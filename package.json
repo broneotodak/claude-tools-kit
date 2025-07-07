@@ -19,7 +19,7 @@
   "author": "Neo Todak",
   "license": "MIT",
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.7",
-    "dotenv": "^17.0.0"
+    "@supabase/supabase-js": "^2.50.3",
+    "dotenv": "^17.0.1"
   }
 }
