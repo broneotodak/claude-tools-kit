@@ -2,6 +2,10 @@
 
 A comprehensive toolkit for Claude Code users to maintain context, manage memories, and work efficiently across multiple machines.
 
+**CTK ensures Claude Code always remembers your context, projects, and preferences - no more starting from scratch!**
+
+📖 **[Read the detailed guide](README-DETAILED.md)** to understand how CTK transforms your AI workflow.
+
 ## 🎯 Key Features
 - **Automatic Context Loading** - Claude Code always starts with full configuration
 - **Memory Integration** - Seamless connection to Supabase PGVector memories
