@@ -1,0 +1,44 @@
+# Claude Code Configuration
+## Initialized: {DATE}
+
+### System Context
+- **Machine**: {MACHINE_NAME}
+- **Environment**: {ENVIRONMENT}
+- **User**: {USERNAME}
+- **Tool**: Claude Code
+
+### Quick Start
+When starting a new Claude Code session, I should:
+1. Read this configuration file
+2. Check recent memories in `claude_desktop_memory`
+3. Load the .env file from the project directory
+4. Note the current project context
+
+### Memory Configuration
+- **Supabase Project**: {SUPABASE_PROJECT_ID}
+- **Memory Type**: PGVector-enhanced
+- **Primary Table**: `claude_desktop_memory`
+- **Activity Table**: `activity_log` (auto-synced via trigger)
+
+### Tool Locations
+- **Memory Tools**: `~/claude-tools/`
+- **Save Memory**: `node ~/claude-tools/save-memory.js "Category" "Title" "Content" importance`
+- **Check Activities**: `node ~/claude-tools/check-activities.js`
+
+### Active Projects
+1. **FlowState AI** 🌊 - Real-time dashboard
+2. **ClaudeN** 💜 - AI partnership system
+3. **Custom Projects** - Add your own here
+
+### Important Reminders
+- Always preserve metadata when saving memories
+- Machine name will be normalized automatically
+- Use importance levels 3-6 for most entries
+- Critical items (7-8) should be rare
+
+### GitHub Repository
+- **Claude Tools Kit**: https://github.com/{USERNAME}/claude-tools-kit
+- Contains all essential tools and setup scripts
+
+---
+*Auto-generated from claude-tools-kit*

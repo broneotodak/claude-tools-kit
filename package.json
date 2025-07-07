@@ -1,0 +1,25 @@
+{
+  "name": "claude-tools-kit",
+  "version": "1.0.0",
+  "description": "Claude Code toolkit for context management and memory integration",
+  "main": "index.js",
+  "scripts": {
+    "setup": "./setup.sh",
+    "save-memory": "node tools/save-memory.js",
+    "check-activities": "node tools/check-latest-activities.js"
+  },
+  "keywords": [
+    "claude",
+    "ai",
+    "tools",
+    "memory",
+    "pgvector",
+    "supabase"
+  ],
+  "author": "Neo Todak",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.7",
+    "dotenv": "^17.0.0"
+  }
+}
