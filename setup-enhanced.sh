@@ -99,13 +99,23 @@ touch "$HOME/.ctk-installed"
 echo "$(date '+%Y-%m-%d %H:%M:%S')" > "$HOME/.ctk-installed"
 
 echo -e "\n${BLUE}🎉 Enhanced Setup Complete!${NC}"
+
+# Run CTK automated commands setup
+echo -e "\n${YELLOW}Setting up CTK automated commands...${NC}"
+if [ -f "$SCRIPT_DIR/setup-ctk-commands.sh" ]; then
+    bash "$SCRIPT_DIR/setup-ctk-commands.sh"
+fi
+
 echo
 echo "Next steps:"
 echo "1. Reload your shell: ${GREEN}source ~/.bashrc${NC}"
 echo
-echo "2. Test the context loader: ${GREEN}claude-context${NC}"
+echo "2. Test the automated commands:"
+echo "   ${GREEN}read memory${NC} - Browse memories"
+echo "   ${GREEN}read claude.md${NC} - View config with context"
+echo "   ${GREEN}ctk status${NC} - Check system status"
 echo
-echo "3. Start Claude with full context: ${GREEN}claude-full${NC}"
+echo "3. Start Claude with RAG context: ${GREEN}ctk start${NC}"
 echo
 echo "Available commands:"
 echo "  ${BLUE}claude-full${NC}    - Start Claude Code with complete context"
