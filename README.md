@@ -4,6 +4,10 @@ A comprehensive toolkit for Claude Code users to maintain context, manage memori
 
 **CTK ensures Claude Code always remembers your context, projects, and preferences - no more starting from scratch!**
 
+## 🆕 RAG System (Retrieval Augmented Generation)
+
+CTK now includes a powerful RAG system that automatically retrieves relevant context from your memory database, making Claude Code truly context-aware and intelligent.
+
 📖 **[Read the detailed guide](README-DETAILED.md)** to understand how CTK transforms your AI workflow.
 
 ## 🎯 Key Features
@@ -37,11 +41,18 @@ source ~/.bashrc
 - `sql/` - Database triggers and functions for FlowState
 - `.env.example` - Environment variables template
 
-### Tools
-1. **save-memory.js** - Save memories to PGVector
-2. **check-memory.js** - Query and check memories
-3. **test-trigger.js** - Test database triggers
+### Memory & Activity Tools
+1. **save-memory-enhanced.js** - Save memories with proper metadata
+2. **check-memory-health.js** - Memory system diagnostics
+3. **fix-memory-null-owners.js** - Fix common memory issues
 4. **analyze-activities.js** - Analyze FlowState activities
+
+### RAG Tools (NEW!)
+5. **rag-retrieve.js** - Search memories by query
+6. **rag-semantic-search.js** - AI-powered semantic search
+7. **rag-context-builder.js** - Auto-build context for Claude
+8. **rag-embed-memories.js** - Create embeddings for semantic search
+9. **claude-rag-startup.sh** - Start Claude with full RAG context
 
 ## 🔧 Configuration
 
@@ -76,6 +87,38 @@ cd-projects     # Navigate to /mnt/h/Projects/Active
 ```
 
 **The environment is automatically loaded when you open a new terminal!**
+
+## 🧠 Using the RAG System
+
+### Quick Start with RAG
+```bash
+# Start Claude with auto-generated context
+./tools/claude-rag-startup.sh
+
+# Search for relevant memories
+./tools/rag-retrieve.js "how to fix webhook error"
+
+# Semantic search (AI-powered)
+./tools/rag-semantic-search.js "database optimization techniques"
+
+# Build context for current project
+./tools/rag-context-builder.js --output
+```
+
+### First Time RAG Setup
+```bash
+# 1. Create embeddings for existing memories
+./tools/rag-embed-memories.js
+
+# 2. Set up semantic search function (run SQL in Supabase)
+./tools/rag-semantic-search.js --help
+```
+
+### RAG Benefits
+- 🎯 **Automatic Context** - Relevant memories loaded on startup
+- 🔍 **Smart Search** - Find information using natural language
+- 🧠 **Semantic Understanding** - AI understands meaning, not just keywords
+- ⚡ **Faster Problem Solving** - Instantly access past solutions
 
 ## 🖥️ Multi-Machine Setup
 
