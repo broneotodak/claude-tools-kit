@@ -71,7 +71,7 @@ const category = getArg(['--category', '-c'], 'Technical');
 const feature = getArg(['--feature', '-f'], 'general');
 const machine = getArg(['--machine', '-m'], require('os').hostname());
 const owner = getArg(['--owner', '-o'], defaultOwner);
-const source = getArg(['--source', '-s'], 'claude_code');
+const source = getArg(['--source', '-s'], 'claude_desktop');
 
 // Validate importance
 if (importance < 1 || importance > 10) {
@@ -110,6 +110,7 @@ async function saveMemory() {
 
     // Prepare memory data
     const memoryData = {
+        user_id: owner, // Add required user_id field
         content: content,
         metadata: metadata,
         importance: importance,
