@@ -1,0 +1,17 @@
+I need help with CTK (Claude Tools Kit) on my machine.
+
+Please:
+1. Check if CTK is installed: ls -la ~/claude-tools-kit
+2. If yes, check status: ctk status
+3. If no, clone from: https://github.com/broneotodak/claude-tools-kit
+
+For implementation details, read:
+- ~/claude-tools-kit/README-FOR-CLAUDE.md (full guide)
+- ~/claude-tools-kit/CLAUDE-QUICK-START.md (quick reference)
+
+My setup:
+- Machine: [Mac/Linux/WSL]
+- Shell: [bash/zsh]
+- Existing CTK: [yes/no]
+
+Please help me set up or use CTK for persistent memory across Claude sessions.
