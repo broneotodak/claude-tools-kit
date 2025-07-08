@@ -94,12 +94,27 @@ async function saveMemory() {
         user_id: owner // Include user_id in metadata for compatibility
     };
 
+    // Determine memory type based on category or content
+    let memory_type = 'general';
+    if (category.toLowerCase().includes('bug') || category.toLowerCase().includes('fix')) {
+        memory_type = 'bug_fix';
+    } else if (category.toLowerCase().includes('solution')) {
+        memory_type = 'technical_solution';
+    } else if (category.toLowerCase().includes('project')) {
+        memory_type = 'project_update';
+    } else if (category.toLowerCase().includes('config')) {
+        memory_type = 'configuration';
+    } else if (category.toLowerCase().includes('milestone')) {
+        memory_type = 'project_milestone';
+    }
+
     // Prepare memory data
     const memoryData = {
         content: content,
         metadata: metadata,
         importance: importance,
         category: category,
+        memory_type: memory_type, // Add required memory_type field
         owner: owner, // Explicitly set owner field
         source: source, // Explicitly set source field
         created_at: new Date().toISOString()
