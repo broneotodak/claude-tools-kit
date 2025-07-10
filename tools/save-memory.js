@@ -8,11 +8,15 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config({ path: '/mnt/h/Projects/Active/claudecode/.env' });
+require('dotenv').config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function saveMemory(category, title, content, importance = 4) {
+    const os = require('os');
+    const hostname = os.hostname();
+    const platform = os.platform();
+    
     const memory = {
         user_id: 'neo_todak',
         memory_type: 'technical_solution',
@@ -21,10 +25,10 @@ async function saveMemory(category, title, content, importance = 4) {
         metadata: {
             tool: "claude_code",
             feature: "claude_code_session",
-            machine: "Windows Home PC",
+            machine: hostname,
             project: category || "ClaudeN",
             actual_source: "claude_desktop",
-            environment: "WSL Ubuntu",
+            environment: platform,
             date: new Date().toISOString().split('T')[0]
         },
         importance: parseInt(importance) || 4,
