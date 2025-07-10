@@ -69,7 +69,16 @@ const project = getArg(['--project', '-p'], 'ClaudeN');
 const importance = parseInt(getArg(['--importance', '-i'], '5'));
 const category = getArg(['--category', '-c'], 'Technical');
 const feature = getArg(['--feature', '-f'], 'general');
-const machine = getArg(['--machine', '-m'], require('os').hostname());
+// Standardize machine names
+const rawMachine = getArg(['--machine', '-m'], require('os').hostname());
+let machine = rawMachine;
+if (rawMachine.toLowerCase().includes('macbook')) {
+    machine = 'MacBook Pro';
+} else if (rawMachine === 'NEO-MOTHERSHIP' || rawMachine === 'DESKTOP-NEO-WIN11') {
+    machine = 'Windows Home PC';
+} else if (rawMachine.toLowerCase().includes('office')) {
+    machine = 'Windows Office PC';
+}
 const owner = getArg(['--owner', '-o'], defaultOwner);
 const source = getArg(['--source', '-s'], 'claude_desktop');
 

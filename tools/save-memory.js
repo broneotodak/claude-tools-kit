@@ -14,8 +14,18 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 
 async function saveMemory(category, title, content, importance = 4) {
     const os = require('os');
-    const hostname = os.hostname();
+    const rawHostname = os.hostname();
     const platform = os.platform();
+    
+    // Standardize machine names
+    let hostname = rawHostname;
+    if (rawHostname.toLowerCase().includes('macbook')) {
+        hostname = 'MacBook Pro';
+    } else if (rawHostname === 'NEO-MOTHERSHIP' || rawHostname === 'DESKTOP-NEO-WIN11') {
+        hostname = 'Windows Home PC';
+    } else if (rawHostname.toLowerCase().includes('office')) {
+        hostname = 'Windows Office PC';
+    }
     
     const memory = {
         user_id: 'neo_todak',
