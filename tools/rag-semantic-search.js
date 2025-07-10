@@ -86,66 +86,21 @@ async function semanticSearch(query, options = {}) {
         console.log('🔎 Searching memories...\n');
         
         // Use raw SQL for similarity search
-        const { data: results, error } = await supabase.rpc('match_memories', {
+        const { data: results, error } = await supabase.rpc('search_memories', {
             query_embedding: queryEmbedding,
-            match_threshold: threshold,
+            match_user_id: 'neo_todak',
             match_count: limit
         });
 
         if (error) {
-            // If RPC doesn't exist, create it
-            if (error.message.includes('could not find')) {
-                console.log('⚠️  Similarity search function not found.');
-                console.log('Creating search function...\n');
-                
-                // Create the function
-                const createFunction = `
-                    CREATE OR REPLACE FUNCTION match_memories (
-                        query_embedding vector(1536),
-                        match_threshold float,
-                        match_count int
-                    )
-                    RETURNS TABLE (
-                        id bigint,
-                        content text,
-                        metadata jsonb,
-                        category text,
-                        importance int,
-                        created_at timestamp,
-                        similarity float
-                    )
-                    LANGUAGE plpgsql
-                    AS $$
-                    BEGIN
-                        RETURN QUERY
-                        SELECT 
-                            cdm.id,
-                            cdm.content,
-                            cdm.metadata,
-                            cdm.category,
-                            cdm.importance,
-                            cdm.created_at,
-                            1 - (cdm.embedding <=> query_embedding) as similarity
-                        FROM claude_desktop_memory cdm
-                        WHERE cdm.embedding IS NOT NULL
-                        AND 1 - (cdm.embedding <=> query_embedding) > match_threshold
-                        ORDER BY cdm.embedding <=> query_embedding
-                        LIMIT match_count;
-                    END;
-                    $$;
-                `;
-
-                console.log('💡 Please run this SQL in your Supabase dashboard:\n');
-                console.log(createFunction);
-                console.log('\nThen run this tool again.');
-                return;
-            }
-            
             console.error('❌ Search error:', error);
             return;
         }
 
-        if (!results || results.length === 0) {
+        // Filter results by threshold since the function doesn't do it
+        const filteredResults = results?.filter(r => r.similarity >= threshold) || [];
+
+        if (!filteredResults || filteredResults.length === 0) {
             console.log('❌ No similar memories found.');
             console.log('\n💡 Tips:');
             console.log('  - Try different keywords');
@@ -155,9 +110,9 @@ async function semanticSearch(query, options = {}) {
         }
 
         // Display results
-        console.log(`✅ Found ${results.length} similar memories:\n`);
+        console.log(`✅ Found ${filteredResults.length} similar memories:\n`);
 
-        results.forEach((memory, index) => {
+        filteredResults.forEach((memory, index) => {
             const date = new Date(memory.created_at).toLocaleDateString();
             const proj = memory.metadata?.project || 'General';
             const similarity = (memory.similarity * 100).toFixed(1);
@@ -172,7 +127,7 @@ async function semanticSearch(query, options = {}) {
         // Generate context block
         if (options.context) {
             console.log('\n=== Context for Claude ===\n');
-            results.forEach((memory) => {
+            filteredResults.forEach((memory) => {
                 console.log(`[${memory.metadata?.project || 'General'}] ${memory.content}\n`);
             });
             console.log('=== End Context ===');

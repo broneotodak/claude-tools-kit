@@ -19,7 +19,15 @@
   "author": "Neo Todak",
   "license": "MIT",
   "dependencies": {
-    "@supabase/supabase-js": "^2.50.3",
-    "dotenv": "^17.0.1"
-  }
+    "@supabase/supabase-js": "^2.50.4",
+    "dotenv": "^17.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/broneotodak/claude-tools-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/broneotodak/claude-tools-kit/issues"
+  },
+  "homepage": "https://github.com/broneotodak/claude-tools-kit#readme"
 }

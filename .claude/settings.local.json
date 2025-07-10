@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash([ -f .env ])",
+      "Bash(node:*)",
+      "Bash(./ctk-commands.sh:*)",
+      "Bash(ls:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(grep:*)",
+      "Bash(chmod:*)",
+      "Bash(rm:*)",
+      "Bash(.git/hooks/post-commit)",
+      "Bash(echo:*)"
+    ],
+    "deny": []
+  }
+}
