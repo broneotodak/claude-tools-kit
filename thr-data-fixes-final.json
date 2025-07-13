@@ -1,0 +1,13 @@
+{
+  "timestamp": "2025-07-13T06:26:58.038Z",
+  "fixes_applied": {
+    "name_swaps": 23,
+    "gender_fixes": 9,
+    "total_fixes": 32
+  },
+  "remaining_issues": {
+    "male_with_binti": 0,
+    "female_with_bin": 0
+  },
+  "status": "COMPLETED"
+}

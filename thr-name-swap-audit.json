@@ -1,0 +1,491 @@
+{
+  "timestamp": "2025-07-13T06:22:04.677Z",
+  "issue": "Employee-Spouse Name Swap",
+  "fixed_records": [
+    {
+      "id": "f221e445-ac90-4417-852b-ab76d792bd0c",
+      "employee_no": "TS001",
+      "old_name": "Rodhiah Azzahra Binti Abu Hanifah",
+      "new_name": "Ahmad Fadli Bin Ahmad Dahlan",
+      "status": "FIXED"
+    }
+  ],
+  "suspicious_records": [
+    {
+      "id": "e1988b27-6a39-4a6e-90bb-7fb59bea5504",
+      "employee_no": "MH002",
+      "current_name": "Amelia Edora",
+      "spouse_name": "Amelia Edora",
+      "gender": "MALE"
+    },
+    {
+      "id": "a4028602-378e-4db5-b255-e77139a5dc1d",
+      "employee_no": "ST0051",
+      "current_name": "Nurul Atikah Binti Rosesidi",
+      "spouse_name": "Nurul Atikah Binti Rosesidi",
+      "gender": "MALE"
+    },
+    {
+      "id": "d9aa1a00-e5db-4ff3-870f-2be0769cd8c9",
+      "employee_no": "TA096",
+      "current_name": "SYAZWINA HANNANI BINTI MOHD SAADOM",
+      "spouse_name": "SYAZWINA HANNANI BINTI MOHD SA",
+      "gender": "MALE"
+    },
+    {
+      "id": "b6191bef-2fed-4fe5-b874-3aea9acc0b05",
+      "employee_no": "ST0045",
+      "current_name": "Muhammad Afzulnazren Bin Mahmud",
+      "spouse_name": "Muhammad Afzulnazren Bin Mahmu",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "a218766a-a94d-46e3-8cf9-3e3a0cd541bf",
+      "employee_no": "ST0043",
+      "current_name": "Ainul Ta'ibah Binti Roslan",
+      "spouse_name": "Ainul Ta'ibah Binti Roslan",
+      "gender": "MALE"
+    },
+    {
+      "id": "d7e4accd-0407-41a5-8c89-eb42a52012b2",
+      "employee_no": "TC151",
+      "current_name": "NURUL AKMA BINTI ZIMRI",
+      "spouse_name": "NURUL AKMA BINTI ZIMRI",
+      "gender": "MALE"
+    },
+    {
+      "id": "d2bad09e-0168-4a9f-9919-2336f8e6bd1d",
+      "employee_no": "ST0027",
+      "current_name": "Fatin Nurul 'Izzah Binti Zulkifli",
+      "spouse_name": "Fatin Nurul 'Izzah Binti Zulki",
+      "gender": "MALE"
+    },
+    {
+      "id": "495ab271-3862-43e3-bb65-3b6ef20c4869",
+      "employee_no": "TC152",
+      "current_name": "Muhammad Yatimi Bin Mizei@Termizi",
+      "spouse_name": "Muhammad Yatimi Bin Mizei@Term",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "7ae75232-2d9e-47f7-9498-4b36794509aa",
+      "employee_no": "TH072",
+      "current_name": "NUR SYAMIRA LIYANA",
+      "spouse_name": "NUR SYAMIRA LIYANA",
+      "gender": "MALE"
+    },
+    {
+      "id": "91ea45b5-e5b1-462c-8056-c8fc894e49b0",
+      "employee_no": "ST0038",
+      "current_name": "Muhammad Danial Bin Mohammad Hizam",
+      "spouse_name": "Muhammad Danial Bin Mohammad H",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "110fda1b-51ce-4555-aa25-3dccaa73751f",
+      "employee_no": "TA036",
+      "current_name": "Mohd Zahril Bin Mansor",
+      "spouse_name": "Mohd Zahril Bin Mansor",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "b7f57321-261d-4f20-b432-66eeb4453267",
+      "employee_no": "ST0001",
+      "current_name": "Raihana Binti Azman",
+      "spouse_name": "Raihana Binti Azman",
+      "gender": "MALE"
+    },
+    {
+      "id": "61f37bf0-2745-453a-a17a-e4b8dce23d47",
+      "employee_no": "ST0003",
+      "current_name": "Zuraida Binti Mohd Yusof",
+      "spouse_name": "Zuraida Binti Mohd Yusof",
+      "gender": "MALE"
+    },
+    {
+      "id": "cf925a00-0248-4a55-b12e-58a8dcbe3f80",
+      "employee_no": "TH069",
+      "current_name": "PUTERI AMIRA BINTI ZAINULAKMAL",
+      "spouse_name": "PUTERI AMIRA BINTI ZAINULAK",
+      "gender": "MALE"
+    },
+    {
+      "id": "21d34fea-4a73-4121-bcd9-cc8fbf96c3e9",
+      "employee_no": "ST0039",
+      "current_name": "Aiman Bin Ahmad Razman",
+      "spouse_name": "Aiman Bin Ahmad Razman",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "6f6852e1-e87c-46c8-943c-c61eaa1cfa65",
+      "employee_no": "TA035",
+      "current_name": "SHELINA BINTI SAIRON",
+      "spouse_name": "SHELINA BINTI SAIRON",
+      "gender": "MALE"
+    },
+    {
+      "id": "fa2e34d1-838c-4a8e-a2c9-cdb819f6b09f",
+      "employee_no": "TA048",
+      "current_name": "Mohd Shahlan Bin Puasa",
+      "spouse_name": "Mohd Shahlan Bin Puasa",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "83aaded0-29ce-43dc-8d92-f81a7b90820e",
+      "employee_no": "TA118",
+      "current_name": "NURUL ADLIN ALYSYA BINTI MOHD ALI AIDIL",
+      "spouse_name": "NURUL ADLIN ALYSYA BINTI MOHD",
+      "gender": "MALE"
+    },
+    {
+      "id": "2767298a-a2ab-4f8f-b4c3-f26596becef7",
+      "employee_no": "TH058",
+      "current_name": "MOHD FARID BIN AB WAHAB",
+      "spouse_name": "MOHD FARID BIN AB WAHAB",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "b4c87486-b004-46bc-8080-a56f3fa9ce7e",
+      "employee_no": "ST0047",
+      "current_name": "Faza Norasheilawaty Binti Faizul Roslee",
+      "spouse_name": "Faza Norasheilawaty Binti Faiz",
+      "gender": "MALE"
+    },
+    {
+      "id": "12d29760-a529-48e5-9c6d-f4a00bb20c2f",
+      "employee_no": "TH004",
+      "current_name": "Muhamad Haris Bin Jasan Ahpandi",
+      "spouse_name": "Muhamad Haris Bin Jasan Ahpand",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "5dabf113-f2f7-4d13-8b01-109f8c68d1f4",
+      "employee_no": "TA045",
+      "current_name": "NUR FATIN NAJIHAH BINTI MOHD HYSAM",
+      "spouse_name": "NUR FATIN NAJIHAH BINTI MOHD H",
+      "gender": "MALE"
+    },
+    {
+      "id": "191ffa35-075f-45a1-9eb0-bb503e840d70",
+      "employee_no": "TA043",
+      "current_name": "MUHAMAD ANWAR FIRDAUS BIN ADZHAR",
+      "spouse_name": "MUHAMAD ANWAR FIRDAUS BIN ADZH",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "539509b1-cb2a-469e-89ec-b46d7c645170",
+      "employee_no": "TA042",
+      "current_name": "NOORMAYA BINTI BAHAROM",
+      "spouse_name": "NOORMAYA BINTI BAHAROM",
+      "gender": "MALE"
+    },
+    {
+      "id": "1b4a12b6-d379-438e-82fa-b0632399aae3",
+      "employee_no": "ST0031",
+      "current_name": "Hamidah Binti Ishak",
+      "spouse_name": "Hamidah Binti Ishak",
+      "gender": "MALE"
+    },
+    {
+      "id": "d2596768-5b79-478d-92c9-5b526b435310",
+      "employee_no": "TA054",
+      "current_name": "Muhammad Hafiz Bin Mazidun",
+      "spouse_name": "Muhammad Hafiz Bin Mazidun",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "6bdb0d84-5baf-4043-8569-336ff3baec80",
+      "employee_no": "ST0012",
+      "current_name": "Nurul Afifah Binti Aziz",
+      "spouse_name": "Nurul Afifah Binti Aziz",
+      "gender": "MALE"
+    },
+    {
+      "id": "4929c4e8-b088-4043-a941-a6cd71b57061",
+      "employee_no": "ST0009",
+      "current_name": "Noor Zihan Binti Md Yusof",
+      "spouse_name": "Noor Zihan Binti Md Yusof",
+      "gender": "MALE"
+    },
+    {
+      "id": "a3238831-da53-4bf2-b544-f30f839ef1cf",
+      "employee_no": "TA101",
+      "current_name": "Nor Syamim Faylina binti Abdul Halim",
+      "spouse_name": "Nor Syamim Faylina binti Abdul",
+      "gender": "MALE"
+    },
+    {
+      "id": "09dae52b-8e44-4b02-9f0c-74f956ca7808",
+      "employee_no": "TS004",
+      "current_name": "SITI NAJWA BINTI ABDUL HALIM",
+      "spouse_name": "SITI NAJWA BINTI ABDUL HALI",
+      "gender": "MALE"
+    },
+    {
+      "id": "c37a9a26-102b-4e39-b5f2-59296821f2d2",
+      "employee_no": "ST0004",
+      "current_name": "Hastini Bitnti Mohd Farid",
+      "spouse_name": "Hastini Bitnti Mohd Farid",
+      "gender": "MALE"
+    },
+    {
+      "id": "45f0adec-8fa6-4c1f-94ee-8448e63abde6",
+      "employee_no": "ST0015",
+      "current_name": "Wan Mohamad Shahaimi Bin Wan Muin",
+      "spouse_name": "Wan Mohamad Shahaimi Bin Wan M",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "63e7e3c0-e4c5-4863-9057-ad5c1ffd01bb",
+      "employee_no": "MTSB013",
+      "current_name": "ZULPADHLI BIN SALUDIN",
+      "spouse_name": "ZULPADHLI BIN SALUDIN",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "51bcd2df-c2d4-4e6b-89b8-b15dae9d1123",
+      "employee_no": "TA111",
+      "current_name": "NUR DAYANA BINTI AHMAD SOBRI",
+      "spouse_name": "NUR DAYANA BINTI AHMAD SOBRI",
+      "gender": "MALE"
+    },
+    {
+      "id": "b2be20f6-0254-4ce2-a76e-f64eb20b8167",
+      "employee_no": "TA117",
+      "current_name": "NUR FAIZAH BINTI AZAHARI",
+      "spouse_name": "NUR FAIZAH BINTI AZAHARI",
+      "gender": "MALE"
+    },
+    {
+      "id": "7dbbabd4-4930-4679-bef2-2700fee2c6f0",
+      "employee_no": "TS025",
+      "current_name": "FARHANIE BINTI MOHAMED FIKRI",
+      "spouse_name": "FARHANIE BINTI MOHAMED FIKR",
+      "gender": "MALE"
+    },
+    {
+      "id": "5ca95a4c-0520-48e6-bb5f-574a62790965",
+      "employee_no": "TA105",
+      "current_name": "AIN NURNISA BINTI AZIZI",
+      "spouse_name": "AIN NURNISA BINTI AZIZI",
+      "gender": "MALE"
+    },
+    {
+      "id": "7e183dcb-01d8-4667-8469-130662e24461",
+      "employee_no": "TA041",
+      "current_name": "MOHD HAIRUL SALLEH BIN ANWAR",
+      "spouse_name": "MOHD HAIRUL SALLEH BIN ANWAR",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "b22d94e9-6b33-4426-a3c1-ad19ff1d76ee",
+      "employee_no": "TA039",
+      "current_name": "NOR AZMIRA BINTI MOHD AZAM",
+      "spouse_name": "NOR AZMIRA BINTI MOHD AZAM",
+      "gender": "MALE"
+    },
+    {
+      "id": "f221e445-ac90-4417-852b-ab76d792bd0c",
+      "employee_no": "TS001",
+      "current_name": "Rodhiah Azzahra Binti Abu Hanifah",
+      "spouse_name": "Rodhiah Azzahra Binti Abu H",
+      "gender": "MALE"
+    },
+    {
+      "id": "9af6140f-f184-474b-b51d-5ef23059673a",
+      "employee_no": "TH070",
+      "current_name": "MOHD FADZIRUL ADHA BIN ABDUL HALIM",
+      "spouse_name": "MOHD FADZIRUL ADHA BIN ABDU",
+      "gender": "FEMALE"
+    },
+    {
+      "id": "e4223be6-f90e-4f2d-acb1-b5d7763ed0e5",
+      "employee_no": "TH008",
+      "current_name": "MOHD SHAYYIE ALIF BIN MD LAZIM",
+      "spouse_name": "MOHD SHAYYIE ALIF BIN MD LAZIM",
+      "gender": "FEMALE"
+    }
+  ],
+  "gender_mismatches": [
+    {
+      "id": "a4028602-378e-4db5-b255-e77139a5dc1d",
+      "employee_no": "ST0051",
+      "full_name": "Nurul Atikah Binti Rosesidi",
+      "personal_info": {
+        "race": "MALAY",
+        "gender": "MALE",
+        "religion": "ISLAM",
+        "marital_status": "SINGLE",
+        "spouse_details": {
+          "name": "Nurul Atikah Binti Rosesidi",
+          "ic_number": "951226-08-6016",
+          "children_count": 0,
+          "marital_status": "SINGLE",
+          "tax_group_code": "02",
+          "working_status": false,
+          "income_tax_branch": null,
+          "income_tax_number": "x No"
+        }
+      },
+      "issue": "Male with \"Binti\" in name"
+    },
+    {
+      "id": "b6191bef-2fed-4fe5-b874-3aea9acc0b05",
+      "employee_no": "ST0045",
+      "full_name": "Muhammad Afzulnazren Bin Mahmud",
+      "personal_info": {
+        "race": "MALAY",
+        "gender": "FEMALE",
+        "religion": "ISLAM",
+        "marital_status": "MARRIED",
+        "spouse_details": {
+          "name": "Muhammad Afzulnazren Bin Mahmu",
+          "ic_number": "920604-14-5449",
+          "children_count": 0,
+          "marital_status": "MARRIED",
+          "tax_group_code": "13",
+          "working_status": true,
+          "income_tax_branch": null,
+          "income_tax_number": "IG25747408000"
+        }
+      },
+      "issue": "Female with \"Bin\" in name"
+    },
+    {
+      "id": "91ea45b5-e5b1-462c-8056-c8fc894e49b0",
+      "employee_no": "ST0038",
+      "full_name": "Muhammad Danial Bin Mohammad Hizam",
+      "personal_info": {
+        "race": "MALAY",
+        "gender": "FEMALE",
+        "religion": "ISLAM",
+        "marital_status": "MARRIED",
+        "spouse_details": {
+          "name": "Muhammad Danial Bin Mohammad H",
+          "ic_number": "911106-14-6671",
+          "children_count": 2,
+          "marital_status": "MARRIED",
+          "tax_group_code": "15",
+          "working_status": true,
+          "income_tax_branch": null,
+          "income_tax_number": "x No"
+        }
+      },
+      "issue": "Female with \"Bin\" in name"
+    },
+    {
+      "id": "61f37bf0-2745-453a-a17a-e4b8dce23d47",
+      "employee_no": "ST0003",
+      "full_name": "Zuraida Binti Mohd Yusof",
+      "personal_info": {
+        "race": "MALAY",
+        "gender": "MALE",
+        "religion": "ISLAM",
+        "marital_status": "MARRIED",
+        "spouse_details": {
+          "name": "Zuraida Binti Mohd Yusof",
+          "ic_number": "861119-56-5960",
+          "children_count": 4,
+          "marital_status": "MARRIED",
+          "tax_group_code": "06",
+          "working_status": false,
+          "income_tax_branch": null,
+          "income_tax_number": "x No"
+        }
+      },
+      "issue": "Male with \"Binti\" in name"
+    },
+    {
+      "id": "b4c87486-b004-46bc-8080-a56f3fa9ce7e",
+      "employee_no": "ST0047",
+      "full_name": "Faza Norasheilawaty Binti Faizul Roslee",
+      "personal_info": {
+        "race": "MALAY",
+        "gender": "MALE",
+        "religion": "ISLAM",
+        "marital_status": "MARRIED",
+        "spouse_details": {
+          "name": "Faza Norasheilawaty Binti Faiz",
+          "ic_number": "890106-7-5316",
+          "children_count": 4,
+          "marital_status": "MARRIED",
+          "tax_group_code": "06",
+          "working_status": false,
+          "income_tax_branch": null,
+          "income_tax_number": "x No"
+        }
+      },
+      "issue": "Male with \"Binti\" in name"
+    },
+    {
+      "id": "45f0adec-8fa6-4c1f-94ee-8448e63abde6",
+      "employee_no": "ST0015",
+      "full_name": "Wan Mohamad Shahaimi Bin Wan Muin",
+      "personal_info": {
+        "race": "MALAY",
+        "gender": "FEMALE",
+        "religion": "ISLAM",
+        "marital_status": "MARRIED",
+        "spouse_details": {
+          "name": "Wan Mohamad Shahaimi Bin Wan M",
+          "ic_number": "941223-02-5825",
+          "children_count": 2,
+          "marital_status": "MARRIED",
+          "tax_group_code": "15",
+          "working_status": true,
+          "income_tax_branch": null,
+          "income_tax_number": "x No"
+        }
+      },
+      "issue": "Female with \"Bin\" in name"
+    },
+    {
+      "id": "4a4221ca-bc1b-4f99-b089-fea562ea7851",
+      "employee_no": "TS043",
+      "full_name": "W Shatila Binti W Ab Shukor",
+      "personal_info": {
+        "race": "MALAY",
+        "gender": "MALE",
+        "religion": "MUSLIM",
+        "marital_status": "MARRIED",
+        "spouse_details": null
+      },
+      "issue": "Male with \"Binti\" in name"
+    },
+    {
+      "id": "5d3da6c4-93d1-4a1d-9138-4d101691634d",
+      "employee_no": "TS080",
+      "full_name": "Nurilya Natasha Binti Mosh Shah",
+      "personal_info": {
+        "race": "MALAY",
+        "gender": "MALE",
+        "religion": "MUSLIM",
+        "marital_status": "MARRIED",
+        "spouse_details": null
+      },
+      "issue": "Male with \"Binti\" in name"
+    },
+    {
+      "id": "f221e445-ac90-4417-852b-ab76d792bd0c",
+      "employee_no": "TS001",
+      "full_name": "Rodhiah Azzahra Binti Abu Hanifah",
+      "personal_info": {
+        "race": "MALAY",
+        "gender": "MALE",
+        "religion": "MUSLIM",
+        "marital_status": "MARRIED",
+        "spouse_details": {
+          "name": "Name Rodhiah Azzahra Binti Abu H",
+          "ic_number": null,
+          "children_count": 2,
+          "marital_status": "MARRIED",
+          "tax_group_code": "15",
+          "working_status": true,
+          "income_tax_branch": null,
+          "income_tax_number": "x No"
+        }
+      },
+      "issue": "Male with \"Binti\" in name"
+    }
+  ]
+}

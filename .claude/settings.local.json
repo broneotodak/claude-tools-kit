@@ -80,7 +80,15 @@
       "Bash(awk:*)",
       "Bash(rg:*)",
       "Bash(psql:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(/opt/homebrew/bin/npm install)",
+      "Bash(/opt/homebrew/bin/npm run dev)",
+      "Bash(git config:*)",
+      "WebFetch(domain:support.anthropic.com)",
+      "Bash(touch:*)",
+      "Bash(/opt/homebrew/bin/npm install @supabase/supabase-js)"
     ],
     "deny": []
   }
