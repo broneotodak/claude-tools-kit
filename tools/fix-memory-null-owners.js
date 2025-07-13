@@ -32,7 +32,7 @@ async function fixNullOwners() {
     const { data: nullOwnerCount, error: countError } = await supabase
         .from('claude_desktop_memory')
         .select('id', { count: 'exact', head: true })
-        .is('owner', null);
+        .is('user_id', null);
 
     if (countError) {
         console.error('❌ Error checking for NULL owners:', countError);
@@ -59,7 +59,7 @@ async function fixNullOwners() {
     const { data: nullMemories, error: fetchError } = await supabase
         .from('claude_desktop_memory')
         .select('id, metadata')
-        .is('owner', null)
+        .is('user_id', null)
         .limit(1000); // Process in batches
 
     if (fetchError) {
@@ -72,22 +72,28 @@ async function fixNullOwners() {
     let failed = 0;
 
     for (const memory of nullMemories) {
-        // Try to determine owner from metadata
-        let owner = null;
+        // Try to determine user_id from metadata
+        let user_id = null;
         
         if (memory.metadata) {
             // Check various possible fields in metadata
-            owner = memory.metadata.user_id || 
-                   memory.metadata.user || 
-                   memory.metadata.owner ||
-                   'neo_todak'; // Default if no user info in metadata
+            user_id = memory.metadata.user_id || 
+                    memory.metadata.user || 
+                    'neo_todak'; // Default if no user info in metadata
         } else {
-            owner = 'neo_todak'; // Default owner
+            user_id = 'neo_todak'; // Default user
         }
 
         const { error: updateError } = await supabase
             .from('claude_desktop_memory')
-            .update({ owner })
+            .update({ 
+                user_id,
+                metadata: {
+                    ...memory.metadata,
+                    last_fixed: new Date().toISOString(),
+                    fixed_by: 'fix-memory-null-owners'
+                }
+            })
             .eq('id', memory.id);
 
         if (updateError) {
@@ -112,7 +118,7 @@ async function fixNullOwners() {
     const { data: remainingNull, error: verifyError } = await supabase
         .from('claude_desktop_memory')
         .select('id', { count: 'exact', head: true })
-        .is('owner', null);
+        .is('user_id', null);
 
     if (!verifyError) {
         const remaining = remainingNull?.length || 0;

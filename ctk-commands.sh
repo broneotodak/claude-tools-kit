@@ -44,6 +44,10 @@ show_help() {
     echo "  flowstate-status                               - Check FlowState integration"
     echo "  sync-activities                                - Sync activities to FlowState"
     echo ""
+    echo -e "${GREEN}Database Commands:${NC}"
+    echo "  query <project> <table> [options]              - Query Supabase tables"
+    echo "  list-tables <project>                          - List tables in project"
+    echo ""
     echo "Examples:"
     echo "  ./ctk-commands.sh save 'Bug Fix' 'Fixed memory issue' 'Updated enrichment logic' 5"
     echo "  ./ctk-commands.sh search 'memory enrichment'"
@@ -200,6 +204,18 @@ case "$1" in
     "sync-activities")
         echo -e "${BLUE}Syncing activities to FlowState...${NC}"
         node "$TOOLS_DIR/enrich-memories-for-flowstate.js"
+        ;;
+    
+    # Database commands
+    "query")
+        shift
+        "$TOOLS_DIR/query-supabase-project.js" "$@"
+        ;;
+    
+    "list-tables")
+        shift
+        project="${1:-ctk}"
+        "$TOOLS_DIR/query-supabase-project.js" "$project" list
         ;;
     
     # Help and default

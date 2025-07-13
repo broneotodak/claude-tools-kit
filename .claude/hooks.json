@@ -1,0 +1,6 @@
+{
+  "hooks": {
+    "tool": ["hooks/conversation-checkpoint.js"],
+    "post_completion": ["hooks/auto-save-memory.js"]
+  }
+}

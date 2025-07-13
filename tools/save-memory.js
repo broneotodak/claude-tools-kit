@@ -9,8 +9,30 @@
 
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
+const { MEMORY_TYPES, MEMORY_CATEGORIES, IMPORTANCE_LEVELS } = require('../config/memory-constants');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+async function validateMemory(memory) {
+    const errors = [];
+
+    if (!memory.user_id) errors.push('user_id is required');
+    if (!memory.category) errors.push('category is required');
+    if (!memory.content) errors.push('content is required');
+    if (!memory.memory_type) errors.push('memory_type is required');
+    if (!memory.metadata?.machine) errors.push('metadata.machine is required');
+
+    // Validate against constants
+    if (!Object.values(MEMORY_TYPES).includes(memory.memory_type)) {
+        errors.push(`Invalid memory_type. Must be one of: ${Object.values(MEMORY_TYPES).join(', ')}`);
+    }
+
+    if (memory.category && !Object.values(MEMORY_CATEGORIES).includes(memory.category)) {
+        errors.push(`Invalid category. Must be one of: ${Object.values(MEMORY_CATEGORIES).join(', ')}`);
+    }
+
+    return errors;
+}
 
 async function saveMemory(category, title, content, importance = 4) {
     const os = require('os');
@@ -29,8 +51,8 @@ async function saveMemory(category, title, content, importance = 4) {
     
     const memory = {
         user_id: 'neo_todak',
-        memory_type: 'technical_solution',
-        category: category || 'ClaudeN',
+        memory_type: MEMORY_TYPES.TECHNICAL_SOLUTION,
+        category: category || MEMORY_CATEGORIES.CLAUDEN,
         content: `${title}: ${content}`,
         metadata: {
             tool: "claude_code",
@@ -46,6 +68,13 @@ async function saveMemory(category, title, content, importance = 4) {
     };
 
     try {
+        // Validate memory before saving
+        const errors = await validateMemory(memory);
+        if (errors.length > 0) {
+            console.error('❌ Validation errors:', errors.join(', '));
+            return;
+        }
+
         const { data, error } = await supabase
             .from('claude_desktop_memory')
             .insert([memory]);

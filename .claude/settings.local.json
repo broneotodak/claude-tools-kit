@@ -62,7 +62,25 @@
       "Bash(git -C /Users/broneotodak/Projects/flowstate-ai commit -m \"Move git activities to Git & GitHub Activity section\n\n- Git commits and pushes now show in GitHub Activity section\n- Added git_commit, git_push categories to GitHub activity detection\n- Renamed section to ''Git & GitHub Activity'' for clarity\n\nGit activities now properly categorized\n\n🤖 Generated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>\")",
       "Bash(find:*)",
       "Bash(./setup-ctk-alias.sh)",
-      "Bash(open:*)"
+      "Bash(open:*)",
+      "Bash(git push:*)",
+      "Bash(./tools/query-thr.js list:*)",
+      "Bash(./tools/query-thr.js:*)",
+      "Bash(./tools/query-supabase-project.js ctk:*)",
+      "Bash(./tools/query-supabase-project.js:*)",
+      "Bash(./tools/thr-operations.js:*)",
+      "Bash(./tools/thr-schema-explorer.js:*)",
+      "Bash(./tools/thr-auth-analyzer.js:*)",
+      "Bash(./tools/atlas-thr-analyzer.js:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(npm install:*)",
+      "Bash(sed:*)",
+      "Bash(jq:*)",
+      "Bash(awk:*)",
+      "Bash(rg:*)",
+      "Bash(psql:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

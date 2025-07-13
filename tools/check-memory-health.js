@@ -39,14 +39,14 @@ async function checkMemoryHealth() {
         const { count: nullOwners } = await supabase
             .from('claude_desktop_memory')
             .select('*', { count: 'exact', head: true })
-            .is('owner', null);
+            .is('user_id', null);
 
         if (nullOwners > 0) {
             issues.push({
                 type: 'NULL_OWNERS',
                 count: nullOwners,
                 severity: 'HIGH',
-                message: `${nullOwners} memories have NULL owners`,
+                message: `${nullOwners} memories have NULL user_id`,
                 fix: 'Run fix-memory-null-owners.js tool'
             });
         }

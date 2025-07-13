@@ -105,6 +105,16 @@ temp/
 *.backup
 *.bak
 *.old
+backups/*.json
+backups/*.sql
+
+# THR specific
+thr-import-data.json
+raw_data/
+/THR/
+
+# Local Claude settings
+.claude/settings.local.json
 
 # Config with potential secrets
 config/local.json
