@@ -88,7 +88,15 @@
       "Bash(git config:*)",
       "WebFetch(domain:support.anthropic.com)",
       "Bash(touch:*)",
-      "Bash(/opt/homebrew/bin/npm install @supabase/supabase-js)"
+      "Bash(/opt/homebrew/bin/npm install @supabase/supabase-js)",
+      "Bash(npm init:*)",
+      "Bash(cat:*)",
+      "Bash(npm run dev:*)",
+      "WebFetch(domain:thr.todak.io)",
+      "Bash(npm:*)",
+      "Bash(/opt/homebrew/bin/npm install puppeteer playwright)",
+      "Bash(npx eslint:*)",
+      "Bash(/usr/local/bin/npm install)"
     ],
     "deny": []
   }
