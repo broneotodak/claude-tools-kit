@@ -96,7 +96,24 @@
       "Bash(npm:*)",
       "Bash(/opt/homebrew/bin/npm install puppeteer playwright)",
       "Bash(npx eslint:*)",
-      "Bash(/usr/local/bin/npm install)"
+      "Bash(/usr/local/bin/npm install)",
+      "Bash(/opt/homebrew/bin/node /Users/broneotodak/Projects/THR/tools/save-github-push-memory.js)",
+      "Bash(/opt/homebrew/bin/node /Users/broneotodak/Projects/THR/tools/save-netlify-security-memory.js)",
+      "Bash(/opt/homebrew/bin/npm run build)",
+      "WebFetch(domain:github.com)",
+      "Bash(/Users/broneotodak/Projects/flowstate-ai/fix-git-hooks.sh)",
+      "Bash(/Users/broneotodak/Projects/flowstate-ai/push-flowstate-updates.sh)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(cp:*)",
+      "Bash(git pull:*)",
+      "WebFetch(domain:neotodak.com)",
+      "Bash(./auto-commit-projects.sh:*)",
+      "Bash(git stash:*)",
+      "Bash(git checkout:*)",
+      "Bash(npx tsc:*)",
+      "Bash(/opt/homebrew/bin/npm install dotenv)",
+      "Bash(yarn add:*)",
+      "Bash(true)"
     ],
     "deny": []
   }
