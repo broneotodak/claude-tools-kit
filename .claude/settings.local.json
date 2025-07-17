@@ -113,7 +113,10 @@
       "Bash(npx tsc:*)",
       "Bash(/opt/homebrew/bin/npm install dotenv)",
       "Bash(yarn add:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(supabase functions deploy:*)",
+      "Bash(supabase status:*)",
+      "Bash(supabase link:*)"
     ],
     "deny": []
   }
