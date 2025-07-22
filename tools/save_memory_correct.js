@@ -42,7 +42,7 @@ Memory System Instructions Reviewed:
             ]
         },
         importance: 4,
-        source: 'claude_desktop'
+        source: 'claude_code'
     };
 
     try {

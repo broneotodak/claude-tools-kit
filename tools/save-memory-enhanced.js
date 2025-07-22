@@ -80,7 +80,7 @@ if (rawMachine.toLowerCase().includes('macbook')) {
     machine = 'Windows Office PC';
 }
 const owner = getArg(['--owner', '-o'], defaultOwner);
-const source = getArg(['--source', '-s'], 'claude_desktop');
+const source = getArg(['--source', '-s'], 'claude_code');
 
 // Validate importance
 if (importance < 1 || importance > 10) {

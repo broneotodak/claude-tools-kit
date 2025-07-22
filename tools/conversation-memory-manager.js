@@ -83,7 +83,7 @@ class ConversationMemoryManager {
                     date: new Date().toISOString().split('T')[0]
                 },
                 importance: 7, // High importance for conversation checkpoints
-                source: 'claude_desktop'
+                source: 'claude_code'
             };
 
             const { error } = await supabase

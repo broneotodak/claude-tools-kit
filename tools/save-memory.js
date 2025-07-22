@@ -64,7 +64,7 @@ async function saveMemory(category, title, content, importance = 4) {
             date: new Date().toISOString().split('T')[0]
         },
         importance: parseInt(importance) || 4,
-        source: 'claude_desktop'
+        source: 'claude_code'
     };
 
     try {
