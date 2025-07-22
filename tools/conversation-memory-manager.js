@@ -8,6 +8,7 @@
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 const { MEMORY_TYPES, MEMORY_CATEGORIES } = require('../config/memory-constants');
+const { getStandardizedMachineName } = require('./machine-detection');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -73,7 +74,7 @@ class ConversationMemoryManager {
                     tool: "claude_code",
                     feature: "conversation_checkpoint",
                     backup_tag: this.backupTag,
-                    machine: process.env.MACHINE_NAME || "Unknown",
+                    machine: getStandardizedMachineName(),
                     project: this.project,
                     actual_source: "claude_code",
                     environment: process.platform,

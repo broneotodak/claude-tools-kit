@@ -21,6 +21,7 @@ show_help() {
     echo ""
     echo -e "${GREEN}Memory Commands:${NC}"
     echo "  save <category> <title> <content> [importance]  - Save a memory"
+    echo "  save-desktop [options] <content>               - Save with Claude Desktop format"
     echo "  check-recent [count]                           - Show recent memories"
     echo "  check-health                                   - Check memory system health"
     echo "  enrich                                         - Run memory enrichment"
@@ -50,6 +51,7 @@ show_help() {
     echo ""
     echo "Examples:"
     echo "  ./ctk-commands.sh save 'Bug Fix' 'Fixed memory issue' 'Updated enrichment logic' 5"
+    echo "  ./ctk-commands.sh save-desktop -p 'CTK' -c 'System Fix' 'Fixed FlowState display'"
     echo "  ./ctk-commands.sh search 'memory enrichment'"
     echo "  ./ctk-commands.sh switch flowstate-ai"
 }
@@ -60,6 +62,12 @@ case "$1" in
     "save")
         shift
         node "$TOOLS_DIR/save-memory.js" "$@"
+        ;;
+    
+    "save-desktop")
+        shift
+        echo -e "${BLUE}Saving memory with Claude Desktop format...${NC}"
+        node "$TOOLS_DIR/claude-desktop-memory.js" "$@"
         ;;
     
     "check-recent")

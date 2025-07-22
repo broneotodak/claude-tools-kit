@@ -116,7 +116,20 @@
       "Bash(true)",
       "Bash(supabase functions deploy:*)",
       "Bash(supabase status:*)",
-      "Bash(supabase link:*)"
+      "Bash(supabase link:*)",
+      "Bash(for:*)",
+      "Bash(do echo \"=== $file ===\")",
+      "Bash(done)",
+      "Bash(/usr/bin/npm install)",
+      "Bash(/opt/homebrew/bin/npm install --prefix ~/claude-tools)",
+      "Bash(test:*)",
+      "Bash(gh api:*)",
+      "Bash(/opt/homebrew/bin/npm install @hello-pangea/dnd)",
+      "Bash(npx supabase db dump:*)",
+      "Bash(/opt/homebrew/bin/npm install jspdf jspdf-autotable)",
+      "Bash(git log:*)",
+      "Bash(npx supabase functions logs:*)",
+      "Bash(npx supabase functions deploy:*)"
     ],
     "deny": []
   }
