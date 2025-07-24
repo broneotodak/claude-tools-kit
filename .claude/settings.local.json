@@ -131,7 +131,8 @@
       "Bash(npx supabase functions logs:*)",
       "Bash(npx supabase functions deploy:*)",
       "WebFetch(domain:ftbtsxlujsnobujwekwx.supabase.co)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "WebFetch(domain:thr.neotodak.com)"
     ],
     "deny": []
   }
