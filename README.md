@@ -1,8 +1,8 @@
-# Claude Tools Kit 🛠️
+# Claude Tools Kit (CTK) 🛠️
 
-A comprehensive toolkit for Claude Code users to maintain context, manage memories, and work efficiently across multiple machines.
+A comprehensive toolkit for Claude Code users featuring safety systems, context management, and schema verification to prevent production incidents.
 
-**CTK ensures Claude Code always remembers your context, projects, and preferences - no more starting from scratch!**
+**CTK includes critical safety features that prevent database corruption and authentication failures.**
 
 ## 🆕 RAG System (Retrieval Augmented Generation)
 
@@ -11,6 +11,9 @@ CTK now includes a powerful RAG system that automatically retrieves relevant con
 📖 **[Read the detailed guide](README-DETAILED.md)** to understand how CTK transforms your AI workflow.
 
 ## 🎯 Key Features
+- **Schema Safety System** - Prevents schema assumption errors with pre-commit hooks
+- **Authentication Protection** - Blocks dangerous auth schema modifications
+- **JSONB Field Mapping** - Automatic validation of field locations
 - **Automatic Context Loading** - Claude Code always starts with full configuration
 - **Memory Integration** - Seamless connection to Supabase PGVector memories
 - **Multi-Machine Support** - Works across Windows/WSL, Office PC, MacBook

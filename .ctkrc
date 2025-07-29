@@ -1,0 +1,77 @@
+{
+  "ui": {
+    "principles": {
+      "persistence": true,
+      "responsiveness": true,
+      "themeSupport": true,
+      "minimalist": true
+    },
+    "breakpoints": {
+      "sm": "640px",
+      "md": "768px",
+      "lg": "1024px",
+      "xl": "1280px"
+    },
+    "touchTargets": {
+      "mobile": "44px",
+      "desktop": "36px"
+    },
+    "colorSystem": "ctk-variables",
+    "requiredFeatures": [
+      "dark-mode",
+      "light-mode",
+      "system-preference-detection",
+      "state-persistence",
+      "mobile-first",
+      "keyboard-navigation",
+      "wcag-aa-compliance"
+    ]
+  },
+  "jsonbMappings": {
+    "thr_employees": {
+      "email": "contact_info",
+      "phone": "contact_info",
+      "address": "contact_info",
+      "emergency_contact": "contact_info",
+      "bank_name": "bank_info",
+      "bank_account": "bank_info",
+      "bank_swift": "bank_info",
+      "dependent_name": "dependents",
+      "dependent_relationship": "dependents",
+      "education_level": "education",
+      "education_institution": "education",
+      "work_experience": "employment_history"
+    },
+    "thr_organizations": {
+      "address": "address_info",
+      "phone": "contact_info",
+      "email": "contact_info"
+    },
+    "thr_positions": {
+      "requirements": "position_details",
+      "responsibilities": "position_details"
+    },
+    "example_table": {
+      "_comment": "Add your own table mappings here"
+    }
+  },
+  "strictMode": true,
+  "logLevel": "warn",
+  "autoFix": false,
+  "checklistRequired": true,
+  "schemaRefreshHours": 24,
+  "commonMistakes": {
+    "directEmailAccess": "Email is always in JSONB contact_info field",
+    "assumeColumnExists": "Always check schema first with verify-schema.js",
+    "skipCTKProcedure": "CTK checklist must be completed weekly",
+    "authSchemaModification": "NEVER create triggers/views on auth.* tables",
+    "crossModuleImpact": "Always consider impacts on other modules"
+  },
+  "platformConstraints": {
+    "supabase": {
+      "authSchema": "Read-only, no custom triggers/views allowed",
+      "rlsPolicies": "Use auth.uid() not joins to auth.users",
+      "authHooks": "Use official Supabase auth hooks only"
+    }
+  }
+}

@@ -1,0 +1,71 @@
+#!/bin/sh
+# CTK Pre-commit Hook
+# Prevents commits with common schema assumption errors
+
+echo "🔍 CTK Pre-commit Check..."
+
+# Get all staged files
+STAGED_FILES=$(git diff --cached --name-only)
+
+# Check for direct column access in SQL/JS files
+for file in $STAGED_FILES; do
+    # Skip if file doesn't exist or is not SQL/JS
+    if [ ! -f "$file" ] || ! echo "$file" | grep -qE '\.(sql|js|jsx|ts|tsx)$'; then
+        continue
+    fi
+    
+    # Check for direct email column access
+    if grep -E "select.*['\"]email['\"]|\.email[^:]" "$file" 2>/dev/null | grep -v "contact_info" | grep -v "auth\.jwt" | grep -v "auth\.email"; then
+        echo "❌ CTK ERROR: Direct 'email' column access detected!"
+        echo "   Email is in the 'contact_info' JSONB field."
+        echo "   Use: .select('contact_info') then access .contact_info.email"
+        echo ""
+        echo "Run 'git diff --cached' to see the problematic code."
+        exit 1
+    fi
+    
+    # Check for other common JSONB fields
+    if grep -E "select.*['\"]phone['\"]|select.*['\"]address['\"]" "$file" 2>/dev/null | grep -v "contact_info" | grep -v "address_info"; then
+        echo "❌ CTK ERROR: Direct 'phone' or 'address' column access detected!"
+        echo "   These fields are in the 'contact_info' JSONB field."
+        exit 1
+    fi
+    
+    # Check for dangerous auth schema modifications
+    if grep -iE "CREATE\s+(TRIGGER|FUNCTION).*ON\s+auth\." "$file" 2>/dev/null; then
+        echo "❌ CTK ERROR: Attempting to create trigger/function on auth schema!"
+        echo "   This will break Supabase authentication."
+        echo "   NEVER modify auth.* schema tables."
+        exit 1
+    fi
+    
+    # Check for views joining auth.users
+    if grep -iE "JOIN\s+auth\.users|FROM\s+auth\.users" "$file" 2>/dev/null | grep -i "CREATE.*VIEW"; then
+        echo "❌ CTK ERROR: View joining auth.users detected!"
+        echo "   This can interfere with Supabase authentication."
+        echo "   Reference user_id instead of joining auth tables."
+        exit 1
+    fi
+done
+
+# Check if CTK checklist is recent (if applicable)
+if [ -f "ctk-system/.ctk-checklist-status.json" ]; then
+    LAST_VERIFIED=$(node -e "
+        const fs = require('fs');
+        try {
+            const status = JSON.parse(fs.readFileSync('ctk-system/.ctk-checklist-status.json'));
+            const days = (Date.now() - new Date(status.verifiedAt || 0)) / (1000 * 60 * 60 * 24);
+            console.log(Math.floor(days));
+        } catch(e) {
+            console.log('999');
+        }
+    " 2>/dev/null || echo "999")
+    
+    if [ "$LAST_VERIFIED" -gt 7 ]; then
+        echo "⚠️  CTK WARNING: Schema verification is $LAST_VERIFIED days old"
+        echo "   Run: node ctk-system/verify-schema.js"
+    fi
+fi
+
+echo "✅ CTK Pre-commit Check Passed"
+exit 0
