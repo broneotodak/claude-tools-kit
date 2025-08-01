@@ -25,7 +25,8 @@ const PROJECT_RULES = [
 
 // Machine normalization rules
 const MACHINE_RULES = [
-  { pattern: /macbook|mac\b/i, normalized: 'MacBook Pro' },
+  { pattern: /macbook|mac\b|neo.*macbook/i, normalized: 'MacBook Pro' },
+  { pattern: /MacBook-Pro.*\.local/i, normalized: 'MacBook Pro' },
   { pattern: /windows|pc|desktop/i, normalized: 'Windows PC' },
   { pattern: /linux|ubuntu|debian/i, normalized: 'Linux Machine' },
   { pattern: /wsl/i, normalized: 'WSL Ubuntu' },
