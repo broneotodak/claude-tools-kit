@@ -105,6 +105,33 @@ CTK Orchestration CLI
  */
 async function main() {
   const args = process.argv.slice(2);
+  
+  // Handle special commands first
+  const command = args[0];
+  
+  if (command === 'detect') {
+    // Detect project mode
+    const mode = detectProjectMode();
+    console.log('Detected project mode:', JSON.stringify(mode, null, 2));
+    process.exit(0);
+  }
+  
+  if (command === 'list-tools') {
+    // List registered tools
+    const { listRegisteredRoles, getToolInfo } = await import('./registry.mjs');
+    const roles = listRegisteredRoles();
+    console.log('\nRegistered Tools:\n');
+    roles.forEach(role => {
+      const info = getToolInfo(role);
+      if (info) {
+        console.log(`  ${role}:`);
+        if (info.thr) console.log(`    - THR-CTK available`);
+        if (info.global) console.log(`    - Global-CTK available`);
+      }
+    });
+    process.exit(0);
+  }
+  
   const options = parseArgs(args);
   
   if (options.help || !options.command) {
@@ -112,9 +139,12 @@ async function main() {
     process.exit(0);
   }
   
-  if (options.command !== 'orchestrate') {
+  if (options.command && options.command !== 'orchestrate') {
     console.error(`Unknown command: ${options.command}`);
-    showHelp();
+    console.error('\nAvailable commands:');
+    console.error('  orchestrate [options] - Run orchestration');
+    console.error('  detect               - Detect project mode');
+    console.error('  list-tools           - List registered tools');
     process.exit(1);
   }
   

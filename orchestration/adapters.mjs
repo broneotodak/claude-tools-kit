@@ -220,6 +220,24 @@ export function guardStrictMode() {
 export async function memoryAdapter(toolPath, baton = {}) {
   guardStrictMode();
   
+  // Check if this is THR memory utils
+  const isTHRMemory = toolPath.includes('thr-memory-utils.js');
+  
+  if (isTHRMemory) {
+    // THR memory utils is a CommonJS module, run as script
+    const args = [];
+    if (baton.content) {
+      args.push('session', baton.content);
+    }
+    const result = await runScript(toolPath, args, { CTK_STRICT_MODE: process.env.CTK_STRICT_MODE });
+    return {
+      artifacts: { saved: result.exitCode === 0, thr: true },
+      tokensIn: 0,
+      tokensOut: 0,
+      toolCalls: 1
+    };
+  }
+  
   const module = await importIfPossible(toolPath);
   
   if (module) {
@@ -285,6 +303,36 @@ export async function sqlAdapter(toolPath, baton = {}) {
 export async function validationAdapter(toolPath, baton = {}) {
   guardStrictMode();
   
+  // Check if this is THR database schema check
+  const isTHRSchema = toolPath.includes('check-database-schema.js');
+  
+  if (isTHRSchema) {
+    // THR schema check outputs to stdout
+    const result = await runScript(toolPath, [], { CTK_STRICT_MODE: process.env.CTK_STRICT_MODE });
+    const issues = [];
+    
+    // Parse stdout for errors/warnings
+    if (result.stdout) {
+      const lines = result.stdout.split('\n');
+      lines.forEach(line => {
+        if (line.includes('ERROR') || line.includes('FAIL')) {
+          issues.push(line);
+        }
+      });
+    }
+    
+    return {
+      artifacts: {
+        issues: issues.length > 0 ? issues : (result.stderr ? [result.stderr] : []),
+        ok: result.exitCode === 0 && issues.length === 0,
+        thr: true
+      },
+      tokensIn: 0,
+      tokensOut: 0,
+      toolCalls: 1
+    };
+  }
+  
   const module = await importIfPossible(toolPath);
   
   if (module) {
@@ -331,6 +379,35 @@ export async function validationAdapter(toolPath, baton = {}) {
 export async function qaAdapter(toolPath, baton = {}) {
   guardStrictMode();
   
+  // Check if this is THR comprehensive test suite
+  const isTHRTests = toolPath.includes('comprehensive-thr-test-suite.js');
+  
+  if (isTHRTests) {
+    // THR test suite outputs detailed results to stdout
+    const result = await runScript(toolPath, [], { CTK_STRICT_MODE: process.env.CTK_STRICT_MODE });
+    
+    // Parse test results from stdout
+    let passed = 0, failed = 0;
+    if (result.stdout) {
+      const passMatch = result.stdout.match(/✅ Passed: (\d+)/); 
+      const failMatch = result.stdout.match(/❌ Failed: (\d+)/);
+      if (passMatch) passed = parseInt(passMatch[1]);
+      if (failMatch) failed = parseInt(failMatch[1]);
+    }
+    
+    return {
+      artifacts: { 
+        testsPassed: result.exitCode === 0,
+        passed,
+        failed,
+        thr: true
+      },
+      tokensIn: 0,
+      tokensOut: 0,
+      toolCalls: 1
+    };
+  }
+  
   const module = await importIfPossible(toolPath);
   
   if (module) {
@@ -372,6 +449,33 @@ export async function qaAdapter(toolPath, baton = {}) {
  */
 export async function securityAdapter(toolPath, baton = {}) {
   guardStrictMode();
+  
+  // Check if this is THR health check
+  const isTHRHealth = toolPath.includes('thr-health-check.js');
+  
+  if (isTHRHealth) {
+    // THR health check is a comprehensive security audit
+    const result = await runScript(toolPath, [], { CTK_STRICT_MODE: process.env.CTK_STRICT_MODE });
+    
+    // Parse security issues from stdout  
+    let securityIssues = 0;
+    if (result.stdout) {
+      const issueMatch = result.stdout.match(/Security Issues Found: (\d+)/);
+      if (issueMatch) securityIssues = parseInt(issueMatch[1]);
+    }
+    
+    return {
+      artifacts: { 
+        audit: true,
+        ok: result.exitCode === 0,
+        securityIssues,
+        thr: true
+      },
+      tokensIn: 0,
+      tokensOut: 0,
+      toolCalls: 1
+    };
+  }
   
   // Pre-commit hooks are typically shell scripts
   const result = await runScript(toolPath, [], { CTK_STRICT_MODE: process.env.CTK_STRICT_MODE });

@@ -28,16 +28,16 @@ const TOOL_REGISTRY = {
     global: path.join(CTK_ROOT, 'tools/run-sql-migration.js')
   },
   validation: {
-    thr: null,  // check-field-access.js doesn't exist
+    thr: path.join(THR_ROOT, 'scripts/check-database-schema.js'),
     global: path.join(CTK_ROOT, 'tools/check-table-structure.js')
   },
   qa: {
-    thr: path.join(THR_ROOT, 'scripts/test-all-modules.js'),
+    thr: path.join(THR_ROOT, 'scripts/comprehensive-thr-test-suite.js'),
     global: null
   },
   security: {
-    thr: path.join(THR_ROOT, '.git/hooks/pre-commit'),
-    global: null
+    thr: path.join(THR_ROOT, 'scripts/thr-health-check.js'),
+    global: path.join(CTK_ROOT, '.githooks/pre-commit')
   },
   env: {
     thr: null,

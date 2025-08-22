@@ -11,6 +11,7 @@ import { recordMetrics, generateRunId, printFinalSummary } from './metrics.mjs';
 import { validateArtifacts, createSecurityContext } from './security.mjs';
 import { runRole, dryRunRole } from './launcher.mjs';
 import { accept, getRejectionReason } from './acceptance.mjs';
+import { applyGate } from './thr_gates.mjs';
 
 /**
  * Run agents sequentially with validation and metrics
@@ -72,16 +73,32 @@ async function runSequential(config, projectMode, isDryRun = false) {
           validateArtifacts(result.artifacts);
         }
         
-        // Acceptance gate check
-        if (!accept(role, result.artifacts)) {
-          const reason = getRejectionReason(role, result.artifacts);
-          
-          if (retries < maxRetries) {
-            console.log(`  ⟲ Retrying ${role}: ${reason}`);
-            retries++;
-            continue;
-          } else {
-            throw new Error(`Acceptance gate failed: ${reason}`);
+        // Apply THR-specific gates for THR project
+        if (projectMode.project === 'THR') {
+          const gateResult = applyGate(role, result, baton);
+          if (!gateResult.accept) {
+            if (retries < maxRetries) {
+              console.log(`  ⟲ Retrying ${role}: ${gateResult.reason}`);
+              retries++;
+              continue;
+            } else {
+              throw new Error(`THR gate failed: ${gateResult.reason}`);
+            }
+          }
+          // Update baton with gate results
+          baton = gateResult.baton;
+        } else {
+          // Standard acceptance gate check
+          if (!accept(role, result.artifacts)) {
+            const reason = getRejectionReason(role, result.artifacts);
+            
+            if (retries < maxRetries) {
+              console.log(`  ⟲ Retrying ${role}: ${reason}`);
+              retries++;
+              continue;
+            } else {
+              throw new Error(`Acceptance gate failed: ${reason}`);
+            }
           }
         }
         
