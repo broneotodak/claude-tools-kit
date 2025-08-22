@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ===== CTK pre-commit: secret & safety scanner =====
+# - Stricter secret patterns (common API key formats)
+# - Allowlist of safe metric keys (tokensIn/tokensOut/etc.)
+# - Optional .secretsignore for extra allowlist terms
+# - Fails closed on suspicious findings
+
+RED=$(printf '\033[31m'); GRN=$(printf '\033[32m'); YLW=$(printf '\033[33m'); NC=$(printf '\033[0m')
+
+echo "[pre-commit] Running security checks..."
+
+# Get staged files (only added/modified)
+files=()
+while IFS= read -r line; do
+  if [ -n "$line" ]; then
+    files+=("$line")
+  fi
+done < <(git diff --cached --name-only --diff-filter=AM)
+
+if [ ${#files[@]} -eq 0 ]; then
+  echo "[pre-commit] No files to scan."
+  exit 0
+fi
+
+# Known-good metric keys we must NOT flag
+SAFE_KEYS_REGEX='(llm_tokens_in|llm_tokens_out|tokensIn|tokensOut|tokenIn|tokenOut)'
+
+# Optional additional allowlist terms (one per line)
+SECRETS_IGNORE_FILE=".secretsignore"
+ALLOWLIST_ARGS=()
+if [ -f "$SECRETS_IGNORE_FILE" ]; then
+  ALLOWLIST_ARGS=(-F -f "$SECRETS_IGNORE_FILE")
+  echo "[pre-commit] Using allowlist from .secretsignore"
+fi
+
+# Stricter patterns for real secrets (expand as needed)
+# - OpenAI: sk-*
+# - GitHub: ghp_*, gho_*, github_pat_*
+# - Google OAuth: ya29.*
+# - AWS Access Key: AKIA*
+# - Supabase: sb-*, eyJ*
+# - Generic: 'api_key'/'access_token' with long value
+SECRET_PATTERNS=(
+  '\bsk-[A-Za-z0-9_-]{20,}\b'
+  '\bghp_[A-Za-z0-9]{36}\b'
+  '\bgho_[A-Za-z0-9]{36}\b'
+  '\bgithub_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}\b'
+  '\bya29\.[A-Za-z0-9._-]{20,}\b'
+  '\bAKIA[0-9A-Z]{16}\b'
+  '\bsb-[a-zA-Z0-9]{20,}\b'
+  'eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}'
+  '(api[_-]?key|access[_-]?token|secret[_-]?key)\s*[:=]\s*["'\''`][A-Za-z0-9_\-\.]{24,}["'\''`]'
+  'postgresql://[^:]+:[^@]+@[^/]+/[^"'\''[:space:]]+'
+  'postgres://[^:]+:[^@]+@[^/]+/[^"'\''[:space:]]+'
+)
+
+fail=0
+while IFS= read -r file; do
+  # Skip deleted, binary, or non-existent files
+  if [ ! -f "$file" ]; then continue; fi
+  if git diff --cached -- "$file" | grep -q '^Binary files'; then continue; fi
+  
+  # Skip .env.template and .env.example files
+  if [[ "$file" =~ \.env\.(template|example)$ ]]; then continue; fi
+  
+  # Skip markdown documentation (but still check for actual secrets)
+  # We'll be more lenient with .md files below
+
+  # Read staged content (not working tree)
+  content="$(git show :$file 2>/dev/null || true)"
+  if [ -z "$content" ]; then continue; fi
+
+  # Allowlist check: if the whole file is allowlisted, skip
+  if [ -n "${ALLOWLIST_ARGS[*]:-}" ]; then
+    if grep -q ${ALLOWLIST_ARGS[*]} -- "$file"; then
+      echo "[pre-commit] Skipping allowlisted file: $file"
+      continue
+    fi
+  fi
+  
+  # Special check for .env files (not template/example)
+  if [[ "$file" =~ \.env($|[^.]) ]] && [[ ! "$file" =~ \.(template|example)$ ]]; then
+    echo -e "${RED}[SECURITY BLOCK]${NC} Attempting to commit .env file: ${YLW}${file}${NC}"
+    echo "  Use .env.template for examples, never commit actual .env files"
+    fail=1
+    continue
+  fi
+  
+  # Check for private key files
+  if [[ "$file" =~ \.(pem|key|p12|pfx)$ ]]; then
+    echo -e "${RED}[SECURITY BLOCK]${NC} Attempting to commit private key file: ${YLW}${file}${NC}"
+    fail=1
+    continue
+  fi
+
+  # Scan line by line
+  line_no=0
+  while IFS= read -r line; do
+    line_no=$((line_no+1))
+
+    # Skip lines matching SAFE metric keys
+    if echo "$line" | grep -Eiq "$SAFE_KEYS_REGEX"; then
+      continue
+    fi
+
+    # Skip lines matching repo-level allowlist words, if provided
+    if [ -n "${ALLOWLIST_ARGS[*]:-}" ] && echo "$line" | grep -q ${ALLOWLIST_ARGS[*]}; then
+      continue
+    fi
+
+    # Check each secret pattern
+    for pat in "${SECRET_PATTERNS[@]}"; do
+      if echo "$line" | grep -Eq "$pat"; then
+        echo -e "${RED}[SECURITY BLOCK]${NC} Potential secret in ${YLW}${file}:${line_no}${NC}"
+        echo "  Pattern: $pat"
+        echo "  Line: $(echo "$line" | sed 's/[[:cntrl:]]//g' | cut -c1-160)"
+        fail=1
+        break
+      fi
+    done
+
+  done <<< "$content"
+
+done < <(printf "%s\n" "${files[@]}")
+
+if [ $fail -ne 0 ]; then
+  echo -e "${RED}[pre-commit] Commit blocked due to findings.${NC}"
+  echo ""
+  echo "How to fix:"
+  echo "1. Remove sensitive data from the files"
+  echo "2. Use environment variables instead of hardcoded values"
+  echo "3. Add sensitive files to .gitignore"
+  echo "4. Use .env.template for example configurations"
+  echo ""
+  echo "If this is a false positive:"
+  echo "  - Add specific terms to .secretsignore (one per line)"
+  echo "  - Or bypass with: git commit --no-verify (use with extreme caution!)"
+  exit 1
+fi
+
+echo -e "${GRN}[pre-commit] Passed.${NC}"
+exit 0

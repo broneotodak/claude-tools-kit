@@ -4,6 +4,16 @@ The CTK orchestration layer runs tools with **safety-first defaults**:
 - **THR** → *strict sequential* (security + acceptance gates, no parallel)
 - **Non-THR** → *hybrid/parallel* with bounded concurrency
 
+## Setup
+
+```bash
+# Install git hooks (required for secret scanning)
+bash scripts/install-git-hooks.sh
+
+# Run tests to verify orchestration safety
+npm run test:orchestration
+```
+
 ## What's Included
 - `strict_runner.mjs` — THR-only sequential runner (fail-closed)
 - `parallel_runner.mjs` — Non-THR hybrid/parallel runner (semaphore bound)

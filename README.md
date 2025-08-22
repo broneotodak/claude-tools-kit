@@ -29,6 +29,9 @@ git clone https://github.com/broneotodak/claude-tools-kit.git ~/claude-tools-kit
 cd ~/claude-tools-kit
 ./setup-enhanced.sh
 
+# Install git hooks
+bash scripts/install-git-hooks.sh
+
 # Reload your shell
 source ~/.bashrc
 

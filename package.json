@@ -6,7 +6,9 @@
   "scripts": {
     "setup": "./setup.sh",
     "save-memory": "node tools/save-memory.js",
-    "check-activities": "node tools/check-latest-activities.js"
+    "check-activities": "node tools/check-latest-activities.js",
+    "hooks:install": "bash scripts/install-git-hooks.sh",
+    "test:orchestration": "node orchestration/tests/run.mjs"
   },
   "keywords": [
     "claude",
