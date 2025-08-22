@@ -27,13 +27,36 @@ fi
 # Known-good metric keys we must NOT flag
 SAFE_KEYS_REGEX='(llm_tokens_in|llm_tokens_out|tokensIn|tokensOut|tokenIn|tokenOut)'
 
-# Optional additional allowlist terms (one per line)
-SECRETS_IGNORE_FILE=".secretsignore"
-ALLOWLIST_ARGS=()
-if [ -f "$SECRETS_IGNORE_FILE" ]; then
-  ALLOWLIST_ARGS=(-F -f "$SECRETS_IGNORE_FILE")
-  echo "[pre-commit] Using allowlist from .secretsignore"
-fi
+# Return 0 if the given path matches any glob/regex in .secretsignore
+allowlisted_file() {
+  local file="$1"
+  [ ! -f ".secretsignore" ] && return 1
+  # Exact match, basename match, glob, or regex
+  while IFS= read -r pat; do
+    [ -z "$pat" ] && continue
+    # Skip comment lines
+    [[ "$pat" =~ ^\s*# ]] && continue
+    # Glob match
+    if [[ "$file" == $pat ]]; then return 0; fi
+    # Basename match
+    if [[ "$(basename "$file")" == $pat ]]; then return 0; fi
+    # Regex match
+    if echo "$file" | grep -Eq "$pat"; then return 0; fi
+  done < .secretsignore
+  return 1
+}
+
+# Return 0 if the given line is allowlisted by any token in .secretsignore
+allowlisted_line() {
+  local line="$1"
+  [ ! -f ".secretsignore" ] && return 1
+  while IFS= read -r pat; do
+    [ -z "$pat" ] && continue
+    [[ "$pat" =~ ^\s*# ]] && continue
+    if echo "$line" | grep -Eq "$pat"; then return 0; fi
+  done < .secretsignore
+  return 1
+}
 
 # Stricter patterns for real secrets (expand as needed)
 # - OpenAI: sk-*
@@ -68,17 +91,15 @@ while IFS= read -r file; do
   # Skip markdown documentation (but still check for actual secrets)
   # We'll be more lenient with .md files below
 
+  # Skip entire file if allowlisted by path
+  if allowlisted_file "$file"; then
+    echo "[pre-commit] Skipping allowlisted file: $file"
+    continue
+  fi
+
   # Read staged content (not working tree)
   content="$(git show :$file 2>/dev/null || true)"
   if [ -z "$content" ]; then continue; fi
-
-  # Allowlist check: if the whole file is allowlisted, skip
-  if [ -n "${ALLOWLIST_ARGS[*]:-}" ]; then
-    if grep -q ${ALLOWLIST_ARGS[*]} -- "$file"; then
-      echo "[pre-commit] Skipping allowlisted file: $file"
-      continue
-    fi
-  fi
   
   # Special check for .env files (not template/example)
   if [[ "$file" =~ \.env($|[^.]) ]] && [[ ! "$file" =~ \.(template|example)$ ]]; then
@@ -105,8 +126,8 @@ while IFS= read -r file; do
       continue
     fi
 
-    # Skip lines matching repo-level allowlist words, if provided
-    if [ -n "${ALLOWLIST_ARGS[*]:-}" ] && echo "$line" | grep -q ${ALLOWLIST_ARGS[*]}; then
+    # Skip line if allowlisted by content token
+    if allowlisted_line "$line"; then
       continue
     fi
 
