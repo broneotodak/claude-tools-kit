@@ -1,0 +1,27 @@
+{
+  "project": "analytics",
+  "mode": "hybrid",
+  "security": "standard",
+  "phases": [
+    {
+      "name": "foundation",
+      "mode": "sequential",
+      "agents": ["sql"]
+    },
+    {
+      "name": "implementation",
+      "mode": "parallel",
+      "agents": ["memory", "validation"]
+    },
+    {
+      "name": "quality",
+      "mode": "parallel",
+      "agents": ["security", "qa"]
+    }
+  ],
+  "metadata": {
+    "description": "Analytics pipeline with hybrid execution",
+    "version": "1.0.0",
+    "author": "CTK Orchestration"
+  }
+}

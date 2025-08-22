@@ -101,6 +101,10 @@ temp/
 *.swo
 *~
 
+# Orchestration run history
+orchestration/run_history/
+run_history/
+
 # Backup files
 *.backup
 *.bak

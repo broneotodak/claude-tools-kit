@@ -1,0 +1,17 @@
+{
+  "project": "THR",
+  "mode": "sequential",
+  "security": "strict",
+  "agents": ["memory", "validation", "qa", "security"],
+  "metadata": {
+    "description": "THR HRMS pipeline - strict sequential execution enforced",
+    "version": "1.0.0",
+    "author": "THR-CTK",
+    "notes": [
+      "THR project always uses sequential mode",
+      "Security validation is mandatory",
+      "Acceptance gates cannot be bypassed",
+      "HITL approval adds pause but cannot skip gates"
+    ]
+  }
+}
