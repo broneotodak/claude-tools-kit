@@ -1,0 +1,28 @@
+{
+  "name": "@ctk/mcp-server",
+  "version": "1.0.0",
+  "description": "MCP Server for Claude Tools Kit - Exposes CTK tools as MCP resources and prompts",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "ctk-mcp-server": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mcp",
+    "claude-code",
+    "ctk",
+    "memory",
+    "pgvector"
+  ],
+  "author": "Neo Todak",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@supabase/supabase-js": "^2.50.4",
+    "dotenv": "^17.2.0"
+  }
+}
