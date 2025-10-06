@@ -1,6 +1,13 @@
 {
   "hooks": {
     "tool": ["hooks/conversation-checkpoint.js"],
-    "post_completion": ["hooks/auto-save-memory.js"]
+    "post_completion": ["hooks/auto-save-memory.js"],
+    "pre_tool": {
+      "Bash(git commit)": ["hooks/pre-commit-security.js"],
+      "Edit": ["hooks/validate-edit.js"]
+    },
+    "post_tool": {
+      "Write": ["hooks/save-to-memory.js"]
+    }
   }
 }
