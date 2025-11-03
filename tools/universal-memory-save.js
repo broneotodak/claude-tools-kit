@@ -50,9 +50,33 @@ class UniversalMemorySave {
 
   normalizeMachine() {
     const hostname = os.hostname();
+    
+    // Check actual hardware model for Mac systems
+    if (process.platform === 'darwin') {
+      try {
+        const { execSync } = require('child_process');
+        const modelOutput = execSync('system_profiler SPHardwareDataType | grep "Model Name"', { encoding: 'utf8' });
+        
+        if (modelOutput.includes('MacBook Air')) {
+          return 'MacBook Air';
+        } else if (modelOutput.includes('MacBook Pro')) {
+          return 'MacBook Pro';
+        } else if (modelOutput.includes('iMac')) {
+          return 'iMac';
+        } else if (modelOutput.includes('Mac Studio')) {
+          return 'Mac Studio';
+        } else if (modelOutput.includes('Mac Pro')) {
+          return 'Mac Pro';
+        }
+      } catch (error) {
+        // Fallback to hostname detection
+        console.warn('Could not detect hardware model, using hostname');
+      }
+    }
+    
     if (hostname.toLowerCase().includes('macbook')) return 'MacBook Pro';
     if (hostname.toLowerCase().includes('windows')) return 'Windows PC';
-    return 'MacBook Pro'; // Default for your system
+    return process.platform === 'darwin' ? 'Mac' : 'Unknown';
   }
 
   async saveMemory(content, options = {}) {

@@ -24,6 +24,7 @@
     "@supabase/supabase-js": "^2.50.4",
     "csv-parser": "^3.0.0",
     "dotenv": "^17.2.0",
+    "pg": "^8.16.3",
     "playwright": "^1.54.1",
     "puppeteer": "^24.12.1"
   },
