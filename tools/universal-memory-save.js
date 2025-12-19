@@ -10,13 +10,19 @@ const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-require('dotenv').config();
 
-// Initialize Supabase
-const supabase = createClient(
-  process.env.SUPABASE_URL || 'https://uzamamymfzhelvkwpvgt.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-);
+// CRITICAL: Always load CTK .env for memory database, not current project's .env
+// This ensures memory saves work from ANY project directory (THR, ATLAS, etc.)
+const ctkEnvPath = path.join('/Users/broneotodak/Projects/claude-tools-kit', '.env');
+require('dotenv').config({ path: ctkEnvPath });
+
+// Memory database credentials (uzamamymfzhelvkwpvgt)
+// NEVER use project-specific databases for memory storage!
+const MEMORY_DB_URL = 'https://uzamamymfzhelvkwpvgt.supabase.co';
+const MEMORY_DB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.FLOWSTATE_SERVICE_KEY;
+
+// Initialize Supabase for memory database
+const supabase = createClient(MEMORY_DB_URL, MEMORY_DB_KEY);
 
 class UniversalMemorySave {
   constructor() {
