@@ -1,0 +1,35 @@
+{
+  "project": "Academy",
+  "name": "Todak Academy Portal v2",
+  "type": "React + Supabase",
+  "path": "/Users/broneotodak/Projects/todak-academy-v2",
+
+  "database": {
+    "provider": "supabase",
+    "project_ref": "hgdlmgqduruejlouesll",
+    "url": "https://hgdlmgqduruejlouesll.supabase.co",
+    "table_prefix": "",
+    "notes": "68 tables, 91K+ rows, migrated from Laravel on Tencent"
+  },
+
+  "deployment": {
+    "production": {
+      "url": "https://academy.neotodak.com",
+      "branch": "main",
+      "platform": "netlify"
+    }
+  },
+
+  "old_system": {
+    "type": "Laravel 10",
+    "server": "43.156.25.169",
+    "status": "still live during rewrite"
+  },
+
+  "github": "broneotodak/todak-academy-v2",
+
+  "commands": {
+    "dev": "npm run dev",
+    "build": "npm run build"
+  }
+}

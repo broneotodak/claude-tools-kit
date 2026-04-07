@@ -1,0 +1,32 @@
+{
+  "project": "AskMyLegal",
+  "name": "AskMyLegal Legal AI Platform",
+  "type": "Next.js + Supabase",
+  "path": "/Users/broneotodak/Projects/askmylegal",
+
+  "database": {
+    "provider": "supabase",
+    "project_ref": "yvxpggnbvuwgwsmsubtr",
+    "url": "https://yvxpggnbvuwgwsmsubtr.supabase.co",
+    "table_prefix": "",
+    "notes": "11 tables, pgVector enabled, RLS active, ap-southeast-1"
+  },
+
+  "deployment": {
+    "production": {
+      "url": "https://askmylegal.com",
+      "domain": "GoDaddy → Netlify",
+      "platform": "netlify"
+    }
+  },
+
+  "github": "broneotodak/askmylegal",
+  "status": "planning phase — dev not started",
+
+  "critical_rules": [
+    "Source of truth: presentation.neotodak.com/askmylegal.html (PIN: langgar)",
+    "Progressive registration: Guest→Basic→Verified",
+    "JPDP registration required before launch",
+    "Biometric never for users"
+  ]
+}

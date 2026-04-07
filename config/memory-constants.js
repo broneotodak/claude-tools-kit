@@ -17,15 +17,20 @@ const MEMORY_TYPES = {
 
 const MEMORY_CATEGORIES = {
     CLAUDEN: 'ClaudeN',
+    CTK: 'CTK',
     THR: 'THR',
     ATLAS: 'ATLAS',
+    ACADEMY: 'Academy',
+    MUSCLEHUB: 'Musclehub',
+    ASKMYLEGAL: 'AskMyLegal',
     TODAK_AI: 'TodakAI',
     FLOWSTATE: 'FlowState',
     FIRASAH: 'Firasah',
     KENAL: 'Kenal',
     N8N: 'n8n',
-    VENTURE_CANVAS: 'VentureCanvas',
-    FLIPPER: 'Flipper',
+    PRESENTATION: 'Presentation',
+    OPENCLAW: 'OpenClaw',
+    DIGITECH: 'Digitech',
     GENERAL: 'General'
 };
 

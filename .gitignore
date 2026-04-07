@@ -160,5 +160,8 @@ gcp-key.json
 *.tfstate.*
 .terraform/
 terraform.tfvars
-!terraform.tfvars.examplebackups/
+!terraform.tfvars.example
+
+# CTK backups and MCP server deps
+backups/
 mcp-server/node_modules/

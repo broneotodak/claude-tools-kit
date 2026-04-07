@@ -1,0 +1,29 @@
+{
+  "project": "Presentation",
+  "name": "Presentation Hub",
+  "type": "Static HTML + Netlify Functions",
+  "path": "/Users/broneotodak/Projects/presentation-repo",
+
+  "deployment": {
+    "production": {
+      "url": "https://presentation.neotodak.com",
+      "site_id": "36b85c5e-67a1-4c4d-b51a-6a565821606e",
+      "branch": "main",
+      "platform": "netlify"
+    }
+  },
+
+  "github": "broneotodak/presentation",
+
+  "critical_rules": [
+    "PIN-protected pages: content served from netlify/functions/pages/*.js",
+    "NEVER put sensitive content in HTML source — only in server-side JS",
+    "CORS: inline route headers only (middleware breaks Netlify serverless)",
+    "Always git push to deploy — NEVER netlify deploy locally"
+  ],
+
+  "commands": {
+    "dev": "netlify dev",
+    "build": "npm run build"
+  }
+}

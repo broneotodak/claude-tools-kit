@@ -8,6 +8,7 @@
     "save-memory": "node tools/save-memory.js",
     "check-activities": "node tools/check-latest-activities.js",
     "hooks:install": "bash scripts/install-git-hooks.sh",
+    "test": "jest --verbose",
     "test:orchestration": "node orchestration/tests/run.mjs"
   },
   "keywords": [
@@ -35,5 +36,8 @@
   "bugs": {
     "url": "https://github.com/broneotodak/claude-tools-kit/issues"
   },
-  "homepage": "https://github.com/broneotodak/claude-tools-kit#readme"
+  "homepage": "https://github.com/broneotodak/claude-tools-kit#readme",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
 }

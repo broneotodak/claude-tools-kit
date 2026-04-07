@@ -1,0 +1,22 @@
+{
+  "project": "Musclehub",
+  "name": "Musclehub Gym Management",
+  "type": "Laravel (archived)",
+  "path": "/Users/broneotodak/Projects/musclehub",
+
+  "database": {
+    "provider": "supabase",
+    "project_ref": "jxcddfejjqqynekbpdxh",
+    "url": "https://jxcddfejjqqynekbpdxh.supabase.co",
+    "table_prefix": "",
+    "notes": "36 tables, 26,754 records migrated from Tencent"
+  },
+
+  "github": "broneotodak/musclehub",
+  "status": "archived — data secured, no active development",
+
+  "critical_rules": [
+    "Mobile app is SEPARATE — likely on GitLab muscle-hub org",
+    "Original server SSH key injection broken — use clone instance from backup image"
+  ]
+}
