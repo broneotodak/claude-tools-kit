@@ -25,6 +25,7 @@ const MEMORY_CATEGORIES = {
     KENAL: 'Kenal',
     N8N: 'n8n',
     VENTURE_CANVAS: 'VentureCanvas',
+    FLIPPER: 'Flipper',
     GENERAL: 'General'
 };
 

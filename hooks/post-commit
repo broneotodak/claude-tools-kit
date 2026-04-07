@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Save git commits to claude_desktop_memory for FlowState
+# FIXED: Source is claude_code, not claude_desktop (git commits are made via Claude Code)
+# VERSION: 2.0 - CTK-Compliant (December 2025)
+
+if [ -z "$FLOWSTATE_SERVICE_KEY" ]; then
+  exit 0
+fi
+
+# Get git info
+COMMIT_MSG=$(git log -1 --pretty=%B | tr '\n' ' ' | sed 's/"/\\"/g')
+REPO_NAME=$(basename $(git rev-parse --show-toplevel))
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+AUTHOR=$(git log -1 --pretty=%an)
+COMMIT_HASH=$(git rev-parse --short HEAD)
+TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+
+# Determine machine name (standardized for FlowState)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  MACHINE_NAME="MacBook Pro"
+elif [[ "$OSTYPE" == "linux-gnu"* ]] && grep -qi microsoft /proc/version 2>/dev/null; then
+  MACHINE_NAME="Windows PC"
+else
+  MACHINE_NAME="MacBook Pro"
+fi
+
+# Create JSON payload - CTK-Compliant
+JSON=$(cat <<JSON_EOF
+{
+  "user_id": "neo_todak",
+  "memory_type": "activity",
+  "category": "git_commit",
+  "content": "Git commit in $REPO_NAME: $COMMIT_MSG",
+  "metadata": {
+    "activity_type": "git_commit",
+    "project": "$REPO_NAME",
+    "branch": "$BRANCH",
+    "author": "$AUTHOR",
+    "commit_hash": "$COMMIT_HASH",
+    "machine": "$MACHINE_NAME",
+    "tool": "Claude Code",
+    "flowstate_ready": true,
+    "ctk_compliant": true
+  },
+  "importance": 5,
+  "source": "claude_code"
+}
+JSON_EOF
+)
+
+# Send to Supabase claude_desktop_memory table
+curl -s -X POST \
+  "https://uzamamymfzhelvkwpvgt.supabase.co/rest/v1/claude_desktop_memory" \
+  -H "apikey: $FLOWSTATE_SERVICE_KEY" \
+  -H "Authorization: Bearer $FLOWSTATE_SERVICE_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: return=minimal" \
+  -d "$JSON" > /tmp/git-hook-result.log 2>&1 &
+
+exit 0

@@ -1,0 +1,54 @@
+{
+  "project": "THR",
+  "name": "Todak HRMS",
+  "type": "React + Vite",
+  "path": "/Users/broneotodak/Projects/THR",
+
+  "database": {
+    "provider": "supabase",
+    "project_ref": "ftbtsxlujsnobujwekwx",
+    "url": "https://ftbtsxlujsnobujwekwx.supabase.co",
+    "table_prefix": "thr_"
+  },
+
+  "deployment": {
+    "staging": {
+      "url": "https://staging-thr.netlify.app",
+      "branch": "staging",
+      "platform": "netlify",
+      "note": "Uses SAME live database as production - only frontend is different"
+    },
+    "production": {
+      "url": "https://thr.todak.io",
+      "branch": "main",
+      "platform": "netlify"
+    }
+  },
+
+  "codebase": {
+    "index_script": "scripts/generate-codebase-index.js",
+    "index_output": ".claude/codebase-index.json",
+    "map_output": ".claude/CODEBASE_MAP.md"
+  },
+
+  "critical_rules": [
+    "access_level: Use COLUMN not JSONB",
+    "employment_status: Use JSONB (no column)",
+    "Level 7: Must use useOrgScope hook",
+    "Email: Always deduplicate by email.toLowerCase()"
+  ],
+
+  "key_files": {
+    "employee_service": "src/shared/services/employeeService.js",
+    "org_scope_hook": "src/shared/hooks/useOrgScope.js",
+    "memo_service": "src/shared/services/memoService.js",
+    "leave_service": "src/shared/services/leaveEntitlementService.js"
+  },
+
+  "commands": {
+    "dev": "npm run dev",
+    "build": "npm run build",
+    "lint": "npm run lint",
+    "regenerate_index": "node scripts/generate-codebase-index.js"
+  }
+}
