@@ -1,0 +1,19 @@
+{
+  "name": "@todak/memory",
+  "version": "0.1.0",
+  "description": "Neo-brain unified memory SDK for all Todak / OpenClaw agents",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./storage": "./src/storage/index.js"
+  },
+  "scripts": {
+    "smoke": "node scripts/smoke.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.101.1"
+  },
+  "author": "Neo Todak",
+  "license": "MIT"
+}

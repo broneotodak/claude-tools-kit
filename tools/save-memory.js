@@ -25,11 +25,63 @@ require('dotenv').config({ path: ctkEnvPath });
 const { getStandardizedMachineName } = require('./machine-detection');
 const { MEMORY_TYPES, MEMORY_CATEGORIES, IMPORTANCE_LEVELS } = require('../config/memory-constants');
 
-// Memory database (uzamamymfzhelvkwpvgt) — NEVER use project databases
+// Legacy memory database (uzamamymfzhelvkwpvgt). Kept as read-write during dual-write soak, then read-only archive.
 const MEMORY_DB_URL = process.env.SUPABASE_URL || 'https://uzamamymfzhelvkwpvgt.supabase.co';
 const MEMORY_DB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
 const supabase = createClient(MEMORY_DB_URL, MEMORY_DB_KEY);
+
+// New unified memory backend (neo-brain, xsunmervpyrplzarebva). Optional: enables dual-write when env vars set.
+const NEO_BRAIN_URL = process.env.NEO_BRAIN_URL;
+const NEO_BRAIN_KEY = process.env.NEO_BRAIN_SERVICE_ROLE_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const NEO_SELF_ID = '00000000-0000-0000-0000-000000000001';
+const neoBrain = (NEO_BRAIN_URL && NEO_BRAIN_KEY) ? createClient(NEO_BRAIN_URL, NEO_BRAIN_KEY) : null;
+
+async function embedForNeoBrain(text) {
+  if (!GEMINI_API_KEY || !text) return null;
+  const model = process.env.GEMINI_EMBED_MODEL || 'gemini-embedding-001';
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: { parts: [{ text: text.slice(0, 2048) }] }, outputDimensionality: 768 }),
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const vals = d?.embedding?.values;
+    return vals ? '[' + vals.join(',') + ']' : null;
+  } catch { return null; }
+}
+
+async function dualWriteToNeoBrain(memory, legacyId) {
+  if (!neoBrain) return { skipped: true };
+  try {
+    const embedding = await embedForNeoBrain(memory.content);
+    const row = {
+      content: memory.content,
+      embedding,
+      category: memory.category,
+      memory_type: memory.memory_type,
+      importance: memory.importance,
+      visibility: memory.visibility || 'internal',
+      subject_id: NEO_SELF_ID,
+      source: memory.source || 'claude_code',
+      source_ref: { legacy_id: legacyId ? String(legacyId) : null, legacy_table: 'claude_desktop_memory', dual_write: true },
+      metadata: memory.metadata || {},
+    };
+    const { data, error } = await neoBrain.from('memories').insert(row).select('id').single();
+    if (error) return { error: error.message };
+    await neoBrain.from('memory_writes_log').insert({
+      memory_id: data.id,
+      action: 'insert',
+      written_by: 'save-memory.js-dualwrite',
+      payload_preview: memory.content.slice(0, 180),
+    });
+    return { id: data.id };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
 
 function detectProject() {
   const cwd = process.cwd();
@@ -56,7 +108,8 @@ function detectProject() {
 }
 
 async function saveMemory(content, options = {}) {
-  const machine = getStandardizedMachineName();
+  // Prefer MACHINE_NAME env var if set (allows custom names like "CLAW")
+  const machine = process.env.MACHINE_NAME || getStandardizedMachineName();
   const project = options.category || detectProject();
 
   const memory = {
@@ -84,9 +137,20 @@ async function saveMemory(content, options = {}) {
 
     if (error) throw error;
 
-    console.log('✅ Memory saved!');
+    const legacyId = data?.[0]?.id;
+    console.log('✅ Memory saved (legacy)!');
     console.log(`   Project: ${project} | Importance: ${memory.importance} | Machine: ${machine}`);
-    return { saved: true, id: data?.[0]?.id };
+
+    if (neoBrain) {
+      const dualResult = await dualWriteToNeoBrain(memory, legacyId);
+      if (dualResult.id) {
+        console.log(`✅ Dual-write neo-brain: ${dualResult.id}`);
+      } else if (dualResult.error) {
+        console.warn(`⚠️  neo-brain dual-write failed: ${dualResult.error}`);
+      }
+    }
+
+    return { saved: true, id: legacyId };
   } catch (directError) {
     console.error('❌ Direct save failed:', directError.message);
 

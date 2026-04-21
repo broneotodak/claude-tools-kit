@@ -23,6 +23,7 @@
   "license": "MIT",
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
+    "@todak/memory": "file:packages/memory",
     "csv-parser": "^3.2.0",
     "dotenv": "^17.4.1",
     "pg": "^8.20.0",
