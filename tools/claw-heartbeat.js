@@ -101,18 +101,20 @@ async function buildMeta() {
 async function emit() {
   const meta = await buildMeta();
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/agent_heartbeats`, {
+  // agent_heartbeats PK is agent_name — upsert via PostgREST on_conflict + merge-duplicates
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/agent_heartbeats?on_conflict=agent_name`, {
     method: 'POST',
     headers: {
       apikey: SERVICE_KEY,
       Authorization: `Bearer ${SERVICE_KEY}`,
       'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
     },
     body: JSON.stringify({
       agent_name: 'claw-mac',
       status: 'ok',
       meta,
+      reported_at: new Date().toISOString(),
     }),
   });
 
