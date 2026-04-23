@@ -82,7 +82,7 @@ const transient = (m, d) => new CommandError('transient', m, d);
 
 async function runOllamaPrompt(payload) {
   const allowedModels = ['qwen3:8b', 'qwen3:14b', 'gemma3:12b'];
-  const { model, prompt, max_tokens = 2000 } = payload || {};
+  const { model, prompt, max_tokens = 2000, think = false } = payload || {};
 
   if (!model || typeof model !== 'string') throw invalidPayload('model (string) is required');
   if (!allowedModels.includes(model))
@@ -90,6 +90,7 @@ async function runOllamaPrompt(payload) {
   if (!prompt || typeof prompt !== 'string') throw invalidPayload('prompt (string) is required');
   if (!Number.isInteger(max_tokens) || max_tokens < 1 || max_tokens > 32000)
     throw invalidPayload('max_tokens must be integer in [1, 32000]', { received: max_tokens });
+  if (typeof think !== 'boolean') throw invalidPayload('think must be boolean when supplied');
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 120_000);
@@ -102,6 +103,7 @@ async function runOllamaPrompt(payload) {
         model,
         prompt,
         stream: false,
+        think,
         options: { num_predict: max_tokens },
       }),
       signal: ctrl.signal,
@@ -125,6 +127,7 @@ async function runOllamaPrompt(payload) {
   const data = await res.json();
   return {
     response: data.response ?? '',
+    thinking: data.thinking ?? null,
     model: data.model ?? model,
     tokens_used: (data.prompt_eval_count || 0) + (data.eval_count || 0),
     eval_duration_ms: data.eval_duration ? Math.round(data.eval_duration / 1e6) : null,
