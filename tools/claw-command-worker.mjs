@@ -151,7 +151,7 @@ const BROWSER_ACT_ALLOWED_HOSTS = new Set([
 ]);
 
 async function browserAct(payload) {
-  const { intent, url_context, timeout_ms, with_screenshot = false } = payload || {};
+  const { intent, url_context, timeout_ms, with_screenshot = false, vars = {} } = payload || {};
 
   if (!intent || typeof intent !== 'string')
     throw invalidPayload('intent (string) is required');
@@ -161,6 +161,8 @@ async function browserAct(payload) {
     throw invalidPayload('timeout_ms must be integer ms in [1000, 300000] when supplied', { received: timeout_ms });
   if (typeof with_screenshot !== 'boolean')
     throw invalidPayload('with_screenshot must be boolean when supplied', { received: with_screenshot });
+  if (vars !== null && (typeof vars !== 'object' || Array.isArray(vars)))
+    throw invalidPayload('vars must be a plain object when supplied', { received: vars });
 
   let host;
   try { host = new URL(url_context).hostname; }
@@ -187,7 +189,7 @@ async function browserAct(payload) {
   }
 
   try {
-    const r = await session.act({ intent, url_context, timeout_ms, withScreenshot: with_screenshot });
+    const r = await session.act({ intent, url_context, timeout_ms, withScreenshot: with_screenshot, vars: vars || {} });
     return {
       layer: r.layer,
       ready: r.ready,
@@ -197,6 +199,7 @@ async function browserAct(payload) {
       duration_ms: r.duration_ms,
       cached_action: r.cached_action || null,
       coached_by: r.coached_by || null,
+      action_output: r.action_output ?? null,
       overlay_detected: r.preflight?.overlay_detected ?? null,
       dismissed: r.preflight?.dismissed ?? null,
       overlay_description: r.preflight?.verdict?.overlay_description || null,

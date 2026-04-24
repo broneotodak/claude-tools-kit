@@ -176,6 +176,16 @@ function computeIntentHash(intent) {
   return sha256hex(String(intent).trim().toLowerCase().replace(/\s+/g, " "));
 }
 
+// Template var substitution for coached action strings. {{name}} → vars.name.
+// Only runs on string values (selector/text/file_path etc). Non-strings pass through.
+function _resolveTemplate(value, vars) {
+  if (typeof value !== "string") return value;
+  return value.replace(/\{\{(\w+)\}\}/g, (_, k) => {
+    if (!(k in vars)) throw new Error(`template var "{{${k}}}" not supplied in vars`);
+    return String(vars[k]);
+  });
+}
+
 async function geminiPreflight({ apiKey, screenshotBuf, intent, timeoutMs = 15000 }) {
   const body = {
     contents: [{
@@ -400,25 +410,121 @@ export class ClawBrowserSession {
     return data.id;
   }
 
-  // Execute a cached action. No LLM involved.
-  async executeAction(action) {
+  // Execute a cached action. No LLM involved. Returns { output } — null for
+  // side-effect actions, string for read_*, array of per-step outputs for sequence.
+  // `vars` supplies values for {{name}} template slots in coached actions.
+  async executeAction(action, { vars = {} } = {}) {
+    const r = (v) => _resolveTemplate(v, vars);
     switch (action?.type) {
       case "none":
-        return; // cached "no overlay" — page is already clear, nothing to do
+        return { output: null };
       case "keyboard_esc":
         await this.page.keyboard.press("Escape");
-        return;
-      case "click_coords":
+        return { output: null };
+      case "click_coords": {
         if (!Number.isFinite(action.x) || !Number.isFinite(action.y)) throw new Error("click_coords needs x,y");
         await this.page.mouse.click(action.x, action.y);
-        return;
-      case "click_selector":
-        if (!action.selector) throw new Error("click_selector needs selector");
-        await this.page.click(action.selector, { timeout: 5000 });
-        return;
+        return { output: null };
+      }
+      case "click_selector": {
+        const sel = r(action.selector);
+        if (!sel) throw new Error("click_selector needs selector");
+        await this.page.click(sel, { timeout: action.timeout_ms || 5000 });
+        return { output: null };
+      }
+      case "type_into": {
+        const sel = r(action.selector);
+        const text = r(action.text);
+        if (!sel) throw new Error("type_into needs selector");
+        if (text == null) throw new Error("type_into needs text");
+        await this.page.fill(sel, String(text), { timeout: action.timeout_ms || 5000 });
+        return { output: null };
+      }
+      case "submit": {
+        const sel = r(action.selector);
+        if (!sel) throw new Error("submit needs selector");
+        await this.page.locator(sel).press("Enter", { timeout: action.timeout_ms || 5000 });
+        return { output: null };
+      }
+      case "read_text": {
+        const sel = r(action.selector);
+        if (!sel) throw new Error("read_text needs selector");
+        const txt = await this.page.locator(sel).first().innerText({ timeout: action.timeout_ms || 5000 });
+        return { output: txt };
+      }
+      case "read_attr": {
+        const sel = r(action.selector);
+        const attr = action.attr;
+        if (!sel || !attr) throw new Error("read_attr needs selector + attr");
+        const val = await this.page.locator(sel).first().getAttribute(attr, { timeout: action.timeout_ms || 5000 });
+        return { output: val };
+      }
+      case "upload_file": {
+        const sel = r(action.selector);
+        const filePath = r(action.file_path);
+        if (!sel || !filePath) throw new Error("upload_file needs selector + file_path");
+        await this.page.setInputFiles(sel, filePath);
+        return { output: null };
+      }
+      case "wait_for": {
+        const sel = r(action.selector);
+        if (!sel) throw new Error("wait_for needs selector");
+        await this.page.waitForSelector(sel, { state: action.state || "visible", timeout: action.timeout_ms || 10000 });
+        return { output: null };
+      }
+      case "scroll_to": {
+        const sel = r(action.selector);
+        if (!sel) throw new Error("scroll_to needs selector");
+        await this.page.locator(sel).first().scrollIntoViewIfNeeded({ timeout: action.timeout_ms || 5000 });
+        return { output: null };
+      }
+      case "sequence": {
+        if (!Array.isArray(action.steps)) throw new Error("sequence needs steps array");
+        const outputs = [];
+        for (let i = 0; i < action.steps.length; i++) {
+          const step = action.steps[i];
+          try {
+            const { output } = await this.executeAction(step, { vars });
+            outputs.push({ step: i + 1, type: step.type, output });
+          } catch (e) {
+            throw new Error(`sequence step ${i + 1} (${step.type}): ${e.message}`);
+          }
+        }
+        return { output: outputs };
+      }
       default:
-        throw new Error(`unknown cached action type: ${action?.type}`);
+        throw new Error(`unknown action type: ${action?.type}`);
     }
+  }
+
+  // ── convenience primitives (all route through executeAction so behavior stays uniform) ──
+  async type(selector, text, { timeout = 5000 } = {}) {
+    const r = await this.executeAction({ type: "type_into", selector, text, timeout_ms: timeout });
+    return r.output;
+  }
+  async click(selector, { timeout = 5000 } = {}) {
+    const r = await this.executeAction({ type: "click_selector", selector, timeout_ms: timeout });
+    return r.output;
+  }
+  async readText(selector, { timeout = 5000 } = {}) {
+    const r = await this.executeAction({ type: "read_text", selector, timeout_ms: timeout });
+    return r.output;
+  }
+  async readAttr(selector, attr, { timeout = 5000 } = {}) {
+    const r = await this.executeAction({ type: "read_attr", selector, attr, timeout_ms: timeout });
+    return r.output;
+  }
+  async uploadFile(selector, filePath) {
+    const r = await this.executeAction({ type: "upload_file", selector, file_path: filePath });
+    return r.output;
+  }
+  async waitFor(selector, { state = "visible", timeout = 10000 } = {}) {
+    const r = await this.executeAction({ type: "wait_for", selector, state, timeout_ms: timeout });
+    return r.output;
+  }
+  async scrollTo(selector, { timeout = 5000 } = {}) {
+    const r = await this.executeAction({ type: "scroll_to", selector, timeout_ms: timeout });
+    return r.output;
   }
 
   // L2→L3 action shape. Cache what ACTUALLY worked to clear the overlay (or 'none' for clean pages).
@@ -436,7 +542,7 @@ export class ClawBrowserSession {
   // Main entry: L3 cache hit → execute → done.  L3 miss → L2 preflight → cache the winner.
   // withScreenshot:true uploads one final screenshot to neo-brain media, attaches
   // screenshot_media_id + screenshot_url to the result (opt-in — costs storage + embedding).
-  async act({ intent, url_context, timeout_ms, skipCache = false, withScreenshot = false } = {}) {
+  async act({ intent, url_context, timeout_ms, skipCache = false, withScreenshot = false, vars = {} } = {}) {
     if (!intent) throw new Error("act() requires intent");
     const start = Date.now();
     if (url_context && this.page.url() !== url_context) {
@@ -458,7 +564,7 @@ export class ClawBrowserSession {
       catch (e) { console.error("[L3] lookup error:", e.message); }
       if (cached) {
         try {
-          await this.executeAction(cached.action);
+          const { output } = await this.executeAction(cached.action, { vars });
           await this.recordActionOutcome({ id: cached.id, success: true }).catch(e => console.error("[L3] record success failed:", e.message));
           result = {
             layer: 3,
@@ -467,6 +573,7 @@ export class ClawBrowserSession {
             cached_action: cached.action,
             coached_by: cached.coached_by,
             ready: true,
+            action_output: output,
             duration_ms: Date.now() - start,
             note: "L3 cache hit — no LLM call",
           };
