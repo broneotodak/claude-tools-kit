@@ -1,15 +1,18 @@
-// ClawBrowserSession — Phase 5b.1 L1 + L2 wrapper
+// ClawBrowserSession — Phase 5b.1 L1 + L2 + L3 wrapper
 // Attaches to a persistent Chrome on CLAW via CDP (separate automation profile).
 // L1: window pin + acquire/goto/screenshot.
-// L2: Gemini 2.0 Flash overlay preflight + dismiss before every act.
-// L3/L4: click-memory cache + vision fallback — not yet implemented.
+// L2: Gemini 2.5 Flash overlay preflight + dismiss.
+// L3: click-memory cache in neo-brain — checked BEFORE L2, written AFTER L2 win.
+// L4: vision fallback — not yet implemented.
 //
 // Profile: ~/.gemini/antigravity-browser-profile (logged-in automation profile)
 // Port:    9333 (9222 is the openclaw gateway — do NOT share)
 // Creds:   neo-brain credentials vault (service=google_gemini, type=api_key)
+// Tables:  browser_action_memory (cache), browser_eval_runs (replay log)
 
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -122,6 +125,57 @@ const PREFLIGHT_SCHEMA = {
   required: ["overlay_detected", "dismiss_strategy"],
 };
 
+// Pick the first non-devtools tab whose target has a window; otherwise create one via CDP.
+async function _selectOrCreateTabWithWindow(browser, context) {
+  const existing = context.pages().filter(p => !p.url().startsWith("devtools://"));
+  for (const page of existing) {
+    try {
+      const cdp = await context.newCDPSession(page);
+      const { windowId } = await cdp.send("Browser.getWindowForTarget");
+      await cdp.detach().catch(() => {});
+      if (windowId) return page;
+    } catch {}
+  }
+  // No windowed tab — ask the browser to create one explicitly.
+  // Use Target.createTarget with newWindow:true via a throwaway CDP session on an existing page.
+  const scratch = existing[0] || await context.newPage();
+  const cdp = await context.newCDPSession(scratch);
+  try {
+    const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank", newWindow: true });
+    await cdp.detach().catch(() => {});
+    // Poll Playwright's page list for the new target.
+    for (let i = 0; i < 20; i++) {
+      await sleep(150);
+      const found = context.pages().find(p => {
+        try { return p.mainFrame()._page?._guid && !p.url().startsWith("devtools://") && p !== scratch; }
+        catch { return false; }
+      }) || context.pages().find(p => p.url() === "about:blank" && p !== scratch);
+      if (found) return found;
+    }
+    // Last resort: return scratch anyway; pinWindow will retry.
+    return scratch;
+  } catch (e) {
+    await cdp.detach().catch(() => {});
+    throw new Error(`unable to create windowed tab: ${e.message}`);
+  }
+}
+
+// --- L3 cache helpers ---
+function sha256hex(s) { return createHash("sha256").update(s).digest("hex"); }
+function normalizedDomain(urlStr) {
+  try { return new URL(urlStr).hostname.replace(/^www\./, ""); } catch { return ""; }
+}
+function computePageStateHash(urlStr, title) {
+  // Stable fingerprint of "what page am I on": path + page title.
+  // Query strings and fragments excluded so `/marketplace/?foo=1` collides with `/marketplace/`.
+  let path = "";
+  try { path = new URL(urlStr).pathname; } catch {}
+  return sha256hex(`${path}::${(title || "").trim()}`);
+}
+function computeIntentHash(intent) {
+  return sha256hex(String(intent).trim().toLowerCase().replace(/\s+/g, " "));
+}
+
 async function geminiPreflight({ apiKey, screenshotBuf, intent, timeoutMs = 15000 }) {
   const body = {
     contents: [{
@@ -179,11 +233,10 @@ export class ClawBrowserSession {
     const [context] = browser.contexts();
     if (!context) throw new Error("no browser context available via CDP");
 
-    let page = context.pages().find(p => !p.url().startsWith("devtools://")) || await context.newPage();
-
-    // Ensure the window is realized before we try to pin it — a freshly-spawned
-    // Chrome can still be attaching its window to the target when pinWindow runs.
-    await page.goto("about:blank").catch(() => {});
+    // Pick or create a TAB target with an associated window. Direct spawn/open from
+    // SSH can give us a target without a window (screen locked, no GUI session, etc);
+    // if that happens, fall back to CDP Target.createTarget with newWindow=true.
+    let page = await _selectOrCreateTabWithWindow(browser, context);
 
     const session = new ClawBrowserSession({ browser, context, page, port: cdpPort, userDataDir });
     await session.pinWindow(rect);
@@ -264,24 +317,164 @@ export class ClawBrowserSession {
     return { overlay_detected: true, dismissed: false, attempts: maxAttempts, screenshots, verdict: finalVerdict };
   }
 
-  async act({ intent, url_context, timeout_ms } = {}) {
+  // --- L3 cache I/O ---
+
+  async lookupAction({ domain, pageStateHash, intentHash }) {
+    const { data, error } = await brain().sb.from("browser_action_memory")
+      .select("id, action, success_count, fail_count, coached_by, last_success_at")
+      .eq("domain", domain)
+      .eq("page_state_hash", pageStateHash)
+      .eq("intent_hash", intentHash)
+      .maybeSingle();
+    if (error) throw new Error(`lookupAction: ${error.message}`);
+    return data || null;
+  }
+
+  async upsertAction({ domain, pageStateHash, intentHash, action, coachedBy = null, notes = null }) {
+    const { data, error } = await brain().sb.from("browser_action_memory")
+      .upsert({
+        domain, page_state_hash: pageStateHash, intent_hash: intentHash,
+        action, coached_by: coachedBy, notes,
+        last_success_at: new Date().toISOString(),
+        success_count: 1,
+      }, { onConflict: "domain,page_state_hash,intent_hash", ignoreDuplicates: false })
+      .select("id")
+      .single();
+    if (error) throw new Error(`upsertAction: ${error.message}`);
+    return data.id;
+  }
+
+  async recordActionOutcome({ id, success }) {
+    const col = success ? "success_count" : "fail_count";
+    const patch = { [col]: await this._incrementColumn(id, col) };
+    if (success) patch.last_success_at = new Date().toISOString();
+    const { error } = await brain().sb.from("browser_action_memory").update(patch).eq("id", id);
+    if (error) throw new Error(`recordActionOutcome: ${error.message}`);
+  }
+
+  async _incrementColumn(id, col) {
+    const { data, error } = await brain().sb.from("browser_action_memory").select(col).eq("id", id).single();
+    if (error) throw new Error(`_incrementColumn: ${error.message}`);
+    return (data?.[col] ?? 0) + 1;
+  }
+
+  // Manual coaching — human-written selector for L2-uncatchable cases (e.g. FB login nag).
+  async coachAction({ domain, pageStateHash, intentHash, action, notes = null }) {
+    return this.upsertAction({ domain, pageStateHash, intentHash, action, coachedBy: "human", notes });
+  }
+
+  // Replay log row — one per eval.
+  async recordEvalRun(row) {
+    const { data, error } = await brain().sb.from("browser_eval_runs").insert(row).select("id").single();
+    if (error) throw new Error(`recordEvalRun: ${error.message}`);
+    return data.id;
+  }
+
+  // Execute a cached action. No LLM involved.
+  async executeAction(action) {
+    switch (action?.type) {
+      case "none":
+        return; // cached "no overlay" — page is already clear, nothing to do
+      case "keyboard_esc":
+        await this.page.keyboard.press("Escape");
+        return;
+      case "click_coords":
+        if (!Number.isFinite(action.x) || !Number.isFinite(action.y)) throw new Error("click_coords needs x,y");
+        await this.page.mouse.click(action.x, action.y);
+        return;
+      case "click_selector":
+        if (!action.selector) throw new Error("click_selector needs selector");
+        await this.page.click(action.selector, { timeout: 5000 });
+        return;
+      default:
+        throw new Error(`unknown cached action type: ${action?.type}`);
+    }
+  }
+
+  // L2→L3 action shape. Cache what ACTUALLY worked to clear the overlay (or 'none' for clean pages).
+  static _actionFromPreflight(pre) {
+    if (!pre.overlay_detected) return { type: "none" };
+    if (!pre.dismissed) return null; // don't cache failures
+    // On dismissal, the design has Esc forced on attempt 2+ — most wins are Esc.
+    // For attempt-1 wins we trust Gemini's click_coords (rare, usually a large modal center that luckily worked).
+    if (pre.attempts >= 2) return { type: "keyboard_esc" };
+    const strat = pre.verdict?.dismiss_strategy;
+    if (strat?.type === "click_coords") return { type: "click_coords", x: strat.x, y: strat.y };
+    return { type: "keyboard_esc" };
+  }
+
+  // Main entry: L3 cache hit → execute → done.  L3 miss → L2 preflight → cache the winner.
+  async act({ intent, url_context, timeout_ms, skipCache = false } = {}) {
     if (!intent) throw new Error("act() requires intent");
+    const start = Date.now();
     if (url_context && this.page.url() !== url_context) {
       await this.goto(url_context, { timeout: timeout_ms || 30000 });
     }
+    const url = this.page.url();
+    const domain = normalizedDomain(url);
+    const title = await this.page.title().catch(() => "");
+    const pageStateHash = computePageStateHash(url, title);
+    const intentHash = computeIntentHash(intent);
+    const cacheKey = { domain, pageStateHash, intentHash };
+
+    // --- L3 lookup ---
+    if (!skipCache) {
+      let cached;
+      try { cached = await this.lookupAction(cacheKey); }
+      catch (e) { console.error("[L3] lookup error:", e.message); }
+      if (cached) {
+        try {
+          await this.executeAction(cached.action);
+          await this.recordActionOutcome({ id: cached.id, success: true }).catch(e => console.error("[L3] record success failed:", e.message));
+          return {
+            layer: 3,
+            intent, url, domain,
+            cache_hit: true,
+            cached_action: cached.action,
+            coached_by: cached.coached_by,
+            ready: true,
+            duration_ms: Date.now() - start,
+            note: "L3 cache hit — no LLM call",
+          };
+        } catch (e) {
+          console.error("[L3] execute failed, falling through to L2:", e.message);
+          await this.recordActionOutcome({ id: cached.id, success: false }).catch(() => {});
+        }
+      }
+    }
+
+    // --- L2 fallback ---
     const pre = await this.preflight({ intent });
+    const ready = !pre.overlay_detected || pre.dismissed === true;
+    let cachedId = null;
+    if (ready) {
+      const actionToCache = ClawBrowserSession._actionFromPreflight(pre);
+      if (actionToCache) {
+        try {
+          cachedId = await this.upsertAction({
+            ...cacheKey,
+            action: actionToCache,
+            coachedBy: "gemini-flash",
+          });
+        } catch (e) {
+          console.error("[L3] upsert failed:", e.message);
+        }
+      }
+    }
+
     return {
       layer: 2,
-      intent,
-      url: this.page.url(),
+      intent, url, domain,
+      cache_hit: false,
+      cache_id_written: cachedId,
       preflight: pre,
-      ready: !pre.overlay_detected || pre.dismissed === true,
-      note: "L2 preflight only — intent fulfilment requires L3 cache or L4 vision (not implemented)",
+      ready,
+      duration_ms: Date.now() - start,
     };
   }
 
   async extract() {
-    throw new Error("extract() is L3+ — not implemented yet");
+    throw new Error("extract() is not implemented yet");
   }
 
   async release({ keepAlive = true } = {}) {
