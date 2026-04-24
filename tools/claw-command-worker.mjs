@@ -2,7 +2,10 @@
 // claw-command-worker.mjs
 // Long-running launchd service. Drains `agent_commands` rows where to_agent='claw-mac'.
 // Uses claim_agent_command() / complete_agent_command() / fail_agent_command_transient() RPCs.
-// v1: dispatches run_ollama_prompt only. Unknown commands → capability_missing.
+// v2 handlers:
+//   - run_ollama_prompt  — local Ollama inference
+//   - browser_act        — ClawBrowserSession.act() (FB + IG only in v1 allowlist)
+// Unknown commands → capability_missing.
 
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -135,9 +138,82 @@ async function runOllamaPrompt(payload) {
   };
 }
 
+// ── browser_act: route an intent to ClawBrowserSession ──────────────
+// Phase 5b.1 v1 scope: Facebook + Instagram ONLY. Other sites (TikTok,
+// Threads, X, LinkedIn, YouTube, Higgsfield, OpenArt, PromeAI, Kling.ai,
+// etc.) deliberately NOT in the allowlist — add each one after its
+// profile is logged-in, its golden paths are eval'd, and its overlays
+// are understood. Rejecting out-of-scope hosts with capability_missing
+// is a feature, not a bug.
+const BROWSER_ACT_ALLOWED_HOSTS = new Set([
+  'www.facebook.com', 'facebook.com',
+  'www.instagram.com', 'instagram.com',
+]);
+
+async function browserAct(payload) {
+  const { intent, url_context, timeout_ms } = payload || {};
+
+  if (!intent || typeof intent !== 'string')
+    throw invalidPayload('intent (string) is required');
+  if (!url_context || typeof url_context !== 'string')
+    throw invalidPayload('url_context (string) is required');
+  if (timeout_ms !== undefined && (!Number.isInteger(timeout_ms) || timeout_ms < 1000 || timeout_ms > 300_000))
+    throw invalidPayload('timeout_ms must be integer ms in [1000, 300000] when supplied', { received: timeout_ms });
+
+  let host;
+  try { host = new URL(url_context).hostname; }
+  catch { throw invalidPayload('url_context must be a valid URL', { received: url_context }); }
+
+  if (!BROWSER_ACT_ALLOWED_HOSTS.has(host)) {
+    throw capabilityMissing(
+      `browser_act not yet enabled for host '${host}' — v1 scope is Facebook + Instagram only`,
+      { allowed: [...BROWSER_ACT_ALLOWED_HOSTS], received: host }
+    );
+  }
+
+  // Dynamic import so a wrapper-level failure doesn't crash the whole worker.
+  const { ClawBrowserSession } = await import('./claw-browser-session.mjs');
+
+  let session;
+  try {
+    session = await ClawBrowserSession.acquire({
+      profile: '.gemini/antigravity-browser-profile',
+      pinRect: { w: 1440, h: 900 },
+    });
+  } catch (e) {
+    throw transient(`browser acquire failed: ${e.message}`);
+  }
+
+  try {
+    const r = await session.act({ intent, url_context, timeout_ms });
+    return {
+      layer: r.layer,
+      ready: r.ready,
+      cache_hit: r.cache_hit,
+      url: r.url,
+      domain: r.domain,
+      duration_ms: r.duration_ms,
+      cached_action: r.cached_action || null,
+      coached_by: r.coached_by || null,
+      overlay_detected: r.preflight?.overlay_detected ?? null,
+      dismissed: r.preflight?.dismissed ?? null,
+      overlay_description: r.preflight?.verdict?.overlay_description || null,
+    };
+  } catch (e) {
+    if (/window not found|CDP|fetch failed|ECONNREFUSED|net::/i.test(e.message)) {
+      throw transient(`browser_act runtime: ${e.message}`);
+    }
+    throw new CommandError('permanent', `browser_act: ${e.message}`);
+  } finally {
+    // Graceful detach — Chrome stays alive (persistent launchd service).
+    await session.release({ keepAlive: true }).catch(() => {});
+  }
+}
+
 // Dispatch table. Add commands here as they come online.
 const HANDLERS = {
   run_ollama_prompt: runOllamaPrompt,
+  browser_act: browserAct,
 };
 
 // ── execution wrapper ──────────────────────────────────────────────
@@ -174,7 +250,7 @@ async function processOne() {
     const result = await execute(cmd);
     await complete(cmd.id, 'done', {
       ...result,
-      _meta: { duration_ms: Date.now() - startedAt, worker_version: 'claw-command-worker-v1' },
+      _meta: { duration_ms: Date.now() - startedAt, worker_version: 'claw-command-worker-v2' },
     });
     console.log(`[worker] done ${cmd.id} in ${Date.now() - startedAt}ms`);
   } catch (err) {
@@ -183,7 +259,7 @@ async function processOne() {
       error: err.message,
       error_class: errorClass,
       details: err.details ?? null,
-      _meta: { duration_ms: Date.now() - startedAt, worker_version: 'claw-command-worker-v1' },
+      _meta: { duration_ms: Date.now() - startedAt, worker_version: 'claw-command-worker-v2' },
     };
     if (errorClass === 'transient') {
       const newStatus = await failTransient(cmd.id, body);
