@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ai.openclaw.browser-automation
+  Persistent Chrome on port 9333 for CLAW's ClawBrowserSession wrapper.
+  Uses the ~/.gemini/antigravity-browser-profile profile (separate from Neo's daily Chrome
+  and from the openclaw gateway :9222 profile).
+
+  Installs to ~/Library/LaunchAgents/ (user-scoped). Loads only in an Aqua GUI session
+  (not ssh/launchd-root) — Chrome needs a window server to create a real window that
+  CDP's Browser.getWindowForTarget can find.
+
+  Install:
+    cp ops/launchd/ai.openclaw.browser-automation.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/ai.openclaw.browser-automation.plist
+
+  Uninstall:
+    launchctl unload ~/Library/LaunchAgents/ai.openclaw.browser-automation.plist
+    rm ~/Library/LaunchAgents/ai.openclaw.browser-automation.plist
+
+  Restart (clean):
+    launchctl kickstart -k gui/$(id -u)/ai.openclaw.browser-automation
+  (NOTE: kickstart sends SIGKILL — use only if Chrome is wedged. Normal updates:
+   unload + reload instead, to give Chrome a graceful SIGTERM and flush cookies.)
+
+  Status:
+    launchctl list | grep browser-automation
+
+  Logs: ~/.openclaw/logs/browser-automation.log
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.openclaw.browser-automation</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Applications/Google Chrome.app/Contents/MacOS/Google Chrome</string>
+    <string>--remote-debugging-port=9333</string>
+    <string>--user-data-dir=/Users/zieel/.gemini/antigravity-browser-profile</string>
+    <string>--no-first-run</string>
+    <string>--no-default-browser-check</string>
+    <string>--disable-fre</string>
+    <string>--disable-background-networking</string>
+    <string>--disable-component-update</string>
+    <string>--disable-features=Translate,MediaRouter,OfferMigrationToDiceUsers,OptGuideOnDeviceModel</string>
+    <string>--disable-session-crashed-bubble</string>
+    <string>--hide-crash-restore-bubble</string>
+    <string>--password-store=basic</string>
+    <string>--ash-no-nudges</string>
+    <string>--auto-accept-browser-signin-for-tests</string>
+    <string>about:blank</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Restart if Chrome exits with non-zero (crash), NOT on clean Cmd+Q.
+       This means Neo can Cmd+Q the Chrome window if he wants to fully stop it;
+       it won't respawn until he `launchctl load` again. -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+    <key>Crashed</key>
+    <true/>
+  </dict>
+
+  <!-- Only load in the user's GUI session (Aqua) — prevents headless/root loads. -->
+  <key>LimitLoadToSessionType</key>
+  <string>Aqua</string>
+
+  <!-- Declare this as a user-interactive GUI process so it gets GPU + window server access. -->
+  <key>ProcessType</key>
+  <string>Interactive</string>
+
+  <key>StandardOutPath</key>
+  <string>/Users/zieel/.openclaw/logs/browser-automation.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/zieel/.openclaw/logs/browser-automation.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key>
+    <string>/Users/zieel</string>
+  </dict>
+</dict>
+</plist>

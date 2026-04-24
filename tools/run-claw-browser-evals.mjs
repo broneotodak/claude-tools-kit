@@ -1,10 +1,9 @@
-// Phase 5b.1 step 3 — 3 golden-path evals.
-// Ephemeral Chrome: launch → run evals → kill Chrome + exit.
-// Output: JSON array of results written to ~/.openclaw/media/browser-evals/<ts>.json
-// Each eval captures nav_ms, preflight_ms, screenshot, overlay verdict.
+// Phase 5b.1 step 3 (v2) — golden-path evals mapped to Neo's real social-media workflows.
+// Chrome is long-lived (persistent launchd service or manually launched). We attach,
+// never spawn new, NEVER kill. Each run calls session.act() (full L3→L2 flow) and
+// records a row in browser_eval_runs.
 
 import { ClawBrowserSession } from "./claw-browser-session.mjs";
-import { execSync } from "node:child_process";
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -14,22 +13,28 @@ if (!existsSync(EVAL_DIR)) mkdirSync(EVAL_DIR, { recursive: true });
 
 const EVALS = [
   {
-    label: "ig-profile-lookup",
-    url: "https://www.instagram.com/beritaharian/",
-    intent: "view this profile — no action needed, just read",
-    project: "twin-profile-lookup",
+    label: "ig-post-create",
+    url: "https://www.instagram.com/",
+    intent: "start a new post from the feed",
+    project: "social-media-posting",
   },
   {
-    label: "fb-marketplace",
-    url: "https://www.facebook.com/marketplace/",
-    intent: "browse marketplace listings",
-    project: "socmed-feed-reading",
+    label: "fb-post-create",
+    url: "https://www.facebook.com/",
+    intent: "start a new post in the composer",
+    project: "social-media-posting",
   },
   {
-    label: "higgsfield-create",
-    url: "https://higgsfield.ai/create",
-    intent: "kick off a new video generation",
-    project: "higgsfield-video-flow",
+    label: "ig-dm-inbox",
+    url: "https://www.instagram.com/direct/inbox/",
+    intent: "open the most recent conversation to reply",
+    project: "twin-autoreply",
+  },
+  {
+    label: "fb-dm-inbox",
+    url: "https://www.facebook.com/messages/",
+    intent: "open the most recent conversation to reply",
+    project: "twin-autoreply",
   },
 ];
 
@@ -69,46 +74,51 @@ for (const ev of EVALS) {
   console.error(`\n[eval] ${ev.label} :: ${ev.url}`);
   const out = { label: ev.label, project: ev.project, url: ev.url, intent: ev.intent, ts: new Date().toISOString() };
   try {
-    const navStart = Date.now();
-    const nav = await session.goto(ev.url, { timeout: 45000 });
-    out.nav_ms = Date.now() - navStart;
-    out.final_url = nav.url;
-    out.title = nav.title;
-
-    const preStart = Date.now();
-    const pre = await withRetry(() => session.preflight({ intent: ev.intent }));
-    out.preflight_ms = Date.now() - preStart;
-    out.overlay_detected = pre.overlay_detected;
-    out.dismissed = pre.dismissed ?? null;
-    out.preflight_attempts = pre.attempts;
-    out.verdict_description = pre.verdict?.overlay_description || null;
-
+    const r = await withRetry(() => session.act({ intent: ev.intent, url_context: ev.url, timeout_ms: 45000 }));
     const shot = await session.screenshot({ name: `eval-${ev.label}` });
-    out.screenshot = shot;
-    out.status = "ok";
-    out.ready = !pre.overlay_detected || pre.dismissed === true;
+    Object.assign(out, {
+      status: "ok",
+      layer: r.layer,
+      cache_hit: r.cache_hit,
+      duration_ms: r.duration_ms,
+      ready: r.ready,
+      cached_action: r.cached_action || null,
+      coached_by: r.coached_by || null,
+      overlay_detected: r.preflight?.overlay_detected ?? null,
+      dismissed: r.preflight?.dismissed ?? null,
+      preflight_description: r.preflight?.verdict?.overlay_description || null,
+      final_url: r.url,
+      screenshot: shot,
+    });
+    // Replay log in neo-brain
+    await session.recordEvalRun({
+      task_label: ev.label,
+      domain: r.domain,
+      intent: ev.intent,
+      resolved_at_layer: r.layer,
+      success: !!r.ready,
+      duration_ms: r.duration_ms,
+      preflight_ms: r.preflight ? r.duration_ms : null,
+      screenshots_url: [shot],
+      failure_reason: r.ready ? null : (r.preflight?.verdict?.overlay_description || "not ready"),
+      metadata: { project: ev.project, url: ev.url, cache_hit: r.cache_hit, coached_by: r.coached_by || null },
+    }).catch(e => console.error("[eval] recordEvalRun failed:", e.message));
   } catch (e) {
     out.status = "error";
     out.error = String(e.message || e);
     try { out.screenshot = await session.screenshot({ name: `eval-${ev.label}-error` }); } catch {}
   }
-  console.error(`[eval] ${ev.label} ->`, JSON.stringify({ status: out.status, nav_ms: out.nav_ms, preflight_ms: out.preflight_ms, overlay: out.overlay_detected, ready: out.ready, err: out.error }));
+  console.error(`[eval] ${ev.label} ->`, JSON.stringify({ status: out.status, layer: out.layer, cache_hit: out.cache_hit, ms: out.duration_ms, ready: out.ready, err: out.error }));
   results.push(out);
-  // polite spacing to avoid hammering Gemini RPM
   await new Promise(r => setTimeout(r, 1200));
 }
 
-await session.release({ keepAlive: false }).catch(() => {});
+// Graceful disconnect — leaves Chrome alive. Sessions persist across runs.
+await session.release({ keepAlive: true }).catch(() => {});
 
 const outPath = join(EVAL_DIR, `evals-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
 writeFileSync(outPath, JSON.stringify({ started: new Date(started).toISOString(), ended: new Date().toISOString(), total_ms: Date.now() - started, results }, null, 2));
 console.error(`\n[evals] results -> ${outPath}`);
-
-// Kill Chrome on :9333 per user request — no overnight browsers.
-try {
-  execSync("pkill -f remote-debugging-port=9333", { stdio: "ignore" });
-  console.error("[evals] Chrome on :9333 killed");
-} catch {}
 
 console.log(JSON.stringify({ outPath, total_ms: Date.now() - started, results }, null, 2));
 process.exit(results.every(r => r.status === "ok") ? 0 : 2);

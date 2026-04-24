@@ -3,7 +3,6 @@
 //  Pass 2: act() on the same page+intent — L3 hit, no Gemini.
 //  Expect pass2 to be ≥5x faster than pass1 and return layer:3.
 import { ClawBrowserSession } from "./claw-browser-session.mjs";
-import { execSync } from "node:child_process";
 
 const URL = "https://www.instagram.com/beritaharian/";
 const INTENT = "view this profile — no action needed, just read";
@@ -25,8 +24,7 @@ console.error("\n[pass 3] same again — L3 hit, confirms success_count incremen
 const p3 = await session.act({ intent: INTENT, url_context: URL });
 console.error(JSON.stringify({ layer: p3.layer, cache_hit: p3.cache_hit, duration_ms: p3.duration_ms }));
 
-await session.release({ keepAlive: false }).catch(() => {});
-try { execSync("pkill -f 'remote-debugging-port=9333'"); } catch {}
+await session.release({ keepAlive: true }).catch(() => {});
 
 const results = { p1, p2, p3 };
 console.log(JSON.stringify(results, null, 2));
