@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.openclaw.supervisor</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/zieel/Projects/claude-tools-kit/tools/supervisor-agent.js</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- every 60 seconds -->
+  <key>StartInterval</key>
+  <integer>60</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/zieel/.openclaw/logs/supervisor.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/zieel/.openclaw/logs/supervisor.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/zieel</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <!-- Boot in DRY_RUN mode. Remove this entry and reload plist to go live. -->
+    <key>SUPERVISOR_DRY_RUN</key>
+    <string>1</string>
+  </dict>
+</dict>
+</plist>

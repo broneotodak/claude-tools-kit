@@ -190,15 +190,16 @@ const post = (path, body) => fetch(`${URL}/rest/v1/${path}`, {
 
 // 2) Append one memory row per run so verify-agents can see 7-day history
 try {
-  await post('memories', {
+  const r = await post('memories', {
     content: `backup-sync ${status} — ${process.env.BS_DATE} · ${errors} errors · ${durationStr} · neo-brain=${meta.size_neo_brain || '?'}, claw=${meta.size_claw || '?'}`,
     category: 'infrastructure',
-    type: 'event',
+    memory_type: 'event',
     importance: 3,
     visibility: 'private',
     source: 'backup-sync',
     metadata: meta,
   });
+  if (!r.ok) console.error('memory write failed', r.status, await r.text());
 } catch (e) { console.error('memory write failed', e.message); }
 
 // 3) Siti WhatsApp notification
