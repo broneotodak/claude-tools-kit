@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.openclaw.backup-sync</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-l</string>
+    <string>-c</string>
+    <string>/Users/zieel/Projects/claude-tools-kit/tools/backup-sync.sh</string>
+  </array>
+
+  <!-- 03:00 Asia/Kuala_Lumpur (MYT, UTC+8) every day.
+       launchd uses local system clock — CLAW is already configured MYT. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <!-- Don't run on load (launchd quirk: when plist is (re)loaded it would otherwise fire once). -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/zieel/.openclaw/logs/backup-sync.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/zieel/.openclaw/logs/backup-sync.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/zieel</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <!-- launchd will wait up to this long before killing a stuck run -->
+  <key>AbandonProcessGroup</key>
+  <false/>
+</dict>
+</plist>
