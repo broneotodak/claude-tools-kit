@@ -151,7 +151,7 @@ const BROWSER_ACT_ALLOWED_HOSTS = new Set([
 ]);
 
 async function browserAct(payload) {
-  const { intent, url_context, timeout_ms } = payload || {};
+  const { intent, url_context, timeout_ms, with_screenshot = false } = payload || {};
 
   if (!intent || typeof intent !== 'string')
     throw invalidPayload('intent (string) is required');
@@ -159,6 +159,8 @@ async function browserAct(payload) {
     throw invalidPayload('url_context (string) is required');
   if (timeout_ms !== undefined && (!Number.isInteger(timeout_ms) || timeout_ms < 1000 || timeout_ms > 300_000))
     throw invalidPayload('timeout_ms must be integer ms in [1000, 300000] when supplied', { received: timeout_ms });
+  if (typeof with_screenshot !== 'boolean')
+    throw invalidPayload('with_screenshot must be boolean when supplied', { received: with_screenshot });
 
   let host;
   try { host = new URL(url_context).hostname; }
@@ -185,7 +187,7 @@ async function browserAct(payload) {
   }
 
   try {
-    const r = await session.act({ intent, url_context, timeout_ms });
+    const r = await session.act({ intent, url_context, timeout_ms, withScreenshot: with_screenshot });
     return {
       layer: r.layer,
       ready: r.ready,
@@ -198,6 +200,8 @@ async function browserAct(payload) {
       overlay_detected: r.preflight?.overlay_detected ?? null,
       dismissed: r.preflight?.dismissed ?? null,
       overlay_description: r.preflight?.verdict?.overlay_description || null,
+      screenshot_media_id: r.screenshot_media_id || null,
+      screenshot_url: r.screenshot_url || null,
     };
   } catch (e) {
     if (/window not found|CDP|fetch failed|ECONNREFUSED|net::/i.test(e.message)) {

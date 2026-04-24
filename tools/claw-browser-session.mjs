@@ -13,7 +13,7 @@
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -265,12 +265,42 @@ export class ClawBrowserSession {
     return { url: this.page.url(), title: await this.page.title().catch(() => null) };
   }
 
-  async screenshot({ name, fullPage = false } = {}) {
+  // Returns { path, media_id?, media_url? }. Always writes to disk.
+  // Pass uploadToBrain:true to also save to neo-brain media table (costs an embedding call).
+  // `intent` + `urlOverride` populate caption + source_ref; fall back to page state.
+  async screenshot({ name, fullPage = false, uploadToBrain = false, intent = null, urlOverride = null } = {}) {
     const ts = new Date().toISOString().replace(/[:.]/g, "-");
     const slug = (name || "shot").replace(/[^a-z0-9_-]/gi, "_");
     const filepath = join(SCREENSHOT_DIR, `${ts}-${slug}.png`);
-    await this.page.screenshot({ path: filepath, fullPage });
-    return filepath;
+    const buffer = await this.page.screenshot({ fullPage });
+    writeFileSync(filepath, buffer);
+    if (!uploadToBrain) return { path: filepath };
+
+    const pageUrl = urlOverride || this.page.url();
+    const dom = normalizedDomain(pageUrl);
+    let pathname = "";
+    try { pathname = new URL(pageUrl).pathname; } catch {}
+    const caption = `${intent || name || "screenshot"} :: ${dom}${pathname}`;
+    try {
+      const m = await brain().saveMedia({
+        kind: "image",
+        buffer,
+        mimeType: "image/png",
+        caption,
+        sourceRef: {
+          intent: intent || null,
+          url: pageUrl,
+          domain: dom,
+          path: pathname,
+          captured_at: ts,
+          agent: "claw-browser-session",
+        },
+      });
+      return { path: filepath, media_id: m.id, media_url: m.storage_url };
+    } catch (e) {
+      console.error("[screenshot] saveMedia failed:", e.message);
+      return { path: filepath, media_id: null, media_url: null, upload_error: e.message };
+    }
   }
 
   // L2: ask Gemini Flash whether an overlay blocks the intent; dismiss if yes.
@@ -282,8 +312,8 @@ export class ClawBrowserSession {
     let lastVerdict = null;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const buf = await this.page.screenshot({ fullPage: false });
-      const shotPath = await this.screenshot({ name: `preflight-attempt${attempt}` });
-      screenshots.push(shotPath);
+      const shot = await this.screenshot({ name: `preflight-attempt${attempt}` });
+      screenshots.push(shot.path);
       const verdict = await geminiPreflight({ apiKey: key, screenshotBuf: buf, intent });
       console.error(`[preflight attempt ${attempt}]`, JSON.stringify(verdict));
       lastVerdict = verdict;
@@ -308,7 +338,7 @@ export class ClawBrowserSession {
     // Final verification pass — did the last action actually clear the overlay?
     const finalBuf = await this.page.screenshot({ fullPage: false });
     const finalShot = await this.screenshot({ name: "preflight-final-verify" });
-    screenshots.push(finalShot);
+    screenshots.push(finalShot.path);
     const finalVerdict = await geminiPreflight({ apiKey: key, screenshotBuf: finalBuf, intent });
     console.error("[preflight final-verify]", JSON.stringify(finalVerdict));
     if (!finalVerdict.overlay_detected) {
@@ -404,7 +434,9 @@ export class ClawBrowserSession {
   }
 
   // Main entry: L3 cache hit → execute → done.  L3 miss → L2 preflight → cache the winner.
-  async act({ intent, url_context, timeout_ms, skipCache = false } = {}) {
+  // withScreenshot:true uploads one final screenshot to neo-brain media, attaches
+  // screenshot_media_id + screenshot_url to the result (opt-in — costs storage + embedding).
+  async act({ intent, url_context, timeout_ms, skipCache = false, withScreenshot = false } = {}) {
     if (!intent) throw new Error("act() requires intent");
     const start = Date.now();
     if (url_context && this.page.url() !== url_context) {
@@ -417,6 +449,8 @@ export class ClawBrowserSession {
     const intentHash = computeIntentHash(intent);
     const cacheKey = { domain, pageStateHash, intentHash };
 
+    let result = null;
+
     // --- L3 lookup ---
     if (!skipCache) {
       let cached;
@@ -426,7 +460,7 @@ export class ClawBrowserSession {
         try {
           await this.executeAction(cached.action);
           await this.recordActionOutcome({ id: cached.id, success: true }).catch(e => console.error("[L3] record success failed:", e.message));
-          return {
+          result = {
             layer: 3,
             intent, url, domain,
             cache_hit: true,
@@ -444,33 +478,54 @@ export class ClawBrowserSession {
     }
 
     // --- L2 fallback ---
-    const pre = await this.preflight({ intent });
-    const ready = !pre.overlay_detected || pre.dismissed === true;
-    let cachedId = null;
-    if (ready) {
-      const actionToCache = ClawBrowserSession._actionFromPreflight(pre);
-      if (actionToCache) {
-        try {
-          cachedId = await this.upsertAction({
-            ...cacheKey,
-            action: actionToCache,
-            coachedBy: "gemini-flash",
-          });
-        } catch (e) {
-          console.error("[L3] upsert failed:", e.message);
+    if (!result) {
+      const pre = await this.preflight({ intent });
+      const ready = !pre.overlay_detected || pre.dismissed === true;
+      let cachedId = null;
+      if (ready) {
+        const actionToCache = ClawBrowserSession._actionFromPreflight(pre);
+        if (actionToCache) {
+          try {
+            cachedId = await this.upsertAction({
+              ...cacheKey,
+              action: actionToCache,
+              coachedBy: "gemini-flash",
+            });
+          } catch (e) {
+            console.error("[L3] upsert failed:", e.message);
+          }
         }
+      }
+      result = {
+        layer: 2,
+        intent, url, domain,
+        cache_hit: false,
+        cache_id_written: cachedId,
+        preflight: pre,
+        ready,
+        duration_ms: Date.now() - start,
+      };
+    }
+
+    if (withScreenshot) {
+      try {
+        const shot = await this.screenshot({
+          name: `act-${intent.slice(0, 30)}`,
+          uploadToBrain: true,
+          intent,
+          urlOverride: result.url,
+        });
+        result.screenshot_path = shot.path;
+        result.screenshot_media_id = shot.media_id || null;
+        result.screenshot_url = shot.media_url || null;
+        if (shot.upload_error) result.screenshot_error = shot.upload_error;
+      } catch (e) {
+        console.error("[act] screenshot failed:", e.message);
+        result.screenshot_error = e.message;
       }
     }
 
-    return {
-      layer: 2,
-      intent, url, domain,
-      cache_hit: false,
-      cache_id_written: cachedId,
-      preflight: pre,
-      ready,
-      duration_ms: Date.now() - start,
-    };
+    return result;
   }
 
   async extract() {

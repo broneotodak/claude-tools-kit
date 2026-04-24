@@ -88,7 +88,7 @@ for (const ev of EVALS) {
       dismissed: r.preflight?.dismissed ?? null,
       preflight_description: r.preflight?.verdict?.overlay_description || null,
       final_url: r.url,
-      screenshot: shot,
+      screenshot: shot.path,
     });
     // Replay log in neo-brain
     await session.recordEvalRun({
@@ -99,14 +99,14 @@ for (const ev of EVALS) {
       success: !!r.ready,
       duration_ms: r.duration_ms,
       preflight_ms: r.preflight ? r.duration_ms : null,
-      screenshots_url: [shot],
+      screenshots_url: [shot.path],
       failure_reason: r.ready ? null : (r.preflight?.verdict?.overlay_description || "not ready"),
       metadata: { project: ev.project, url: ev.url, cache_hit: r.cache_hit, coached_by: r.coached_by || null },
     }).catch(e => console.error("[eval] recordEvalRun failed:", e.message));
   } catch (e) {
     out.status = "error";
     out.error = String(e.message || e);
-    try { out.screenshot = await session.screenshot({ name: `eval-${ev.label}-error` }); } catch {}
+    try { out.screenshot = (await session.screenshot({ name: `eval-${ev.label}-error` })).path; } catch {}
   }
   console.error(`[eval] ${ev.label} ->`, JSON.stringify({ status: out.status, layer: out.layer, cache_hit: out.cache_hit, ms: out.duration_ms, ready: out.ready, err: out.error }));
   results.push(out);
