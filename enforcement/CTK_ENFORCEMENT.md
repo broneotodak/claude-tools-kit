@@ -1,277 +1,166 @@
-# 🛑 MANDATORY CTK ENFORCEMENT - READ BEFORE ANY ACTION 🛑
+# CTK Enforcement — SOP for every Claude Code instance
 
-## STOP! Before responding to ANY prompt, you MUST:
+This file lives in git so VPS agents and remote CC instances inherit the same rules. **Loaded on demand**, not at session start. Read it before: data operations, commits to a new repo, monitoring/alert work, or storing user-supplied credentials.
 
-### 1️⃣ IMMEDIATE CHECKS (Do these FIRST, before thinking about the answer):
-- [ ] What project am I in? Check `pwd`
-- [ ] Is this THR? Check for `.ctkrc` file
-- [ ] Which database should I use? (THR: ftbtsxlujsnobujwekwx, Memory: uzamamymfzhelvkwpvgt)
-- [ ] Are there existing tools for this task in `/scripts` or `/tools`?
+Last consolidation: 2026-04-26 (slimmed from 276 lines; trigger lookups and capability marketing removed — modern Opus picks tools by judgment).
 
-### 2️⃣ FORBIDDEN ACTIONS (NEVER do these):
-❌ Create new search/save scripts if one exists
-❌ Use generic approaches for project-specific tasks
-❌ Mix up THR database with memory database
-❌ Skip verification before data operations
-❌ Ignore "save progress" requests
-❌ Make assumptions without checking existing code
-❌ **NEVER use PGPASSWORD or raw psql commands** - Use CTK tools instead!
-❌ **NEVER guess database credentials** - Always read from CTK/.env files
+---
 
-### 3️⃣ MANDATORY ACTIONS (ALWAYS do these):
-✅ Read existing files before creating new ones
-✅ Use CTK tools (save-memory.js for all projects)
-✅ Save to memory when user mentions "save"/"progress"/"document"
-✅ Run test/verification before any data changes
-✅ Check git history before claiming something isn't saved
+## 1. Core Discipline
 
-### 4️⃣ PROJECT-SPECIFIC RULES:
+- **No assumptions.** Verify with code, schema, samples, or git — never reason from "it should be."
+- **Find the root cause.** A hardcoded patch IS the bug. If you can't reach the root in this session, surface it; don't paper over it.
+- **Read existing tools before writing new ones.** Check `~/Projects/claude-tools-kit/tools/` and the project's own `scripts/` first.
+- **Test before deploy, verify before claiming done.** A passing typecheck is not a passing feature.
+- **Don't ignore "save progress" requests.** See section 3.
 
-#### For THR:
+If you violate any of these: stop, acknowledge, correct, and save the correction to memory so the next session inherits the lesson.
+
+---
+
+## 2. Database Discipline
+
+| DB | Project Ref | Purpose |
+|---|---|---|
+| **neo-brain** (PRIMARY memory) | `xsunmervpyrplzarebva` | Memory backend since 2026-04-19. Use `@todak/memory` SDK. |
+| Memory pgVector (LEGACY) | `uzamamymfzhelvkwpvgt` | Old `claude_desktop_memory` — read-only archive. No new write consumers. |
+| THR / ATLAS | `ftbtsxlujsnobujwekwx` | Shared HR + Asset DB |
+| Academy | `hgdlmgqduruejlouesll` | Todak Academy portal |
+| AskMyLegal | `yvxpggnbvuwgwsmsubtr` | Legal AI (planning) |
+| Musclehub | `jxcddfejjqqynekbpdxh` | Archived |
+
+**NEVER mix these.** The DB names are random — model can't infer which to use.
+
+**NEVER use `psql` with `PGPASSWORD`.** Use the SDK or `tools/run-sql-migration.js`.
+
+**Before any data operation:**
+1. Preview 5 sample rows: `SELECT * FROM table LIMIT 5;`
+2. Count what will change: `SELECT COUNT(*) FROM table WHERE <condition>;`
+3. Then proceed.
+
+Bulk operations without preview have caused real damage (THR 2025-07-15: 27 employees assigned to wrong organizations, 138 with scrambled names — root cause was assuming employee-ID prefixes mapped to specific orgs).
+
+---
+
+## 3. Memory Discipline
+
+**Primary path: neo-brain via SDK**, not direct queries.
+
+- JS: `import { NeoBrain } from '@todak/memory'` — package at `~/Projects/claude-tools-kit/packages/memory/`
+- Python: `from neo_brain_client import NeoBrain` — `tools/neo_brain_client.py`
+- Env: `NEO_BRAIN_URL`, `NEO_BRAIN_SERVICE_ROLE_KEY`, `GEMINI_API_KEY` (in `~/Projects/claude-tools-kit/.env`)
+- **Always pass `agent: 'instance-name'`** when constructing `NeoBrain` — appears in `memory_writes_log` for audit
+- Default `visibility: 'private'`. Tag `'public'` only for content meant to be retrievable in shared contexts.
+- Neo's self-id: `00000000-0000-0000-0000-000000000001`
+
+**CLI (dual-writes legacy for compat):**
 ```bash
-# Database access - ONLY use these methods:
-Config: /Users/broneotodak/Projects/claude-tools-kit/projects/THR/config.json
-Credentials: /Users/broneotodak/Projects/claude-tools-kit/.env.thr
-
-# Run SQL migrations:
-node /Users/broneotodak/Projects/claude-tools-kit/tools/run-sql-migration.js sql/file.sql
-
-# Query via Supabase JS (in CTK):
-cd /Users/broneotodak/Projects/claude-tools-kit && node -e "require('dotenv').config({path:'.env.thr'}); ..."
-
-# NEVER do this:
-# PGPASSWORD='xxx' psql "postgresql://..." ← FORBIDDEN!
+node ~/Projects/claude-tools-kit/tools/save-memory.js "Category" "Title" "Content" 6
 ```
 
-#### For ATLAS:
-```bash
-# Shares database with THR
-Config: /Users/broneotodak/Projects/claude-tools-kit/projects/THR/config.json
-# Uses same credentials as THR
-```
+**When to save proactively** (don't wait for "save progress"):
+- A migration completes (data moved, schema changed)
+- A production deploy succeeds (push → CI green → user confirms it works)
+- A non-trivial feature lands (new tool, endpoint, UI tab)
+- A bug fix the user flagged as concerning or important
+- A long workstream changes direction ("now let's do X")
+- The user signs off ("sleep", "afk", "bye")
 
-#### For Memory (pgVector):
-```bash
-# Memory database - different from project databases!
-Credentials: /Users/broneotodak/Projects/claude-tools-kit/.env (SUPABASE_SERVICE_ROLE_KEY)
-URL: https://uzamamymfzhelvkwpvgt.supabase.co
-```
+If ≥5 significant changes since the last save: just save and mention it in one line. No ceremony.
 
-### 5️⃣ AUTOMATIC TRIGGERS:
+**Don't write a fill-in-the-blank template.** Capture what was accomplished, key decisions, problems solved, next steps. Length follows substance.
 
-When user says → You MUST do:
-- "save progress" → Run: `node ~/Projects/claude-tools-kit/tools/save-memory.js "Project" "Progress" "content" 6`
-- "check status" → Run: `git status && git log --oneline -5`
-- "test this" → Find and run test files first
-- "positions not working" → Run: `node test-position-handling.cjs`
+---
 
-### 5️⃣.4 CREDENTIAL HANDLING (MANDATORY, 2026-04-24):
+## 4. Credential Vault (added 2026-04-24)
 
-When Neo shares a credential (password, API key, token, SSH key, PIN, etc.) in chat, you MUST store it in the **neo-brain `credentials` table** via the `upsert_credential` RPC — not in memory files, not in .env files, not in source. The value is encrypted in Supabase Vault; only the `vault_secret_id` pointer sits in the `credentials` table.
+When the user shares a credential (password, API key, token, SSH key, PIN), store it in neo-brain `credentials` via the `upsert_credential` RPC — **never** in memory files, `.env` files, or source. The plaintext is encrypted in Supabase Vault; only the `vault_secret_id` pointer sits in the row.
 
-**How to store:**
+**Store:**
 ```sql
--- Execute against neo-brain (xsunmervpyrplzarebva) via Supabase MCP
 SELECT upsert_credential(
   p_owner_id := '00000000-0000-0000-0000-000000000001'::uuid,  -- NEO_SELF_ID
-  p_service := '<lowercase-service-slug>',     -- e.g. 'tdcc', 'netlify', 'openai'
-  p_credential_type := '<kind>',               -- e.g. 'password', 'api_key', 'ssh_key', 'pin', 'service_role'
-  p_value := '<the plaintext secret>',
-  p_description := '<human-readable context>',
-  p_environment := 'production',               -- or 'staging', 'dev'
-  p_expires_at := NULL,                        -- timestamptz if known
-  p_metadata := jsonb_build_object(
-    'url', '<service URL>',
-    'username', '<if applicable>',
-    'saved_by', 'claude-code-session',
-    'saved_at', now()::text
-  )
+  p_service := '<lowercase-slug>',     -- 'tdcc', 'netlify', 'openai'
+  p_credential_type := '<kind>',       -- 'password', 'api_key', 'ssh_key', 'pin', 'service_role'
+  p_value := '<plaintext>',
+  p_description := '<context>',
+  p_environment := 'production',
+  p_metadata := jsonb_build_object('url', '...', 'username', '...', 'saved_by', 'claude-code-session')
 );
 ```
 
-**How to read back:**
+**Read:**
 ```sql
-SELECT credential_value
-FROM get_credential(
+SELECT credential_value FROM get_credential(
   p_owner_id := '00000000-0000-0000-0000-000000000001'::uuid,
   p_service := '<slug>',
-  p_credential_type := '<kind>',   -- optional
-  p_environment := 'production'
+  p_credential_type := '<kind>'
 );
 ```
 
-**In memory files (`~/.claude/projects/-Users-broneotodak/memory/*.md`):** reference by lookup key only — e.g. "password stored in neo-brain credentials: service='tdcc', type='password', owner=NEO_SELF_ID". NEVER write the plaintext value to disk.
+**In memory files**, reference by lookup key only — e.g. `"password stored in neo-brain credentials: service='tdcc', type='password'"`. NEVER write plaintext to disk.
 
-**Reasoning**: Credentials in chat end up in transcript history anyway, but writing them to memory files replicates them into pgVector-indexed embeddings and across machines on sync. Routing through `upsert_credential` + Vault keeps the vector/embedding layer secret-free.
+**Why:** plaintext in memory files gets replicated into pgVector embeddings and across machines on sync. Vault routing keeps the vector layer secret-free.
 
-### 5️⃣.5 PROACTIVE SAVE NUDGES (Neo asked for more-frequent reminders, 2026-04-24):
+---
 
-You MUST suggest saving to neo-brain (via save-memory.js) WITHOUT being asked when ANY of these milestones hit:
-- ✅ A migration completes (data moved between DBs/tables, or schema changed)
-- ✅ A production deploy succeeds (git push → Actions green → user confirms it works)
-- ✅ A non-trivial feature lands (new tool, new endpoint, new UI tab)
-- ✅ A bug fix Neo explicitly flagged as "concerning" or "important"
-- ✅ Before a long-running workstream changes direction (user says "now let's do X")
-- ✅ Before the user explicitly signs off ("im going to sleep", "afk", "bye", "later")
+## 5. Pre-Commit Secrets (added 2026-04-25)
 
-The nudge doesn't need to be a long ceremony — one line: "Save this milestone to neo-brain? (y/n)" then just do it if yes. If the conversation has been dense (≥5 significant changes since last save), don't ask — just save and mention it in one sentence.
+**Before the FIRST `git commit` on any new repo**, verify:
 
-Do NOT wait for the user to say "save progress". The whole point of pgVector memory is cross-session continuity; a session that ends without a save loses context that future-you needs.
+1. `.gitignore` covers: `node_modules/`, `.env`, `.env.*`, `*.key`, `*.token`, `secrets/`, session/auth state files, `*.bak`, `*.log`
+2. `git status --ignored` confirms secrets show as ignored, not staged
+3. `git diff --cached | grep -iE 'API_KEY|SECRET|TOKEN|PASSWORD'` is empty
+4. Stage explicit files (`git add server.js package.json …`), never `git add .`
 
-### 6️⃣ VERIFICATION BEFORE ACTION:
+**Migrating an existing dirty repo:** start fresh in a parallel clean tree (git init → rsync minus secrets → push to new repo → delete old). Don't filter-repo unless commit history must be preserved — fresh start is simpler.
 
-Before ANY database operation:
-```bash
-# 1. Check which DB you're using
-echo $SUPABASE_URL
+**Originating incident** (2026-04-25): Siti's `nclaw-dashboard` initial commit included `.env` with Supabase service_role + Anthropic + OpenAI + Gemini + ElevenLabs + Telnyx + neo-brain service_role keys. Repo was private and sole collaborator was Neo so the leak was contained — but had to migrate to a clean `broneotodak/siti` repo and delete the old one.
 
-# 2. Preview the data
-SELECT * FROM table_name LIMIT 5;
+---
 
-# 3. Count affected rows
-SELECT COUNT(*) FROM table_name WHERE condition;
+## 6. Monitoring Discipline
 
-# 4. Only then proceed
-```
+Full procedure: **`MONITORING_ENFORCEMENT.md`** in this folder. Read it before any alert, supervisor rule, push monitor, dashboard health card, or auto-action.
 
-## 🎯 CORE CTK PRINCIPLES (MANDATORY):
-
-### 1. **pgVector Memory is CENTRAL**
-- ALL progress MUST be saved to pgVector (uzamamymfzhelvkwpvgt)
-- Memory is your PRIMARY source of truth
-- Check memory FIRST before making claims
-- Save to memory THROUGHOUT the session, not just at the end
-
-### 2. **ACCURACY - No Assumptions**
-- ❌ NEVER assume something isn't working without testing
-- ❌ NEVER guess at database schemas without checking
-- ❌ NEVER claim something isn't saved without verifying git
-- ✅ ALWAYS verify with actual commands
-- ✅ ALWAYS test before concluding
-- ✅ ALWAYS check existing code before creating new
-
-### 3. **Use Multiagent/Parallel Mode**
-- When multiple tasks are independent, run them in PARALLEL
-- Use Task tool with multiple agents when appropriate
-- Examples of parallel operations:
-  - `git status` + `git log` + `git diff` (all at once)
-  - Multiple file reads for related components
-  - Multiple test scripts running simultaneously
-- Use `subagent_type=Explore` for codebase exploration
-- Use `subagent_type=Plan` for implementation planning
-
-## 🚀 CLAUDE CODE CAPABILITIES (ALWAYS OFFER WHEN RELEVANT)
-
-### Automatic Capability Triggers:
-When user mentions → Offer these capabilities:
-- **"fix bugs"** → Parallel testing + Code analysis + Git operations
-- **"improve performance"** → Performance analysis + Database operations + Monitoring
-- **"add feature"** → Plan agent + Code generation + Test creation
-- **"deploy"** → Parallel deployment + Monitoring + Git operations
-- **"document"** → Documentation generation + Code analysis
-- **"integrate"** → Cross-project + API integration + n8n workflows
-- **"analyze"** → Explore agent + Code analysis + Database analysis
-- **"automate"** → Project automation + Script generation + CI/CD
-- **"test"** → Test generation + Parallel testing + Monitoring
-- **"refactor"** → Code analysis + Plan agent + Git operations
-- **"understand codebase"** → Explore agent for deep analysis
-- **"security"** → Security vulnerability scanning + OWASP checks
-
-### Core Capabilities to Proactively Offer:
-1. **Parallel Execution**: Run multiple independent operations simultaneously
-2. **Intelligent Analysis**: Security scanning, performance optimization, code smells
-3. **Advanced Git**: PRs with descriptions, release notes, branch management
-4. **Safe Migrations**: Preview and run SQL migrations safely
-5. **Multi-Agent**: Specialized agents for complex tasks (Explore/Plan)
-6. **Real-time Monitoring**: Watch long-running processes with BashOutput
-7. **Documentation Generation**: API docs, user guides, architecture diagrams
-8. **Cross-Project Integration**: Sync between THR/ATLAS, n8n workflows
-9. **Memory Management**: pgVector storage and retrieval
-10. **Web Operations**: WebSearch for current info, WebFetch for APIs
-
-### Quick Commands:
-```bash
-# Launch exploration agent for codebase understanding
-Task tool with subagent_type="Explore"
-
-# Run safe SQL migration
-node /Users/broneotodak/Projects/claude-tools-kit/tools/run-sql-migration.js
-
-# Save to memory
-node /Users/broneotodak/Projects/claude-tools-kit/tools/universal-memory-save.js
-
-# Monitor background processes
-BashOutput tool with bash_id="<id>"
-```
-
-**IMPORTANT**: Always mention relevant capabilities when they could help the user's task!
-
-### 4. **Database Discipline**
-- pgVector/Memory: `uzamamymfzhelvkwpvgt.supabase.co`
-- THR/ATLAS: `ftbtsxlujsnobujwekwx.supabase.co`
-- NEVER mix these up - they serve different purposes!
-
-### 5. **Monitoring Discipline** (added 2026-04-25)
-**A monitor that exists is not a monitor that works.** Before creating any
-alert, supervisor rule, push monitor, dashboard health card, or auto-action
-gated on a signal, you MUST:
+The short version:
 1. Read the source code that produces the signal
 2. Synthetic-test both edges (good→bad AND bad→good)
 3. If push monitor: wire the pusher in the same change
-4. Dry-run ≥ 24h before auto-actions
+4. Dry-run ≥24h before any auto-action
 
-Full rules: `~/.claude/MONITORING_ENFORCEMENT.md` (mandatory reading before any monitoring work).
+**Originating incident** (2026-04-25): supervisor rules built around `agent_heartbeats.meta.wa_status` — a raw baileys event-type string, not real health. 49 false fires overnight. 75% of dashboard red lights were noise.
 
-**Originating incident:** built supervisor-agent rules around `agent_heartbeats.meta.wa_status`
-— a raw baileys event-type string, not real health. 49 false fires overnight. Push monitors
-for twin-ingest/forex created without wiring agents → permanent false DOWN.
-
-### 6. **Pre-Commit Secrets Discipline** (added 2026-04-25)
-**Before the FIRST `git commit` on ANY new repo**, you MUST verify:
-1. `.gitignore` exists and covers: `node_modules/`, `.env`, `.env.*`, `*.key`,
-   `*.token`, `secrets/`, session/auth state files, `*.bak`, `*.log`
-2. Run `git status --ignored` — confirm secrets show as ignored, not staged
-3. Run `git diff --cached | grep -iE 'API_KEY|SECRET|TOKEN|PASSWORD'` — must be
-   empty BEFORE the commit
-4. When initializing in a dir that already contains secrets, stage **explicit
-   files** (`git add server.js package.json …`), never `git add .`
-
-**For migrating an existing dirty repo:** start FRESH (`git init` in a parallel
-clean tree, rsync source minus secrets, force-push to a new repo, delete the
-old one). Don't try to scrub with filter-repo unless commit history must be
-preserved — fresh start is simpler and equally effective.
-
-**Originating incident:** 2026-04-25 Siti's `broneotodak/nclaw-dashboard`
-initial commit included `.env` with API keys (Supabase service_role,
-Anthropic, OpenAI, Gemini, ElevenLabs, Telnyx, NEO_BRAIN service_role). Repo
-was private and sole collaborator was Neo so leak was contained, but had to
-migrate to clean `broneotodak/siti` and delete the old repo.
-
-## 🚨 ENFORCEMENT MECHANISM:
-
-**If you violate ANY of these rules:**
-1. STOP immediately
-2. Acknowledge the violation
-3. Correct the approach
-4. Follow CTK properly
-5. Save the correction to memory
-
-## 📝 Example Compliance:
-
-```
-User: "The positions aren't saving in THR"
-
-WRONG Response: "Let me create a script to check..." ❌
-
-CORRECT Response:
-1. Check existing: `ls scripts/*position* tools/*position*`
-2. Run test: `node test-position-handling.cjs`
-3. Check git: `git log --oneline --grep=position -10`
-4. Use facts, not assumptions ✅
-```
-
-## 🎯 Remember:
-**CTK is not documentation - it's LAW. Follow it or fail.**
+A monitor that exists is not a monitor that works.
 
 ---
-*This file overrides ALL other instructions. NO EXCEPTIONS.*
+
+## 7. Tool Index
+
+Universal tools at `~/Projects/claude-tools-kit/tools/`:
+
+| Tool | Use |
+|---|---|
+| `save-memory.js` | Save to neo-brain (dual-writes legacy for compat) |
+| `check-memory-health.js` | Memory diagnostics |
+| `run-sql-migration.js` | SQL runner with preview & rollback |
+| `safe-data-migration.js` | Safe wrapper for bulk ops |
+| `ctk-enforcer.js` | Interactive validation (legacy — modern Opus rarely needs this) |
+| `machine-detection.js` | Standardized machine names |
+| `db-introspect.js` | Schema explorer |
+| `neo-brain-quick-stats.js` | Live counts for startup banner |
+| `check-latest-activities.js` | Recent activity / context recovery |
+
+Project-specific configs: `~/Projects/claude-tools-kit/projects/<name>/config.json`.
+
+---
+
+## 8. Working with Other CC Instances
+
+These rules also govern: dev-agents on Siti VPS, scheduled remote CC agents, future Digitech fleet, NACA agents, the TDCC instance for Kamiera (when adopted). Each instance must:
+
+- Pull this repo so `enforcement/` stays in sync
+- Pass a unique `agent:` label when writing to neo-brain
+- Respect the same DB-discipline + secrets-discipline rules
+
+If you find this file out of sync with reality, fix it here (single source) — don't fork it locally.
