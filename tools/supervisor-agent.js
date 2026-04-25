@@ -215,6 +215,84 @@ async function tier3(agent, cfg, symptom, runId, prior) {
 
 const dispatch = { 1: tier1, 2: tier2, 3: tier3 };
 
+// ── Phase 4: fleet auto-discovery ───────────────────────────────────
+// Any agent_name reporting heartbeats that isn't in WATCH and isn't a known
+// scheduled agent → potentially a new fleet node we should introduce. On
+// first detection per agent_name, write a discovery memory + notify Neo via
+// Siti. Idempotent via the marker memory.
+const KNOWN_OUTSIDE_WATCH = new Set([
+  // Scheduled-cadence agents (heartbeats fire on their own schedule)
+  'backup-sync', 'person-sync', 'pr-decision-dispatcher',
+  // Specialist agents not in WATCH (still healthy by their own logic)
+  'dev-agent', 'planner-agent', 'reviewer', 'siti', 'naca-backend', 'twin-ingest', 'claw-mac', 'supervisor', 'toolsmith',
+]);
+
+async function discoverNewFleetNodes(byName, nowMs) {
+  const candidates = Object.values(byName).filter(hb =>
+    !WATCH[hb.agent_name] && !KNOWN_OUTSIDE_WATCH.has(hb.agent_name) && hb.agent_name !== ME
+  );
+  if (!candidates.length) return [];
+
+  const announced = [];
+  for (const hb of candidates) {
+    // Idempotency: have we already announced this node?
+    const prev = await rest(
+      `memories?source=eq.${ME}&category=eq.fleet-node-discovered&metadata->>agent_name=eq.${encodeURIComponent(hb.agent_name)}&select=id&limit=1`,
+    );
+    if (prev?.length) continue;  // already announced — skip
+
+    const meta = hb.meta || {};
+    console.log(`[supervisor] 🆕 fleet node discovered: ${hb.agent_name} (${meta.hostname || '?'})`);
+
+    // 1) Mark discovery (idempotency anchor)
+    await rest('memories', {
+      method: 'POST',
+      body: JSON.stringify({
+        content: `fleet node discovered: ${hb.agent_name} reporting from ${meta.hostname || 'unknown host'}, ${meta.platform || 'unknown platform'}, ${meta.cpu_count || '?'} CPUs, ${meta.mem_total_mb || '?'}MB RAM`,
+        category: 'fleet-node-discovered',
+        memory_type: 'event',
+        importance: 6,
+        visibility: 'private',
+        source: ME,
+        metadata: {
+          agent_name: hb.agent_name,
+          hostname: meta.hostname,
+          platform: meta.platform,
+          role: meta.role || 'unknown',
+          ports: meta.ports || {},
+          first_seen_at: hb.reported_at,
+        },
+      }),
+    });
+
+    // 2) Notify Neo via Siti
+    if (!DRY_RUN) {
+      const message = [
+        `━━ 🛡️ supervisor ━━`,
+        `🆕 *New fleet node detected*`,
+        ``,
+        `📛 agent: ${hb.agent_name}`,
+        meta.hostname ? `🖥 host: ${meta.hostname}` : '',
+        meta.platform ? `⚙️ platform: ${meta.platform}` : '',
+        meta.cpu_count && meta.mem_total_mb ? `📊 ${meta.cpu_count} CPU · ${Math.round(meta.mem_total_mb/1024)}GB RAM` : '',
+        meta.role ? `🎭 role: ${meta.role}` : '',
+        ``,
+        `Reporting heartbeats successfully. Welcome to the fleet 🤝`,
+      ].filter(Boolean).join('\n');
+      await rest('agent_commands', {
+        method: 'POST',
+        body: JSON.stringify({
+          from_agent: ME, to_agent: 'siti', command: 'send_whatsapp_notification',
+          payload: { to: NOTIFY_TO, message }, priority: 3,
+        }),
+      });
+    }
+
+    announced.push(hb.agent_name);
+  }
+  return announced;
+}
+
 // ── self heartbeat ──────────────────────────────────────────────────
 async function selfHeartbeat(meta) {
   await rest('agent_heartbeats?on_conflict=agent_name', {
@@ -268,6 +346,10 @@ async function main() {
       actions.push({ agent, symptom: symptom.key, tier: chosenTier, action: result.action });
     }
   }
+
+  // Phase 4: fleet auto-discovery — find any new agent_names + announce once.
+  const discovered = await discoverNewFleetNodes(byName, startMs);
+  if (discovered.length) actions.push({ kind: 'fleet_discovery', new_nodes: discovered });
 
   // Cross-agent symptoms (not tied to a specific watchlist entry)
   const dl = await detectDeadLetterGrowing();

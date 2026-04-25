@@ -105,17 +105,26 @@ HOSTNAME=$(scutil --get LocalHostName 2>/dev/null || hostname -s)
 
 echo
 hr
-echo "${BLD}${GRN}✅ SETUP SELESAI${OFF}"
+echo "${BLD}${GRN}✅ SETUP SELESAI — Bagian 1 dari 2${OFF}"
 hr
-echo "Kirim 4 baris di bawah ini ke Neo via WhatsApp:"
+echo "Kirim semua info di bawah ini ke Neo via WhatsApp (paling gampang: screenshot semua):"
 echo
-echo "Hostname     : $HOSTNAME"
-echo "Tailscale IP : $TS_IP"
-echo "macOS        : $(sw_vers -productVersion)"
-echo "SSH Pubkey   :"
-cat "$KEY.pub"
+echo "  SSH user      : $(whoami)"
+echo "  Tailscale IP  : $TS_IP"
+echo "  Hostname      : $HOSTNAME"
+echo "  macOS         : $(sw_vers -productVersion)"
+echo "  SSH Pubkey    :"
+echo
+sed 's/^/    /' "$KEY.pub"
+echo
 hr
 echo
-echo "📸 Screenshot bagian di atas, kirim ke Neo via WhatsApp."
-echo "   Neo akan tambah laptop ini ke fleet."
+echo "${BLD}Apa yang Neo akan lakukan setelah terima info ini:${OFF}"
+echo "  1. Authorize SSH pubkey kamu"
+echo "  2. Jalankan ${YEL}add-fleet-node.sh $(whoami) $TS_IP${OFF}"
+echo "     (ini push secrets + start heartbeat reporter di laptop kamu)"
+echo "  3. Dalam 60 detik laptop kamu mulai laporan ke fleet"
+echo "  4. Neo dapet WhatsApp 🆕 'New fleet node detected'"
+echo
+echo "Kalo udah selesai semua, screenshot lagi WA Neo dan kirim 👍"
 echo
