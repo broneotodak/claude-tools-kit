@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.openclaw.pr-decision-dispatcher</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/zieel/Projects/claude-tools-kit/tools/pr-decision-dispatcher.js</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Every 30s: cheap polling, only fires action when a real awaiting + Neo reply pair exists -->
+  <key>StartInterval</key>
+  <integer>30</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/zieel/.openclaw/logs/pr-decision-dispatcher.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/zieel/.openclaw/logs/pr-decision-dispatcher.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/zieel</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+</dict>
+</plist>
