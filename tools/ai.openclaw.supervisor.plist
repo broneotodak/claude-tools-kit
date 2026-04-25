@@ -30,9 +30,9 @@
     <string>/Users/zieel</string>
     <key>PATH</key>
     <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
-    <!-- Boot in DRY_RUN mode. Remove this entry and reload plist to go live. -->
-    <key>SUPERVISOR_DRY_RUN</key>
-    <string>1</string>
+    <!-- Live mode since 2026-04-25 (v2 dry-run validated zero false fires
+         under the same conditions that broke v1). To re-enter dry-run,
+         add a SUPERVISOR_DRY_RUN=1 key here and reload the plist. -->
   </dict>
 </dict>
 </plist>
