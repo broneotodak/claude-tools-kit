@@ -64,7 +64,7 @@ function matchVerdict(body) {
 
 async function findAwaiting() {
   const cutoff = new Date(Date.now() - LOOKBACK_MS).toISOString();
-  return await rest(`memories?category=eq.pr-awaiting-decision&created_at=gte.${cutoff}&order=created_at.desc&select=id,content,metadata,created_at`);
+  return await rest(`memories?category=eq.pr-awaiting-decision&created_at=gte.${encodeURIComponent(cutoff)}&order=created_at.desc&select=id,content,metadata,created_at`);
 }
 
 async function alreadyDecided(prUrl) {
@@ -74,9 +74,11 @@ async function alreadyDecided(prUrl) {
 }
 
 async function neoRepliesAfter(sinceIso) {
-  // Recent Neo inbound messages, ordered by time asc so we process in order
+  // Recent Neo inbound messages, ordered by time asc so we process in order.
+  // Bug fix 2026-04-25: encodeURIComponent the timestamp — its '+' was being
+  // URL-decoded as space, making the gte filter malformed and returning 0 rows.
   return await rest(
-    `memories?source=eq.nclaw_whatsapp_conversation&metadata->>role=eq.user&metadata->>from_lid=eq.${NEO_LID}&created_at=gte.${sinceIso}&order=created_at.asc&select=content,created_at&limit=20`,
+    `memories?source=eq.nclaw_whatsapp_conversation&metadata->>role=eq.user&metadata->>from_lid=eq.${NEO_LID}&created_at=gte.${encodeURIComponent(sinceIso)}&order=created_at.asc&select=content,created_at&limit=20`,
   );
 }
 
