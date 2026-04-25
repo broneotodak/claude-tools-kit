@@ -226,6 +226,27 @@ Full rules: `~/.claude/MONITORING_ENFORCEMENT.md` (mandatory reading before any 
 — a raw baileys event-type string, not real health. 49 false fires overnight. Push monitors
 for twin-ingest/forex created without wiring agents → permanent false DOWN.
 
+### 6. **Pre-Commit Secrets Discipline** (added 2026-04-25)
+**Before the FIRST `git commit` on ANY new repo**, you MUST verify:
+1. `.gitignore` exists and covers: `node_modules/`, `.env`, `.env.*`, `*.key`,
+   `*.token`, `secrets/`, session/auth state files, `*.bak`, `*.log`
+2. Run `git status --ignored` — confirm secrets show as ignored, not staged
+3. Run `git diff --cached | grep -iE 'API_KEY|SECRET|TOKEN|PASSWORD'` — must be
+   empty BEFORE the commit
+4. When initializing in a dir that already contains secrets, stage **explicit
+   files** (`git add server.js package.json …`), never `git add .`
+
+**For migrating an existing dirty repo:** start FRESH (`git init` in a parallel
+clean tree, rsync source minus secrets, force-push to a new repo, delete the
+old one). Don't try to scrub with filter-repo unless commit history must be
+preserved — fresh start is simpler and equally effective.
+
+**Originating incident:** 2026-04-25 Siti's `broneotodak/nclaw-dashboard`
+initial commit included `.env` with API keys (Supabase service_role,
+Anthropic, OpenAI, Gemini, ElevenLabs, Telnyx, NEO_BRAIN service_role). Repo
+was private and sole collaborator was Neo so leak was contained, but had to
+migrate to clean `broneotodak/siti` and delete the old repo.
+
 ## 🚨 ENFORCEMENT MECHANISM:
 
 **If you violate ANY of these rules:**
