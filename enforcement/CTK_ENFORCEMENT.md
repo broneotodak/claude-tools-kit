@@ -70,6 +70,16 @@ If ≥5 significant changes since the last save: just save and mention it in one
 
 **Don't write a fill-in-the-blank template.** Capture what was accomplished, key decisions, problems solved, next steps. Length follows substance.
 
+### 3.5 Doc/Memory Pattern (added 2026-04-26)
+
+Don't duplicate progress notes between memory and code. Each goes to its natural home:
+
+- **Tech specs** (architecture, schemas, API contracts) → repo: HTML deck or per-project README
+- **Decisions / context** (why X over Y, who approved, when to revisit) → neo-brain memory
+- **Progress notes** (what landed in this PR) → commit body or PR description, NOT a separate memory entry
+
+If tempted to duplicate: write the spec in repo, link to it from memory. Future-you reading code goes to repo; future-you searching for context goes to memory. Same write in two places means both rot at different rates.
+
 ---
 
 ## 4. Credential Vault (added 2026-04-24)
