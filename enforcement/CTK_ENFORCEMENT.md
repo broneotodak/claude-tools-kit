@@ -16,6 +16,18 @@ Last consolidation: 2026-04-26 (slimmed from 276 lines; trigger lookups and capa
 
 If you violate any of these: stop, acknowledge, correct, and save the correction to memory so the next session inherits the lesson.
 
+### 1.1 Diagnostic discipline (added 2026-04-26)
+
+When investigating "why isn't X happening?", walk the full data scope before narrowing:
+
+1. **Inventory first** — list the universe (all rows, all groups, all configs) before filtering by hypothesis.
+2. **Cross-reference second** — compare what's expected (config/schema) vs what's actually present.
+3. **Filter last** — only narrow once you've established what the universe contains.
+
+Filter-first reasoning ("does Roslan exist? no → he must not be in the group") hides every case your hypothesis didn't predict. The bug you find is rarely the bug you assumed.
+
+**Originating incident** (2026-04-26): During a Siti debugging session, Roslan/AbgLord/Rokiah returned 0 messages from a `pushName ILIKE` search. Claim made: *"Siti must not be in that group."* One query against `nclaw_contacts` would have shown Siti IS in "Todak Fantasy ADMIN" with admin permission. The actual bug was wacli dropping messages despite the bot's group membership — a fundamentally different problem with a different fix path. Filter-first reasoning hid the real failure mode and wasted user trust.
+
 ---
 
 ## 2. Database Discipline
