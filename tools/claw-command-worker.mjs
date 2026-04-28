@@ -279,7 +279,9 @@ async function runPostScript(channel, payload) {
   return new Promise((resolve, reject) => {
     const proc = spawn('/opt/homebrew/bin/python3', [scriptPath, mediaPath, caption], {
       timeout: 6 * 60 * 1000,
-      env: { ...process.env, PATH: `/opt/homebrew/bin:/usr/bin:/bin:${process.env.PATH || ''}` },
+      // /usr/sbin needed for lsof (Antigravity port discovery in post scripts).
+      // Launchd-spawned worker has a restricted PATH that doesn't include it.
+      env: { ...process.env, PATH: `/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:${process.env.PATH || ''}` },
     });
     let stdout = '', stderr = '';
     proc.stdout.on('data', d => { stdout += d.toString(); });
