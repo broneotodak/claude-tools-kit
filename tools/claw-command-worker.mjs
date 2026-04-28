@@ -364,6 +364,13 @@ async function processOne() {
       _meta: { duration_ms: Date.now() - startedAt, worker_version: 'claw-command-worker-v2' },
     });
     console.log(`[worker] done ${cmd.id} in ${Date.now() - startedAt}ms`);
+    // Phase 5c · fire a Siti WhatsApp notification on terminal post_to_* status
+    // so Neo gets a confirmation DM right after the post lands. Best-effort.
+    if (cmd.command?.startsWith('post_to_')) {
+      await notifySitiPostResult(cmd, 'done', result, null).catch(e =>
+        console.error(`[worker] siti notify (success) failed: ${e.message}`),
+      );
+    }
   } catch (err) {
     const errorClass = err.errorClass || 'permanent';
     const body = {
@@ -375,12 +382,53 @@ async function processOne() {
     if (errorClass === 'transient') {
       const newStatus = await failTransient(cmd.id, body);
       console.error(`[worker] transient ${cmd.id} → ${newStatus}: ${err.message}`);
+      // Notify Siti only on retries-exhausted (newStatus === 'failed' or 'dead_letter')
+      if (cmd.command?.startsWith('post_to_') && newStatus !== 'pending') {
+        await notifySitiPostResult(cmd, newStatus, null, err.message).catch(() => {});
+      }
     } else {
       await complete(cmd.id, 'failed', body);
       console.error(`[worker] failed ${cmd.id} (${errorClass}): ${err.message}`);
+      if (cmd.command?.startsWith('post_to_')) {
+        await notifySitiPostResult(cmd, 'failed', null, err.message).catch(() => {});
+      }
     }
   }
   return true;
+}
+
+// Phase 5c · Siti WA notification on post_to_* terminal status.
+// Writes an agent_command to_agent='siti' command='send_whatsapp_notification'.
+// Siti's existing handler picks it up and DMs Neo (60177519610). Also updates
+// the content_drafts row's source_ref with the post URL when present, so the
+// SCHED tab DRAFTS lane reflects terminal state.
+async function notifySitiPostResult(cmd, status, result, errorMsg) {
+  const channel = (cmd.command || '').replace(/^post_to_/, '');
+  const draftId = cmd.payload?.draft_id;
+  const caption = (cmd.payload?.caption || '').slice(0, 80);
+  const url = result?.url;
+  let message;
+  if (status === 'done') {
+    message = `✅ Posted to ${channel.toUpperCase()}${url ? `\n🔗 ${url}` : ''}\n📝 ${caption}${draftId ? `\n(draft ${draftId.slice(0, 8)})` : ''}`;
+  } else {
+    message = `❌ ${channel.toUpperCase()} post FAILED${status === 'dead_letter' ? ' (dead letter, retries exhausted)' : ''}\n📝 ${caption}\n⚠️ ${(errorMsg || 'unknown').slice(0, 200)}`;
+  }
+  await fetch(`${SUPABASE_URL}/rest/v1/agent_commands`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({
+      from_agent: 'claw-mac',
+      to_agent: 'siti',
+      command: 'send_whatsapp_notification',
+      payload: { to: '60177519610', message },
+      priority: 5,
+    }),
+  });
 }
 
 async function loop() {
