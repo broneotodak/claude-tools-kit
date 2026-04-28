@@ -217,10 +217,114 @@ async function browserAct(payload) {
   }
 }
 
+// ── post_to_<channel>: wraps existing browser-automation post scripts ──
+// Phase 5c. Each platform has a python script in ~/.openclaw/skills/daily-quotes/
+// that takes (media_path, caption) on argv and uses Antigravity MCP via Chrome
+// CDP to log into the platform, attach media, and click Post.
+//
+// Payload: { caption, media_path, media_kind, draft_id?, idempotency_key? }
+//
+// Exit code 0 = success. Non-zero with stderr containing 'MCP tool error' or
+// 'navigating frame was detached' = TRANSIENT (browser session blip → retry).
+// Other non-zero exits = PERMANENT (script bug, login expired, content invalid).
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+
+const POST_SCRIPTS = {
+  linkedin:   `${homedir()}/.openclaw/skills/daily-quotes/linkedin-post.py`,
+  instagram:  `${homedir()}/.openclaw/skills/daily-quotes/ig-post.py`,
+  ig:         `${homedir()}/.openclaw/skills/daily-quotes/ig-post.py`, // alias
+  threads:    `${homedir()}/.openclaw/skills/daily-quotes/threads-post.py`,
+  tiktok:     `${homedir()}/.openclaw/skills/daily-quotes/tiktok-post.py`,
+  x:          `${homedir()}/.openclaw/skills/daily-quotes/x-post.py`,
+  twitter:    `${homedir()}/.openclaw/skills/daily-quotes/x-post.py`, // alias
+};
+
+const TRANSIENT_PATTERNS = [
+  /MCP tool error/i,
+  /navigating frame was detached/i,
+  /selected page has been closed/i,
+  /timed out/i,
+  /lifecyclewatcher disposed/i,
+  /econnreset|epipe|connection reset/i,
+  /port discovery failed/i,
+];
+
+function classifyPostFailure(stderr, exitCode) {
+  const blob = (stderr || '').slice(-2000);
+  if (TRANSIENT_PATTERNS.some(rx => rx.test(blob))) return 'transient';
+  if (/no such file|cannot find|not found/i.test(blob)) return 'permanent';
+  return 'permanent'; // default — caller decided this is broken, retry won't fix
+}
+
+async function runPostScript(channel, payload) {
+  const caption = (payload.caption || '').toString();
+  const mediaPath = (payload.media_path || '').toString();
+  if (!caption.trim()) throw invalidPayload('caption required (non-empty)');
+  if (!mediaPath) throw invalidPayload('media_path required');
+  if (!existsSync(mediaPath)) {
+    throw new CommandError('permanent', `media file not found at ${mediaPath} on claw-mac`);
+  }
+  const scriptPath = POST_SCRIPTS[channel];
+  if (!scriptPath) {
+    throw capabilityMissing(`no post script for channel '${channel}'`, {
+      available_channels: [...new Set(Object.keys(POST_SCRIPTS))],
+    });
+  }
+  if (!existsSync(scriptPath)) {
+    throw new CommandError('permanent', `post script missing on disk: ${scriptPath}. Channel handler not yet built.`);
+  }
+
+  // Spawn python3 <script> <media_path> <caption>. 6-min timeout for video uploads.
+  return new Promise((resolve, reject) => {
+    const proc = spawn('/opt/homebrew/bin/python3', [scriptPath, mediaPath, caption], {
+      timeout: 6 * 60 * 1000,
+      env: { ...process.env, PATH: `/opt/homebrew/bin:/usr/bin:/bin:${process.env.PATH || ''}` },
+    });
+    let stdout = '', stderr = '';
+    proc.stdout.on('data', d => { stdout += d.toString(); });
+    proc.stderr.on('data', d => { stderr += d.toString(); });
+    proc.on('close', code => {
+      if (code === 0) {
+        // Try to extract a posted URL from stdout (scripts sometimes print one)
+        const urlMatch = stdout.match(/https?:\/\/\S+/);
+        resolve({
+          channel,
+          posted: true,
+          url: urlMatch ? urlMatch[0] : null,
+          stdout_tail: stdout.slice(-500),
+          script: scriptPath,
+        });
+      } else {
+        const klass = classifyPostFailure(stderr, code);
+        const err = new CommandError(klass,
+          `${channel} post failed (exit ${code}): ${(stderr.split('\n').filter(Boolean).pop() || 'unknown error').slice(0, 200)}`,
+          { stderr_tail: stderr.slice(-1000), stdout_tail: stdout.slice(-500), exit_code: code });
+        reject(err);
+      }
+    });
+    proc.on('error', e => reject(new CommandError('transient', `spawn error: ${e.message}`)));
+  });
+}
+
+const postLinkedIn  = (p) => runPostScript('linkedin', p);
+const postInstagram = (p) => runPostScript('instagram', p);
+const postThreads   = (p) => runPostScript('threads', p);
+const postTikTok    = (p) => runPostScript('tiktok', p);
+const postX         = (p) => runPostScript('x', p);
+
 // Dispatch table. Add commands here as they come online.
 const HANDLERS = {
   run_ollama_prompt: runOllamaPrompt,
   browser_act: browserAct,
+  // Phase 5c · content posting via existing CLAW python scripts
+  post_to_linkedin:  postLinkedIn,
+  post_to_instagram: postInstagram,
+  post_to_ig:        postInstagram, // alias used by older callers
+  post_to_threads:   postThreads,
+  post_to_tiktok:    postTikTok,
+  post_to_x:         postX,
+  post_to_twitter:   postX, // alias
 };
 
 // ── execution wrapper ──────────────────────────────────────────────
