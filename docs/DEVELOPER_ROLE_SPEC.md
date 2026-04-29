@@ -1,7 +1,13 @@
 # Developer Role + Project Scope — Spec
 
-**Status:** DRAFT · 2026-04-29 · awaits implementation
-**Scope:** Cross-cutting — Siti runtime + NACA UX + neo-brain schema
+**Status:** PARTIAL · 2026-04-29 · NACA half shipped, Siti gate work pending
+**Scope:** Cross-cutting — Siti runtime + NACA UX + Siti-DB schema
+
+> **Update 2026-04-29 (afternoon):**
+> - Schema applied to `uzamamymfzhelvkwpvgt` (Siti's legacy DB — `nclaw_contacts` lives there, NOT on neo-brain `xsunmervpyrplzarebva`). The earlier note in this doc that said "neo-brain" was wrong.
+> - `broneotodak/siti#33` merged + deployed: PATCH `/api/contacts/:id` now accepts `project_scope`.
+> - `broneotodak/naca-app#1` merged + deployed: SITI tab UI shows `developer` and `readonly` in the dropdown, plus the project_scope text field when developer is selected.
+> - **Pending — owned by Siti session:** `submit_planner_task` line 2521 still excludes `developer`, plus the auto-classifier path investigation (the path that let Hanis through). Until those land, even contacts marked `developer:project-X` will be rejected by `submit_planner_task`. The data side is ready; the gate side isn't.
 
 ## Why we need this
 
