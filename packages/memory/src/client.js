@@ -120,6 +120,37 @@ export class NeoBrain {
     });
   }
 
+  /**
+   * List memories chronologically (newest first). No embedding required.
+   * Use this for "what's recent" / activity scans / session-start briefs.
+   * For semantic lookup use search() instead.
+   * @param {{limit?:number, sinceHours?:number, source?:string, memoryType?:string, category?:string, minImportance?:number, visibility?:string[], subjectId?:string, includeArchived?:boolean}} [opts]
+   */
+  async listMemories({
+    limit = 20,
+    sinceHours = null,
+    source = null,
+    memoryType = null,
+    category = null,
+    minImportance = null,
+    visibility = ["public", "internal", "private"],
+    subjectId = null,
+    includeArchived = false,
+  } = {}) {
+    let q = this.sb.from("memories").select("*");
+    if (!includeArchived) q = q.eq("archived", false);
+    if (sinceHours != null) q = q.gte("created_at", new Date(Date.now() - sinceHours * 3600_000).toISOString());
+    if (source) q = q.eq("source", source);
+    if (memoryType) q = q.eq("memory_type", memoryType);
+    if (category) q = q.eq("category", category);
+    if (minImportance != null) q = q.gte("importance", minImportance);
+    if (subjectId) q = q.eq("subject_id", subjectId);
+    if (visibility) q = q.in("visibility", visibility);
+    const { data, error } = await q.order("created_at", { ascending: false }).limit(limit);
+    if (error) throw new Error(`listMemories: ${error.message}`);
+    return data || [];
+  }
+
   // ---------- MEDIA ----------
 
   /**
