@@ -148,12 +148,16 @@ def main():
 
     # ─── TRAIN ───────────────────────────────────────────────────────────────
     print("\n→ Starting training ...")
-    # trl 0.11.x uses tokenizer=; 0.12+ uses processing_class=. Keep tokenizer= for compat.
+    # trl 0.11.x: needs explicit formatting_func for chat-format datasets (no auto-detect)
+    def formatting_func(example):
+        return tokenizer.apply_chat_template(example["messages"], tokenize=False)
+
     trainer = SFTTrainer(
         model=model,
         train_dataset=ds,
         peft_config=lora,
         tokenizer=tokenizer,
+        formatting_func=formatting_func,
         args=sft_cfg,
     )
     trainer.train()
