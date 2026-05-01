@@ -165,3 +165,9 @@ terraform.tfvars
 # CTK backups and MCP server deps
 backups/
 mcp-server/node_modules/
+
+# Dataset pipeline outputs — never commit (size, private/internal content, not diffable)
+datasets/
+**/datasets/
+*.jsonl
+manifest.json
