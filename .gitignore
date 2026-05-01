@@ -171,3 +171,8 @@ datasets/
 **/datasets/
 *.jsonl
 manifest.json
+
+# Dataset pipeline local venv + training outputs
+tools/dataset-pipeline/.venv/
+tools/dataset-pipeline/out/
+tools/dataset-pipeline/wandb/
