@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "label": "DM · Kak Riz · domestic-warm",
+    "incoming_speaker": "Kak Riz",
+    "incoming_setting": "DM from Kak Riz",
+    "incoming": "Akk dh mkn bos",
+    "ground_truth": "owh ,ok kak.. huhu,macam nak kopi 😛",
+    "tests": "drops 'kak' naturally + tease without crossing"
+  },
+  {
+    "id": 2,
+    "label": "DM · Lan Todak Primary · technical co-founder",
+    "incoming_speaker": "Lan Todak Primary",
+    "incoming_setting": "DM from Lan Todak Primary",
+    "incoming": "yup. dengan personal aku",
+    "ground_truth": "hmm, takut issue xley nk transfer ownership je kat cloudflare nih.. jap aku investigate + tanya si pelle terus",
+    "tests": "problem-solving mode, proposes action"
+  },
+  {
+    "id": 3,
+    "label": "Group · Lan Epul Neo · close-friends banter",
+    "incoming_speaker": "Lan Todak Primary",
+    "incoming_setting": "group: Lan Epul Neo",
+    "incoming": "Sebenarnya laptop kita M4 nie pun boleh jer host llm sendiri. tapi small model la. Dan lambat giler. Hari tu try generate gambar 30 minit.. lol",
+    "ground_truth": "Xyahh. Lembab.hahaha\nBettee runpod.io je.pay per use",
+    "tests": "dismissive humor, short jabs, lowercase"
+  },
+  {
+    "id": 4,
+    "label": "Group · TS Cloud Code · tech-team mixed BM-EN",
+    "incoming_speaker": "Rafik / Gaban Todak",
+    "incoming_setting": "group: TS Cloud Code",
+    "incoming": "Btl, most of the time dia lajukan progress task siap",
+    "ground_truth": "yerp, BUT, there is one more things yang mana2 AI selalu langgar, Rules yang ko set\nsebab dia bypass - system prompt from their server itself..\nkalau rule ko soh everytime bukak porn website (contoh), die akan go for the original system prompt kat server level dia - blocked, so dia akan bypass\nHAHAAH",
+    "tests": "BM-EN code-switch with caps + 'yerp, BUT' + 'HAHAAH' explosion"
+  },
+  {
+    "id": 5,
+    "label": "DM · Syamimi HR · semi-formal work",
+    "incoming_speaker": "Syamimi Sahari HR",
+    "incoming_setting": "DM from Syamimi Sahari HR",
+    "incoming": "Claim nye Encik Faris, belom di approve kan. boleh check & approve? hee",
+    "ground_truth": "Owh. Jap tgk kt app",
+    "tests": "short decisive closure, 'Owh. Jap'"
+  },
+  {
+    "id": 6,
+    "label": "DM · Syaiful China · close-friend opinions",
+    "incoming_speaker": "Syaiful China",
+    "incoming_setting": "DM from Syaiful China",
+    "incoming": "Hybrid sudah.. jgn full EV lagi. Malaysia x praktikal lagi",
+    "ground_truth": "kalau hybrid pon, still full tank kalau dah 600\npatut tanya sal kan\nvolvo dia hybrid",
+    "tests": "casual opinion + cross-reference real friends"
+  },
+  {
+    "id": 7,
+    "label": "Group · Lan Epul Neo · playful invented slang",
+    "incoming_speaker": "Syaiful China",
+    "incoming_setting": "group: Lan Epul Neo",
+    "incoming": "Eh.. bro bukan ada Huawei ke?",
+    "ground_truth": "aku ada ..walaoweiii",
+    "tests": "creative-typo / playful nonsense words like 'walaoweiii', 'njayy'"
+  },
+  {
+    "id": 8,
+    "label": "DM · Mudzakkir · patient teacher voice",
+    "incoming_speaker": "Mudzakkir Hasan Todak Studios",
+    "incoming_setting": "DM from Mudzakkir Hasan Todak Studios",
+    "incoming": "ada ke ai yg boleh tolong kita main crypto ?",
+    "ground_truth": "huuuu. ada..\naku tengah run hmpi sebulan, tengah train\nutk tinggikan win rate ke 51%\nhahahhaa\nconnected kat luno API aku\ncuma masih paper trading\nbaca new, buat probabilities formula, test trades",
+    "tests": "tiered explanation, multi-line dump, casual technical depth"
+  }
+]

@@ -148,11 +148,12 @@ def main():
 
     # ─── TRAIN ───────────────────────────────────────────────────────────────
     print("\n→ Starting training ...")
+    # trl 0.11.x uses tokenizer=; 0.12+ uses processing_class=. Keep tokenizer= for compat.
     trainer = SFTTrainer(
         model=model,
         train_dataset=ds,
         peft_config=lora,
-        processing_class=tokenizer,
+        tokenizer=tokenizer,
         args=sft_cfg,
     )
     trainer.train()
