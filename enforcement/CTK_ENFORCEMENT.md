@@ -186,3 +186,46 @@ These rules also govern: dev-agents on Siti VPS, scheduled remote CC agents, fut
 - Respect the same DB-discipline + secrets-discipline rules
 
 If you find this file out of sync with reality, fix it here (single source) — don't fork it locally.
+
+---
+
+## 9. Multi-Session Coordination (added 2026-05-01)
+
+When MULTIPLE Claude Code sessions are working in parallel on the NACA fleet, they can ship code that races in production. Today's bug pattern: Session A built poster-agent, Session B built timekeeper-agent — neither tested alongside the other, and on first production run they raced for the same `scheduled_actions` rows. 3 daily-content posts stuck pending for 1+ hour; Siti hallucinated success when asked "is it posted yet?".
+
+**SHARED INFRA — coordinate before touching:**
+
+Tables: `scheduled_actions`, `agent_commands`, `agent_intents`, `agent_heartbeats`, `content_drafts`, `memories`, `nclaw_contacts`, `gam_audit`.
+
+Code paths: any RPC poller (timekeeper, poster-agent, dev-agent, planner-agent, supervisor, verifier, toolsmith), webhook-relay, NACA gam gateway, retrieveTwinMemories callers, Siti tool handlers.
+
+**Pre-flight checklist before editing shared infra:**
+
+1. Search neo-brain for recent shared-infra changes:
+   ```js
+   await brain.from('memories')
+     .select('content,created_at,metadata')
+     .eq('source', 'claude_code')
+     .eq('category', 'shared_infra_change')
+     .gte('created_at', new Date(Date.now() - 7 * 86400e3).toISOString());
+   ```
+2. Check `agent_heartbeats` — confirm no agent restarted in last 60 min (signal of active parallel work).
+3. If ambiguous: post a 3-line "intent" note in conversation: *"about to modify TABLE/AGENT — anything in flight I should know?"* and let Neo flag conflicts.
+
+**Post-deploy: leave a discoverable changelog.** After shipping changes that touch shared infra, save a memory note:
+
+```bash
+node ~/Projects/claude-tools-kit/tools/save-memory.js \
+  "shared_infra_change" \
+  "<short title>" \
+  "<what changed, why, what consumers/producers are affected>" \
+  6
+```
+
+Tag `category: shared_infra_change` so future sessions can search-filter. List affected tables and agents in the body.
+
+**Conflict mid-session.** If you notice another session's recent change conflicts with your plan: **stop**, read the other session's most recent shared_infra_change memory, ask Neo whether to merge or sequence — don't ship in parallel without explicit reconciliation.
+
+**Safety net.** `tools/stuck-command-monitor.js` runs on CLAW cron every 5 min and alerts Neo via Siti `/api/send` when `agent_commands` are stuck `pending > 10min` or `running > 15min`. This catches cross-session races in <5 min instead of 1+ hour. Don't rely on the monitor as a substitute for pre-flight discipline — it's the last line, not the first.
+
+**Originating incident** (2026-05-01): Siti claimed "approved → posting to tiktok, linkedin, instagram in ~10s" but timekeeper-agent claimed all 3 SAs before poster-agent could fire them. Commands sat pending 1+hr. When Neo asked "is it posted yet?", Siti's pure-semantic memory recall surfaced an unrelated old success (academy logo PR done Apr 28) and presented it as if THIS draft posted — pure hallucination from cross-domain noise. Full evidence: neo-brain memory `065d6128-84e3-4b47-9d4a-e80fb7e0160a`.
