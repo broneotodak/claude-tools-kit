@@ -224,7 +224,7 @@ const KNOWN_OUTSIDE_WATCH = new Set([
   // Scheduled-cadence agents (heartbeats fire on their own schedule)
   'backup-sync', 'person-sync', 'pr-decision-dispatcher',
   // Specialist agents not in WATCH (still healthy by their own logic)
-  'dev-agent', 'planner-agent', 'reviewer', 'siti', 'naca-backend', 'twin-ingest', 'claw-mac', 'supervisor', 'toolsmith',
+  'dev-agent', 'planner-agent', 'reviewer', 'siti', 'naca-backend', 'twin-ingest', 'neo-twin-orchestrator', 'claw-mac', 'supervisor', 'toolsmith',
 ]);
 
 async function discoverNewFleetNodes(byName, nowMs) {
