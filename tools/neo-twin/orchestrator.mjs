@@ -318,10 +318,17 @@ async function processMemory(memory) {
   const meta = memory.metadata || {};
   const chatJid = meta.chat_jid;
   const senderPhone = meta.sender_phone;
+  const senderName = (meta.sender_name || "").toLowerCase();
+  const content = memory.content || "";
   const isFromOwner = meta.is_from_owner === true;
 
-  // Skip messages from self (Neo's own outgoing — would be a loop)
-  if (isFromOwner || senderPhone === OWNER_PHONE) {
+  // Skip messages from self (Neo's own outgoing — would be a loop).
+  // Multiple signals because Baileys uses LIDs in groups (sender_phone won't match
+  // OWNER_PHONE for group msgs, and is_from_owner can be wrong for the same reason).
+  // Most reliable: pushName ('Broneotodak' / 'Neo') + content prefix from twin-ingest.
+  const ownerNames = new Set(["broneotodak", "neo", "neo todak", "ahmad fadli"]);
+  const contentLooksLikeOwner = /^\[(?:dm|group:[^\]]+)\]\s+Neo said:/i.test(content);
+  if (isFromOwner || senderPhone === OWNER_PHONE || ownerNames.has(senderName) || contentLooksLikeOwner) {
     await markHandled(memory.id, "skipped_self", null);
     stats.skipped_no_state++;
     return;
@@ -402,15 +409,22 @@ async function processMemory(memory) {
     draft_reply: finalReply,
     sent_reply: isShadow ? null : finalReply,
     message_id: null,
-    status: isShadow ? "shadow" : "sent",
+    // legacy DB CHECK constraint allows: pending|sent|edited_sent|skipped
+    // We use 'pending' for shadow drafts (would_have_sent=true distinguishes them)
+    status: isShadow ? "pending" : "sent",
     rate_limited: false,
     would_have_sent: isShadow,
     model_used: t1.provider + (t2.ok ? "+qwen2.5:32b" : ""),
   });
 
   // 7. Send (only if not shadow)
+  // If draft save failed (draftId is null), skip marking handled so we retry next poll
+  if (!draftId) {
+    log(`DRAFT save failed — leaving memory unhandled for retry`);
+    return;
+  }
   if (isShadow) {
-    log(`SHADOW logged draft ${draftId?.slice(0, 8)} to ${chatJid.slice(0, 25)} | "${finalReply.slice(0, 60)}"`);
+    log(`SHADOW logged draft ${draftId.slice(0, 8)} to ${chatJid.slice(0, 25)} | "${finalReply.slice(0, 60)}"`);
     await markHandled(memory.id, "shadow_logged", draftId);
     stats.shadow_logged++;
   } else {
