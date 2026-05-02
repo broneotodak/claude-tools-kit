@@ -135,20 +135,24 @@ CREATE INDEX idx_twin_active_state_status ON twin_active_state(status);
 CREATE INDEX idx_twin_active_state_pause ON twin_active_state(pause_until_ts) WHERE status='paused';
 ```
 
-### Initial seed (per Neo's whitelist)
+### Initial seed (per Neo's whitelist) — APPLIED 2026-05-03
 
-```sql
--- Both groups START in shadow mode (3-day soak before live)
-INSERT INTO twin_active_state (target_jid, target_kind, status, shadow_mode, added_by, last_change_reason)
-VALUES
-  ('<lan-epul-neo-group-jid>',   'group', 'active', true, 'neo', 'initial whitelist'),
-  ('<test-ai-whatsapp-group-jid>', 'group', 'active', true, 'neo', 'initial whitelist');
--- (DM contacts added ad-hoc per Neo's choice)
-```
+Both groups seeded with `status='active', shadow_mode=true` (3-day soak before live):
+
+| Group | JID |
+|---|---|
+| Lan Epul Neo | `120363425720743054@g.us` |
+| Test AI WhatsApp group | `120363408864826595@g.us` |
+
+(DM contacts added ad-hoc per Neo's choice — currently empty.)
 
 ### Default state for new entries
 
 `status='disabled'` (per Q12). Operator must explicitly toggle to `active`.
+
+### Migration status
+
+✅ Applied 2026-05-03 via Supabase migration `neo_twin_v2_state_and_drafts_extension`. All 7 new `twin_drafts` columns + `twin_active_state` table + 2 indexes + 2 seed rows verified.
 
 ---
 
@@ -478,10 +482,10 @@ CTK §9 `shared_infra_change` memory must be saved when:
 
 ## 16. Decisions still needed before code
 
-1. **Tailscale on Twin VPS** (§11) — install yes/no?
-2. **First-week target JIDs** — need to find the actual JIDs for "Lan Epul Neo" group + "Test AI WhatsApp group" (run `wacli chats list` or query twin_contacts). Wait until SSH check?
-3. **Schema location finalize** — confirm legacy DB stays as the home for twin_drafts + twin_active_state for now.
-4. **Tier 1 confidence gate** — does Haiku reliably output a confidence field? Or do we ask it explicitly via prompt? (Implementation detail, can decide during build.)
+1. **Tailscale on Twin VPS** (§11) — install yes/no? - Yes (already did this)
+2. **First-week target JIDs** — need to find the actual JIDs for "Lan Epul Neo" group + "Test AI WhatsApp group" (run `wacli chats list` or query twin_contacts). Wait until SSH check? - Yes, go SSH
+3. **Schema location finalize** — confirm legacy DB stays as the home for twin_drafts + twin_active_state for now. - Yes, for now until we satisfied the twin memory does not hallucinate/polluted
+4. **Tier 1 confidence gate** — does Haiku reliably output a confidence field? Or do we ask it explicitly via prompt? (Implementation detail, can decide during build.) - decide during build
 
 ---
 
