@@ -1,0 +1,14 @@
+{
+  "name": "neo-twin-orchestrator",
+  "version": "0.1.0",
+  "description": "Phase 6 Step 9 — neo-twin auto-reply orchestrator (Twin VPS pm2 process)",
+  "main": "orchestrator.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node orchestrator.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "dotenv": "^16.4.7"
+  }
+}
