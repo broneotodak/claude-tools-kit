@@ -29,8 +29,12 @@ const KNOWN_PROJECTS = {
     url: process.env.ATLAS_SUPABASE_URL || 'https://ftbtsxlujsnobujwekwx.supabase.co',
     key: process.env.ATLAS_SUPABASE_SERVICE_ROLE_KEY,
     description: 'ATLAS/THR - Asset Tracking & HR Shared Database'
+  },
+  'neo-brain': {
+    url: process.env.NEO_BRAIN_URL,
+    key: process.env.NEO_BRAIN_SERVICE_ROLE_KEY,
+    description: 'Neo Brain - Central memory store (memories, agent_heartbeats, agent_commands)'
   }
-  // Add more projects as we discover them
 };
 
 async function queryProject(projectUrl, serviceKey, table, query = {}) {
