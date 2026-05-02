@@ -380,36 +380,22 @@ Estimated cost: RM0 (your hardware), ~60 min training. Adds maybe 10-20% Neo-lik
 
 ---
 
-## 11. ⚠ Open infrastructure decision: Tailscale on Twin VPS
+## 11. ✅ RESOLVED — Tailscale on Twin VPS (option A executed 2026-05-03)
 
-**Problem:** Twin VPS at `5.161.126.222` is on public internet. tr-home at `100.126.89.7` is on tailnet only. Currently **unreachable** from Twin VPS — connection times out at 5s.
+Twin VPS now joined the tailnet. Tier 2 reachability confirmed.
 
-**Confirmed via test (this session):**
-```
-$ ssh root@5.161.126.222 'curl -s --max-time 5 http://100.126.89.7:11434/api/tags'
-http_code=000 ttotal=5.002813
-$ ssh root@5.161.126.222 'which tailscale'
-(not installed)
-```
+**Action taken (2026-05-03):**
+- Tailscale installed via official `install.sh`
+- `tailscale up --authkey=<from-vault> --hostname=neo-twin --accept-routes`
+- Auth key sourced from neo-brain credentials vault (`service='tailscale', credential_type='auth_key'`, id `68df675d-...`) — never written to disk on Twin VPS
 
-**Three solutions:**
+**Result:**
+- Twin VPS tailnet IP: `100.120.79.126` (hostname: `neo-twin`)
+- Tailnet peers visible: imeldas-macbook-air, macbook-pro-2, naca-pi, naca-vps, slaves-macbook-pro (1 + 2), tr-home (`100.126.89.7`), ugreen-nas-1
+- `curl http://100.126.89.7:11434/api/tags` from Twin VPS → 200 OK, `qwen2.5:32b` (Q4_K_M, 19.85 GB, 32.8B params) confirmed available
+- twin-ingest pm2 process unaffected (5d uptime preserved)
 
-**A. Install Tailscale on Twin VPS** *(recommended)*
-- 5 min install, joins tailnet, gets `100.x.y.z` IP
-- Direct reach to tr-home ✓
-- Bonus: orchestrator can also reach CLAW wacli-service if ever needed
-- Requires: Neo's Tailscale auth key (one-time)
-- Trade: small attack surface increase (tailscaled daemon), mitigated by Tailscale's hardening
-
-**B. Move orchestrator to a tailnet host**
-- e.g. CLAW (always-on, has wacli) or tr-home itself (already on tailnet, has Ollama)
-- Loses "alongside twin-ingest" benefit
-- tr-home as orchestrator host is interesting — but then tr-home needs reach BACK to Twin VPS for `/api/send` (round-trip via internet anyway)
-
-**C. Expose tr-home Ollama publicly**
-- ❌ Don't recommend. Ollama auth is weak.
-
-**Recommendation: A.** Install Tailscale on Twin VPS. Need Neo to grab a tailnet auth key from Tailscale admin console (or a one-time `tailscale up` interactive run via SSH).
+**`shared_infra_change` memory:** `2d122862-91d0-423f-a6ee-06b9226297db`
 
 ---
 
