@@ -138,7 +138,7 @@ Pre-flight grep results: zero code queries on Twin VPS, zero on naca-app, only o
 ## 8. Auth
 
 - **Phase 1 (tr-home dashboard):** tailnet-only by default. PIN env var available but unset.
-- **Phase 2+ (command center):** PIN-gated from day one. Reuse the `404282` family or generate a fresh one and store via `upsert_credential` (CTK §4) under service `command-center`.
+- **Phase 2+ (command center):** PIN-gated from day one. PIN stored via `upsert_credential` (CTK §4) under service `command-center`, type `pin`. Cookie signing secret stored alongside under type `cookie_secret`. Plaintext never leaves the vault.
 - Public read-only mode for demos: behind a separate path like `/public` with redacted fields. Defer to Phase 4.
 
 ---
@@ -154,8 +154,12 @@ Pre-flight grep results: zero code queries on Twin VPS, zero on naca-app, only o
 
 ## 10. Open questions
 
-- Repo name for the command center: `neotodak-command`, `fleet-command`, `command-center`?
-- Schema option A vs B for milestones (§6) — decide before Phase 3 starts.
-- Operator MBP heartbeat agent: write a new tiny launchd plist or reuse claude-tools-kit's existing scaffolding?
-- Public demo mode (§8): which fields are safe to show without PIN?
+**Resolved (left here as decision log):**
+- ~~Repo name~~ → `broneotodak/neotodak-command`
+- ~~Schema option A vs B~~ → Plan A executed (rename + FK + backward-compat view), see §6
+
+**Still open:**
+- Operator MBP heartbeat agent: write a new tiny launchd plist or reuse claude-tools-kit's existing scaffolding? (Phase 4)
+- Public demo mode (§8): which fields are safe to show without PIN? (Phase 4)
 - Long-term: should `project_registry.sop` start pointing to claude-tools-kit/specs/ files automatically once specs are tagged with `project:` frontmatter?
+- **Tabled (cross-cutting design):** how do we map `agent_commands` rows to a project so "currently working on X" badges become possible? Options: add `project` column to `agent_commands` (shared infra change), infer from payload (fragile), or new `agent_focus` table. Affects both NACA app's "currently working" UI AND command center Phase 4 cross-refs. Needs a dedicated design conversation before either surface builds toward it.
