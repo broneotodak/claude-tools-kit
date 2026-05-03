@@ -125,13 +125,24 @@ Pre-flight grep results: zero code queries on Twin VPS, zero on naca-app, only o
 
 ---
 
-## 7. Phase 4 — Cross-references + presence
+## 7. Phase 4 — Cross-references + presence (PARTIAL)
 
-- Live-fetch GitHub README excerpts (via gh API, cached 5min in `kv_cache` neo-brain table or in Netlify edge cache).
-- Embed presentation.neotodak.com deck URLs.
-- "Currently working" badges: join `agent_commands.status='running'` + recent `memory_writes_log.written_by` → display per-project lights.
-- Operator MBP heartbeat: tiny launchd plist on each MBP that pushes to `agent_heartbeats` every 60s. (Neo MBP, Imel MBA, anyone else.)
-- Optional: SSE replacing 5s polling.
+- ✅ Operator MBP heartbeat (Neo MBP via launchd; Imel pending)
+- ✅ Operator NAS heartbeat (`nas-ugreen` via systemd user timer + linger)
+- ✅ Honest agent detail card (replaced misleading 24h graph after schema reality check)
+- ⏳ Live-fetch GitHub README excerpts on `/project` page (gh API + edge cache)
+- 🛑 "Currently working" badges — tabled, needs `agent_commands → project` mapping design (§10)
+- ⏳ SSE replacing 5s polling — optional, deferred
+
+## 7b. Phase 5 — Native + Observable (NEW, in progress)
+
+Goal: command center becomes the Ubuntu desktop default + NACA agents can read its health programmatically.
+
+- ✅ `/api/health` public endpoint — anon-readable aggregate (status / counts / FCC progress). CORS open. Different audience from `/api/snapshot` (PIN-gated, raw rows).
+- ✅ Ubuntu autostart on tr-home — `~/.config/autostart/command-center.desktop` fires `chromium --app=https://command.neotodak.com` on GNOME login. Chromium 147 installed via snap.
+- ✅ NACA-agent consumption pattern — see §11 below.
+- ⏳ Supervisor rule: alert Neo via Siti when `/api/health` flips to `degraded` for ≥N consecutive polls (per MONITORING_ENFORCEMENT.md — both edges, dry-run, source-validated).
+- ⏸️ System tray indicator — deferred polish.
 
 ---
 
@@ -149,6 +160,60 @@ Pre-flight grep results: zero code queries on Twin VPS, zero on naca-app, only o
 - §5 secrets: every new repo passes the pre-commit checklist before first push.
 - §6 monitoring: every health signal we display must be source-validated. Don't repeat the `wa_status` anti-pattern. If a signal is push-based, the pusher ships in the same change.
 - §9 multi-session: every Phase boundary that touches `project_registry`, `project_milestones`, `agent_heartbeats`, `agent_commands` is a shared-infra change → pre-flight check + post-deploy `shared_infra_change` memory.
+
+---
+
+## 11. NACA-agent consumption pattern (Phase 5.4)
+
+Fleet-Command-Center is **discoverable by NACA agents** via three paths, in increasing fidelity:
+
+### 11.1 Aggregate health (anonymous, no PIN)
+
+```
+GET https://command.neotodak.com/api/health
+```
+
+Returns `status` (ok / degraded / down), human-readable `signals[]` if not ok, agent freshness counts, recent command stats, and FCC project progress. CORS open. Cache 30s at edge.
+
+**Polling cadence for agents:**
+- Supervisor + planner: every 60s
+- Other agents (toolsmith, dev, reviewer): every 5min
+- Treat `status=degraded` as a Siti-grade alert
+- Treat `status=down` as a Siti-critical alert
+
+### 11.2 Endpoint discovery via `project_registry.metadata`
+
+Any agent can resolve FCC's URLs from neo-brain:
+
+```sql
+SELECT metadata->'endpoints' FROM project_registry WHERE project='fleet-command-center';
+```
+
+Returns `{health, snapshot, projects, project, agent, activity, public_deck, health_schema}`. Plus `metadata.consumers_hint` (free-text guidance), `metadata.monitorable=true`, `metadata.audience='fleet-wide'`.
+
+This is the **primary discovery surface** — agents shouldn't hardcode URLs. If an endpoint moves, only `project_registry` updates.
+
+### 11.3 Knowledge graph relationships
+
+Seeded 10 `kg_triples` (subject_type=`project`, subject_key=`fleet-command-center`) using the existing predicate vocabulary — no new predicates introduced. Agents use:
+
+```sql
+SELECT * FROM kg_lookup('project','fleet-command-center');
+```
+
+To find the repo, deploy URL, supabase project, tech stack, status — same shape as every other project in the graph.
+
+### 11.4 Granular fleet state (PIN-gated, full fidelity)
+
+Agents that have the PIN (vault: `service='command-center'`, `type='pin'`) can hit:
+
+```
+POST /api/auth { pin } → cookie
+GET /api/snapshot → 19+ agents × heartbeats × 50 commands × 30-min sessions
+GET /api/agent?name=X → single agent detail
+```
+
+Reserved for high-trust agents (e.g. supervisor pulling specific offline agent names for a precise alert). Most agents should NOT need this — `/api/health` aggregate is enough.
 
 ---
 
