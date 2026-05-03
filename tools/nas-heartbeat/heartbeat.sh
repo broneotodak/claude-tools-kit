@@ -8,6 +8,7 @@ set -u
 NEO_BRAIN_URL="${NEO_BRAIN_URL:?env var required}"
 NEO_BRAIN_SERVICE_ROLE_KEY="${NEO_BRAIN_SERVICE_ROLE_KEY:?env var required}"
 INTERVAL="${INTERVAL:-60}"
+AGENT_NAME="${AGENT_NAME:-ugreen-nas-1}"
 
 # Endpoints to probe — host is whatever the container resolves "host.docker.internal" or NAS LAN IP to.
 # Default values target the NAS internal services.
@@ -63,9 +64,9 @@ while true; do
 EOF
 )
 
-  PAYLOAD=$(printf '{"agent_name":"nas-ugreen","status":"%s","reported_at":"%s","meta":%s}' "$STATUS" "$NOW" "$META")
+  PAYLOAD=$(printf '{"agent_name":"%s","status":"%s","reported_at":"%s","meta":%s}' "$AGENT_NAME" "$STATUS" "$NOW" "$META")
 
-  HTTP=$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' -X POST "$NEO_BRAIN_URL/rest/v1/agent_heartbeats" \
+  HTTP=$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' -X POST "$NEO_BRAIN_URL/rest/v1/agent_heartbeats?on_conflict=agent_name" \
     -H "apikey: $NEO_BRAIN_SERVICE_ROLE_KEY" \
     -H "Authorization: Bearer $NEO_BRAIN_SERVICE_ROLE_KEY" \
     -H "Content-Type: application/json" \

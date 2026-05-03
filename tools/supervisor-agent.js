@@ -54,7 +54,8 @@ const WATCH = {
   'dev-agent':     { max_age_sec: 600, critical: false, target_host: 'siti-vps' },
   'planner-agent': { max_age_sec: 600, critical: false, target_host: 'siti-vps' },
   'reviewer':      { max_age_sec: 600, critical: false, target_host: 'siti-vps' },
-  'claw-mac':      { max_age_sec: 240, critical: true,  target_host: 'claw' },
+  'claw-mac':        { max_age_sec: 240, critical: true,  target_host: 'claw' },
+  'ugreen-nas-1':  { max_age_sec: 300, critical: false, target_host: 'ugreen-nas-1' },
 };
 
 // ── cooldowns per tier (longer than v1) ─────────────────────────────

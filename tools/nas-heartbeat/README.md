@@ -1,6 +1,6 @@
 # nas-heartbeat
 
-Tiny container that posts a fleet pulse for the Ugreen NAS (`nas-ugreen` agent) every 60s. Reports disk free, services up (Gitea, MinIO, Kuma), uptime.
+Tiny container that posts a fleet pulse for the Ugreen NAS (`ugreen-nas-1` agent) every 60s. Reports disk free, services up (Gitea, MinIO, Kuma), uptime.
 
 ## Why a container
 
@@ -18,7 +18,7 @@ NAS doesn't have my SSH key, so a launchd-style script needs Neo's hands. Contai
 
 ## Verify
 
-Within ~60s of starting, `command.neotodak.com` fleet view should show `nas-ugreen` flip from "never" → "active". Container logs (Ugreen UI) should show `OK ok gitea=true minio=true kuma=true disk=N%`.
+Within ~60s of starting, `command.neotodak.com` fleet view should show `ugreen-nas-1` flip from "never" → "active". Container logs (Ugreen UI) should show `OK ok gitea=true minio=true kuma=true disk=N%`.
 
 ## Uninstall
 

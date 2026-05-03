@@ -1,7 +1,7 @@
 # nas-heartbeat — drop-in compose for Ugreen NAS Container Manager
 # Deploy: paste this file via Ugreen Container Manager → Compose → Create.
 # Set the two NEO_BRAIN_* env vars in the GUI before starting.
-# After first run, command.neotodak.com fleet view should show nas-ugreen flip from "never" → "active" within 60s.
+# After first run, command.neotodak.com fleet view should show ugreen-nas-1 flip from "never" → "active" within 60s.
 
 services:
   nas-heartbeat:
@@ -14,6 +14,7 @@ services:
     environment:
       NEO_BRAIN_URL: "${NEO_BRAIN_URL}"
       NEO_BRAIN_SERVICE_ROLE_KEY: "${NEO_BRAIN_SERVICE_ROLE_KEY}"
+      AGENT_NAME: "ugreen-nas-1"
       INTERVAL: "60"
       # When network_mode=host, probes go to 127.0.0.1 directly:
       GITEA_URL: "http://127.0.0.1:3000/api/v1/version"
