@@ -38,11 +38,19 @@ const NEO_NUMBER_FOR_SITI = NEO_PHONE;
 const ME = 'pr-decision-dispatcher';
 const LOOKBACK_MS = 6 * 3600 * 1000;  // only consider awaiting rows from last 6h
 
-// Verdict keywords — English + Indonesian/Sundanese for Neo's habits
+// Verdict keywords — English + Indonesian/Sundanese for Neo's habits.
+// Anchored form (whole body must be one token) — bare-verdict path.
 const VERDICTS = {
   approve: /^\s*(approve|approved|setuju|ok|oke|merge|✅)\s*$/i,
   reject:  /^\s*(reject|rejected|tolak|close|cancel|❌)\s*$/i,
   hold:    /^\s*(hold|holdon|pending|tunda|tahan|wait|🤔)\s*$/i,
+};
+// Same tokens without anchors — used to match the leading verb in the
+// natural-language "<verdict> [pr] [#]<n>" form ("approve pr #8").
+const VERDICT_WORDS = {
+  approve: /^(approve|approved|setuju|ok|oke|merge|✅)$/i,
+  reject:  /^(reject|rejected|tolak|close|cancel|❌)$/i,
+  hold:    /^(hold|holdon|pending|tunda|tahan|wait|🤔)$/i,
 };
 
 // ── REST helpers ────────────────────────────────────────────────────
@@ -56,9 +64,28 @@ const rest = async (path, opts = {}) => {
 };
 
 // ── core logic ──────────────────────────────────────────────────────
+// Returns { verdict, pr_number } | null. Bare tokens get pr_number=null;
+// "<verdict> [pr] [#]<n>" replies carry pr_number and disambiguate which
+// awaiting PR the reply applies to (#132 — without this, two PRs awaiting
+// + bare "approve" silently dispatched both).
 function matchVerdict(body) {
-  const trimmed = String(body || '').trim();
-  for (const [v, re] of Object.entries(VERDICTS)) if (re.test(trimmed)) return v;
+  const raw = String(body || '').trim().replace(/[!?.,\s]+$/, '').trim();
+  if (!raw) return null;
+  // Path 1 — bare verdict token (existing behavior preserved).
+  for (const [v, re] of Object.entries(VERDICTS)) {
+    if (re.test(raw)) return { verdict: v, pr_number: null };
+  }
+  // Path 2 — "<verdict-token> [pr] [#]<n>" with optional trailing emphasis
+  // already stripped above. Only the FIRST token is checked against the
+  // verb list, so prose containing "approve" mid-sentence won't match.
+  const m = raw.toLowerCase().match(/^(\S+)\s+(?:pr\s*)?#?(\d+)$/);
+  if (m) {
+    const verb = m[1];
+    const num = Number(m[2]);
+    for (const [v, re] of Object.entries(VERDICT_WORDS)) {
+      if (re.test(verb)) return { verdict: v, pr_number: num };
+    }
+  }
   return null;
 }
 
@@ -186,8 +213,14 @@ async function main() {
     for (const r of replies) {
       const v = matchVerdict(r.content);
       if (!v) continue;
+      // If the reply names an explicit PR number ("approve pr #8"), only
+      // apply it to the awaiting row whose pr_number matches — prevents a
+      // PR-specific verdict from being mis-routed to a different awaiting
+      // row that happens to be older. Bare-token replies (pr_number=null)
+      // keep the existing first-match-wins behavior.
+      if (v.pr_number != null && Number(meta.pr_number) !== v.pr_number) continue;
       try {
-        await recordDecision({ awaiting: a, verdict: v, replyAt: r.created_at, replyBody: r.content });
+        await recordDecision({ awaiting: a, verdict: v.verdict, replyAt: r.created_at, replyBody: r.content });
         processed++;
       } catch (e) {
         console.error(`[pr-dispatch] dispatch failed for ${meta.pr_url}: ${e.message}`);
