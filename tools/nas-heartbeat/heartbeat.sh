@@ -1,82 +1,114 @@
-#!/bin/sh
-# nas-heartbeat — Ugreen NAS fleet pulse, intended to run inside a Docker container.
-# Loops every 60s, posts to neo-brain agent_heartbeats.
-# Status logic: ok by default; degraded if any tracked Docker service is down or disk >92%.
-
+#!/bin/bash
+# nas-heartbeat — Ugreen NAS fleet pulse to neo-brain agent_heartbeats every 60s.
+# Same shape as tr-home-heartbeat.sh. User-space install, no sudo needed.
 set -u
 
-NEO_BRAIN_URL="${NEO_BRAIN_URL:?env var required}"
-NEO_BRAIN_SERVICE_ROLE_KEY="${NEO_BRAIN_SERVICE_ROLE_KEY:?env var required}"
-INTERVAL="${INTERVAL:-60}"
+ENV_FILE="$HOME/.openclaw/fleet.env"
+LOG="$HOME/.openclaw/logs/nas-heartbeat.log"
+mkdir -p "$(dirname "$LOG")"
 
-# Endpoints to probe — host is whatever the container resolves "host.docker.internal" or NAS LAN IP to.
-# Default values target the NAS internal services.
-GITEA_URL="${GITEA_URL:-http://host.docker.internal:3000/api/v1/version}"
-MINIO_URL="${MINIO_URL:-http://host.docker.internal:9000/minio/health/live}"
-KUMA_URL="${KUMA_URL:-http://host.docker.internal:3001/}"
+if [ ! -r "$ENV_FILE" ]; then
+  echo "$(date -Iseconds) ERROR env file unreadable: $ENV_FILE" >> "$LOG"
+  exit 0
+fi
+# shellcheck disable=SC1090
+source "$ENV_FILE"
 
+if [ -z "${NEO_BRAIN_URL:-}" ] || [ -z "${NEO_BRAIN_SERVICE_ROLE_KEY:-}" ]; then
+  echo "$(date -Iseconds) ERROR env missing creds" >> "$LOG"
+  exit 0
+fi
+
+# --- gather metrics -----------------------------------------------------------
+# Disk free on /volume1 (the big RAID5)
+DF=$(df -P /volume1 2>/dev/null | tail -1)
+DISK_USED_PCT=$(echo "$DF" | awk '{print $5}' | tr -d '%')
+DISK_FREE_GB=$(echo "$DF" | awk '{printf "%.1f", $4 / 1048576}')
+DISK_TOTAL_GB=$(echo "$DF" | awk '{printf "%.1f", $2 / 1048576}')
+
+# Memory used MB
+MEM_USED_MB=$(free -m 2>/dev/null | awk '/^Mem:/ {print $3}')
+MEM_USED_MB=${MEM_USED_MB:-null}
+
+# Uptime seconds
+UPTIME_SEC=$(awk '{print int($1)}' /proc/uptime 2>/dev/null || echo "null")
+
+# Tailscale up — 100.x interface presence
+TS_UP="false"
+if ip addr 2>/dev/null | grep -qE 'inet 100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.'; then TS_UP="true"; fi
+
+# Service probes (200-399 = up)
 probe() {
   local url="$1"
-  curl -sS --max-time 3 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || echo "000"
+  local code
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$url" 2>/dev/null || echo "000")
+  if [ "$code" -ge 200 ] && [ "$code" -lt 400 ] 2>/dev/null; then
+    echo "true:$code"
+  else
+    echo "false:$code"
+  fi
 }
 
-while true; do
-  NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+GITEA=$(probe http://127.0.0.1:3000/api/v1/version)
+MINIO=$(probe http://127.0.0.1:9000/minio/health/live)
+KUMA=$(probe http://127.0.0.1:3001/)
+N8N=$(probe http://127.0.0.1:5678/)
 
-  # Disk free on / (where the container is mounted)
-  DF_LINE=$(df -P / 2>/dev/null | tail -1)
-  DISK_USED_PCT=$(echo "$DF_LINE" | awk '{print $5}' | tr -d '%')
-  DISK_FREE_GB=$(echo "$DF_LINE" | awk '{printf "%.1f", $4 / 1048576}')
+GITEA_UP=${GITEA%:*}; GITEA_CODE=${GITEA#*:}
+MINIO_UP=${MINIO%:*}; MINIO_CODE=${MINIO#*:}
+KUMA_UP=${KUMA%:*};   KUMA_CODE=${KUMA#*:}
+N8N_UP=${N8N%:*};     N8N_CODE=${N8N#*:}
 
-  # Memory used MB (best-effort — container may not see host memory)
-  MEM_USED_MB=$(awk '/^MemAvailable/ {avail=$2} /^MemTotal/ {total=$2} END {if (total) print int((total-avail)/1024)}' /proc/meminfo 2>/dev/null || echo "null")
+# Status: ok by default; degraded on any tracked service down or disk >=92%
+STATUS="ok"
+if [ "$GITEA_UP" = "false" ] || [ "$MINIO_UP" = "false" ] || [ "$KUMA_UP" = "false" ]; then STATUS="degraded"; fi
+if [ -n "$DISK_USED_PCT" ] && [ "$DISK_USED_PCT" -ge 92 ]; then STATUS="degraded"; fi
 
-  # Uptime seconds (host uptime if /proc/uptime accessible)
-  UPTIME_SEC=$(awk '{print int($1)}' /proc/uptime 2>/dev/null || echo "null")
+NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-  # Service probes
-  GITEA_CODE=$(probe "$GITEA_URL")
-  MINIO_CODE=$(probe "$MINIO_URL")
-  KUMA_CODE=$(probe "$KUMA_URL")
-
-  GITEA_UP=$([ "$GITEA_CODE" = "200" ] && echo true || echo false)
-  MINIO_UP=$([ "$MINIO_CODE" = "200" ] && echo true || echo false)
-  KUMA_UP=$([ "$KUMA_CODE" = "200" ] && echo true || echo false)
-
-  STATUS="ok"
-  [ "$GITEA_UP" = "false" ] || [ "$MINIO_UP" = "false" ] || [ "$KUMA_UP" = "false" ] && STATUS="degraded"
-  [ -n "$DISK_USED_PCT" ] && [ "$DISK_USED_PCT" -ge 92 ] && STATUS="degraded"
-
-  META=$(cat <<EOF
+PAYLOAD=$(cat <<JSON
 {
-  "version": "nas-heartbeat-v1",
-  "disk_free_gb": $DISK_FREE_GB,
-  "disk_used_pct": $DISK_USED_PCT,
-  "ram_used_mb": $MEM_USED_MB,
-  "uptime_sec": $UPTIME_SEC,
-  "services": {
-    "gitea": { "up": $GITEA_UP, "code": $GITEA_CODE },
-    "minio": { "up": $MINIO_UP, "code": $MINIO_CODE },
-    "kuma":  { "up": $KUMA_UP,  "code": $KUMA_CODE  }
+  "agent_name": "nas-ugreen",
+  "status": "$STATUS",
+  "reported_at": "$NOW",
+  "meta": {
+    "version": "nas-heartbeat-v1",
+    "disk_free_gb": $DISK_FREE_GB,
+    "disk_total_gb": $DISK_TOTAL_GB,
+    "disk_used_pct": $DISK_USED_PCT,
+    "ram_used_mb": $MEM_USED_MB,
+    "uptime_sec": $UPTIME_SEC,
+    "tailscale_up": $TS_UP,
+    "services": {
+      "gitea": { "up": $GITEA_UP, "code": $GITEA_CODE },
+      "minio": { "up": $MINIO_UP, "code": $MINIO_CODE },
+      "kuma":  { "up": $KUMA_UP,  "code": $KUMA_CODE  },
+      "n8n":   { "up": $N8N_UP,   "code": $N8N_CODE   }
+    }
   }
 }
-EOF
+JSON
 )
 
-  PAYLOAD=$(printf '{"agent_name":"nas-ugreen","status":"%s","reported_at":"%s","meta":%s}' "$STATUS" "$NOW" "$META")
+HTTP=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 -X POST "$NEO_BRAIN_URL/rest/v1/agent_heartbeats" \
+  -H "apikey: $NEO_BRAIN_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $NEO_BRAIN_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: resolution=merge-duplicates" \
+  --data "$PAYLOAD" 2>&1)
 
-  HTTP=$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' -X POST "$NEO_BRAIN_URL/rest/v1/agent_heartbeats" \
-    -H "apikey: $NEO_BRAIN_SERVICE_ROLE_KEY" \
-    -H "Authorization: Bearer $NEO_BRAIN_SERVICE_ROLE_KEY" \
-    -H "Content-Type: application/json" \
-    -H "Prefer: resolution=merge-duplicates" \
-    --data "$PAYLOAD" 2>&1)
+if [ "$HTTP" = "201" ] || [ "$HTTP" = "200" ]; then
+  echo "$(date -Iseconds) OK $STATUS gitea=$GITEA_UP minio=$MINIO_UP kuma=$KUMA_UP n8n=$N8N_UP disk=${DISK_USED_PCT}%" >> "$LOG"
+else
+  echo "$(date -Iseconds) FAIL http=$HTTP" >> "$LOG"
+fi
 
-  if [ "$HTTP" = "201" ] || [ "$HTTP" = "200" ]; then
-    echo "$(date -Iseconds) OK $STATUS gitea=$GITEA_UP minio=$MINIO_UP kuma=$KUMA_UP disk=${DISK_USED_PCT}%"
-  else
-    echo "$(date -Iseconds) FAIL http=$HTTP"
+# Cap log to last 5000 lines
+if [ -s "$LOG" ]; then
+  LINES=$(wc -l < "$LOG")
+  if [ "$LINES" -gt 5000 ]; then
+    tail -5000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
   fi
+fi
 
-  sleep "$INTERVAL"
-done
+exit 0

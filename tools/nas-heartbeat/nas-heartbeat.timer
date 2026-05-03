@@ -1,0 +1,11 @@
+[Unit]
+Description=Fire NAS heartbeat every minute
+
+[Timer]
+OnUnitActiveSec=60s
+OnBootSec=30s
+AccuracySec=5s
+Unit=nas-heartbeat.service
+
+[Install]
+WantedBy=timers.target
