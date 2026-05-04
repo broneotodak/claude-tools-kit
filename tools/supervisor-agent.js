@@ -39,6 +39,7 @@ const SERVICE_KEY  = env.NEO_BRAIN_SERVICE_ROLE_KEY || process.env.NEO_BRAIN_SER
 if (!SUPABASE_URL || !SERVICE_KEY) { console.error('[supervisor] env missing'); process.exit(1); }
 const KUMA_BASE  = process.env.KUMA_BASE  || 'http://100.85.18.97:3001';
 const KUMA_SLUG  = process.env.KUMA_SLUG  || 'neo-fleet';
+const FCC_HEALTH_URL = process.env.FCC_HEALTH_URL || 'https://command.neotodak.com/api/health';
 const DRY_RUN    = process.env.SUPERVISOR_DRY_RUN === '1';
 const NOTIFY_TO  = process.env.SUPERVISOR_NOTIFY_TO || '60177519610';
 const ME = 'supervisor';
@@ -68,6 +69,8 @@ const ROUTING = {
   siti_wa_not_ready:    { ladder: [3] },                         // QR rescan or account issue → human only
   dead_letter_growing:  { ladder: [2, 3] },                      // investigate → alert
   command_stuck:        { ladder: [1, 2, 3] },                   // restart claimer → investigate → alert
+  fcc_health_degraded:  { ladder: [3] },                         // can't auto-fix Netlify; surface to Neo only
+  fcc_health_down:      { ladder: [3] },                         // critical — same path, but cfg.critical=true
 };
 
 // ── REST helpers ────────────────────────────────────────────────────
@@ -115,6 +118,29 @@ async function detectDeadLetterGrowing() {
   const histCount = await rest(`agent_commands?select=count&status=eq.dead_letter&created_at=lt.${cutoff}`, { headers: { Prefer: 'count=exact' } });
   const past = histCount?.[0]?.count ?? 0;
   if (cur > past) return { key: 'dead_letter_growing', detail: `dead_letter rows: now=${cur}, 1h-ago=${past}` };
+  return null;
+}
+
+async function detectFccHealthDegraded() {
+  // Phase 5.5: poll the public /api/health endpoint of the Fleet Command Center
+  // and synthesize a symptom if status != ok. Different signal source from agent_heartbeats —
+  // /api/health is itself an aggregate over registry × heartbeats × commands_1h, so it's the
+  // right "fleet self-assessment" signal (per MONITORING_ENFORCEMENT.md — source is validated:
+  // see neotodak-command/netlify/functions/health.js, status computed deterministically).
+  let r;
+  try {
+    r = await fetch(FCC_HEALTH_URL, { signal: AbortSignal.timeout(8000) });
+  } catch {
+    return null;  // network blip — not the same as 'down'; skip rather than false-fire
+  }
+  if (!r.ok) {
+    return { key: 'fcc_health_down', detail: `${FCC_HEALTH_URL} HTTP ${r.status}` };
+  }
+  let body;
+  try { body = await r.json(); } catch { return null; }
+  const signals = (body.signals || []).join('; ') || '(no signals)';
+  if (body.status === 'down')     return { key: 'fcc_health_down',     detail: signals };
+  if (body.status === 'degraded') return { key: 'fcc_health_degraded', detail: signals };
   return null;
 }
 
@@ -350,6 +376,21 @@ async function main() {
   // Phase 4: fleet auto-discovery — find any new agent_names + announce once.
   const discovered = await discoverNewFleetNodes(byName, startMs);
   if (discovered.length) actions.push({ kind: 'fleet_discovery', new_nodes: discovered });
+
+  // Phase 5.5: Fleet Command Center self-assessed health
+  const fcc = await detectFccHealthDegraded();
+  if (fcc) {
+    const route = ROUTING[fcc.key];
+    const prior = await priorFires('fleet-command-center', fcc.key, startMs);
+    let chosenTier = null;
+    for (const t of route.ladder) { if (!prior[t]) { chosenTier = t; break; } }
+    if (chosenTier) {
+      const cfg = { critical: fcc.key === 'fcc_health_down', target_host: 'command.neotodak.com' };
+      const result = await dispatch[chosenTier]('fleet-command-center', cfg, fcc, runId, prior);
+      console.log(`[supervisor] fleet-command-center/${fcc.key} → tier ${chosenTier} ${result.action}${result.stubbed ? ' (stub)' : ''}`);
+      actions.push({ agent: 'fleet-command-center', symptom: fcc.key, tier: chosenTier, action: result.action });
+    }
+  }
 
   // Cross-agent symptoms (not tied to a specific watchlist entry)
   const dl = await detectDeadLetterGrowing();
