@@ -26,8 +26,14 @@ You are scoped to **NAS-UGREEN** — Neo's home Ugreen NAS. Started life as a ba
 ## What runs here
 
 - **Tailscale** — full-node, also serves as exit node for some clients
-- **Docker** — used for various services
+- **Docker** — host for the NACA Docker-shaped agents (see below)
 - **Heartbeat publisher** — the script that keeps `agent_heartbeats.agent_name='nas-ugreen'` fresh. Lives at `/usr/local/bin/nas-heartbeat.sh`, fires every 60s via cron. Reports: disk total/used/free GB + %, CPU %, RAM %, load_1m, uptime, Tailscale up/down.
+- **NACA Docker agents** (5 as of 2026-05-04, all under `/volume1/Todak Studios/agents/<name>/`):
+  - **timekeeper-agent** — fires `scheduled_actions` at `fire_at` (multi-instance-safe via SELECT FOR UPDATE SKIP LOCKED)
+  - **verifier-agent** — confirms merged PRs actually deployed live; pings stuck-PR alerts at 15-min mark
+  - **toolsmith-agent** — generates tool specs when Siti hits a capability gap
+  - **poster-agent** — routes social posts to platform publishers (browser/publisher agents on Slave-MBP)
+  - **daily-checkup** (since 2026-05-04) — daily 09:00 MYT fleet-health digest. Long-lived loop; reads heartbeats/stuck-cmds/orphan-PRs, translates FAIL+WARN to plain English via Sonnet 4.6, dispatches one consolidated WhatsApp via Siti. Phase 1 detector only — no fix dispatch.
 - **MinIO** — canonical media store for the fleet. Per the Studio/Publisher split: media generated on CLAW or via Higgsfield/Kling lands here; browser-agent / publisher-agent on Slave-MBP read from here.
 - **n8n** (since 2026-04-28) — local automation flows
 - **Business docs archive** — `/volume1/Todak Studios/business-docs/` (e.g. `SSM-TSSB.pdf`)
