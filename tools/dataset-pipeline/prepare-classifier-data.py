@@ -41,16 +41,21 @@ _TRAILING_ENRICHMENT = re.compile(
     r'\n\n(?:Person facts|People facts|Topic|Summary|Context|Tags|Mentions|Entities):',
     re.IGNORECASE,
 )
+# Trailing "(in group: NAME)" annotation that wa-primary appends after the body.
+# 26% of train rows in V1 had this residue — it leaks group identity into the
+# input and lets the classifier shortcut-learn via group name. Strip it.
+_TRAILING_GROUP_ANNOTATION = re.compile(r'\s*\(in group:[^)]*\)\s*$')
 
 
 def strip_wrapper(content: Optional[str]) -> str:
     """Extract the raw inbound message text from an enriched content field.
 
     Handles:
-      [dm] X said: "msg"                        → msg
-      [group: G] X said to Neo: "msg"           → msg
-      "msg\\n\\nPerson facts: ..."              → msg
-      "msg" (already raw)                       → msg
+      [dm] X said: "msg"                                     → msg
+      [group: G] X said to Neo: "msg"                        → msg
+      [group: G] X said to Neo: "msg" (in group: G)          → msg
+      "msg\\n\\nPerson facts: ..."                            → msg
+      "msg" (already raw)                                    → msg
     """
     if not content:
         return ''
@@ -58,6 +63,9 @@ def strip_wrapper(content: Optional[str]) -> str:
     s = _SAID_PREFIX.sub('', s)
     # Drop trailing enrichment block (anything after the first marker)
     s = _TRAILING_ENRICHMENT.split(s, maxsplit=1)[0]
+    # Strip trailing "(in group: NAME)" annotation BEFORE the quote-stripping pass,
+    # so the quote-stripper sees true matched-quotes-at-both-ends.
+    s = _TRAILING_GROUP_ANNOTATION.sub('', s).rstrip()
     # Strip surrounding quotes if present
     if len(s) >= 2 and s[0] in ('"', "'") and s[-1] == s[0]:
         s = s[1:-1]
