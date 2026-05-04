@@ -261,6 +261,7 @@ For UI / frontend changes, **type-check + test suite are not enough**. Open the 
 8. **Vault first** for any user-supplied secret. Never hardcode credentials. CTK §4.
 9. **Don't pre-decide which option Neo wants.** When offering A/B/C, present them honestly. Neo defaults to C (full build) — don't hedge toward A.
 10. **If something looks unfamiliar (file, branch, config) — investigate first, don't delete.** It might be in-progress work from another session.
+11. **Every agent in `agent_registry` (status='active') MUST publish to `agent_heartbeats`.** Vendor `claude-tools-kit/lib/heartbeat.mjs` into the agent's repo and call `emitHeartbeat()` (one-shot) or `startHeartbeatLoop()` (long-running). All four fleet dashboards (command.neotodak.com, neotodak-command, presentation.* fleet pages, NACA app) read this table — an agent without a publisher is silently invisible everywhere. `tools/check-project-health.js` enforces this; opt-out via `agent_registry.meta.heartbeat_exempt=true` only when monitoring is intentionally external (e.g. ICMP-only edge devices).
 
 ---
 
