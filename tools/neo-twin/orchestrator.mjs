@@ -18,6 +18,7 @@
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
+import { startHeartbeatLoop } from "../../lib/heartbeat.mjs";
 
 // ─── ENV / CONFIG ────────────────────────────────────────────────────────────
 const NEO_BRAIN_URL = process.env.NEO_BRAIN_URL;
@@ -486,5 +487,23 @@ log(`endpoints — neo-brain ${NEO_BRAIN_URL?.slice(0, 38)}…  legacy ${LEGACY_
 poll();
 setInterval(poll, POLL_INTERVAL_MS);
 
-process.on("SIGTERM", () => { log("SIGTERM — exiting"); process.exit(0); });
+// Heartbeat — publish to agent_heartbeats every 60s so fleet dashboards see us.
+const stopHeartbeat = startHeartbeatLoop({
+  agentName: "neo-twin",
+  intervalMs: 60_000,
+  getPayload: () => ({
+    status: stats.errors > 0 && Date.now() - stats.startedAt > 5 * 60_000 ? "degraded" : "ok",
+    meta: {
+      uptime_sec: Math.round((Date.now() - stats.startedAt) / 1000),
+      polls: stats.polls,
+      candidates: stats.candidates,
+      replied: stats.replied,
+      shadow_logged: stats.shadow_logged,
+      poll_in_flight: pollInFlight,
+      version: "neo-twin-v2",
+    },
+  }),
+});
+
+process.on("SIGTERM", async () => { log("SIGTERM — exiting"); await stopHeartbeat(); process.exit(0); });
 process.on("SIGINT", () => { log("SIGINT — exiting"); process.exit(0); });

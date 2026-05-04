@@ -19,6 +19,7 @@
 
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { emitHeartbeat } from '../lib/heartbeat.mjs';
 
 const envPath = process.env.NEO_BRAIN_ENV_PATH || `${homedir()}/.openclaw/secrets/neo-brain.env`;
 const env = Object.fromEntries(
@@ -229,6 +230,26 @@ async function main() {
     }
   }
   console.log(`[pr-dispatch] cycle done — awaiting=${awaiting.length} dispatched=${processed} skipped=${skipped}`);
+  // Heartbeat — record this cycle so dashboards know we're running. launchd
+  // re-fires us every 30s; emitHeartbeat upserts on PK=agent_name.
+  await emitHeartbeat({
+    agentName: 'pr-decision-dispatcher',
+    status: 'ok',
+    meta: { awaiting: awaiting.length, dispatched: processed, skipped, cycle_at: new Date().toISOString() },
+    brainUrl: URL,
+    serviceKey: KEY,
+  }).catch(err => console.error('[pr-dispatch] heartbeat fail:', err.message));
 }
 
-main().catch(e => { console.error('[pr-dispatch] fatal:', e.message); process.exit(1); });
+main().catch(async (e) => {
+  console.error('[pr-dispatch] fatal:', e.message);
+  // Best-effort degraded heartbeat so the dashboard reflects the failed cycle.
+  await emitHeartbeat({
+    agentName: 'pr-decision-dispatcher',
+    status: 'degraded',
+    meta: { error: e.message?.slice(0, 200), cycle_at: new Date().toISOString() },
+    brainUrl: URL,
+    serviceKey: KEY,
+  }).catch(() => {});
+  process.exit(1);
+});
