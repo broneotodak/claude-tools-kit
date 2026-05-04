@@ -132,6 +132,35 @@ async function checkHeartbeats() {
   printCheck('Heartbeats', status, details);
 }
 
+async function checkHeartbeatCoverage() {
+  // Catch the silent-failure mode: agent is `status='active'` in agent_registry
+  // but has never written a row to agent_heartbeats. The agent may be running
+  // fine — but every fleet dashboard (command.neotodak.com, neotodak-command,
+  // presentation.* fleet pages, NACA app) reads from agent_heartbeats. An
+  // agent without a publisher is invisible to all of them simultaneously.
+  //
+  // This check fails on missing publishers so the gap can't be re-introduced
+  // when a new agent ships without wiring lib/heartbeat.mjs.
+  const [{ data: reg }, { data: hb }] = await Promise.all([
+    sb.from('agent_registry').select('agent_name,host,meta').eq('status', 'active'),
+    sb.from('agent_heartbeats').select('agent_name'),
+  ]);
+  const haveHb = new Set((hb || []).map(h => h.agent_name));
+  const missing = (reg || [])
+    // Allow opt-out for agents whose monitoring is intentionally external (e.g.
+    // a hardware-only entry covered by Kuma ICMP). They must declare it.
+    .filter(r => !r.meta?.heartbeat_exempt)
+    .filter(r => !haveHb.has(r.agent_name));
+  const status = missing.length === 0 ? 'PASS' : missing.length <= 2 ? 'WARN' : 'FAIL';
+  const details = [`${(reg||[]).length} active agents in registry · ${missing.length} have no heartbeat publisher`];
+  if (missing.length) {
+    details.push(`missing: ${missing.slice(0,8).map(m => m.agent_name).join(', ')}${missing.length>8?` +${missing.length-8} more`:''}`);
+    details.push(`fix: vendor lib/heartbeat.mjs into the agent's repo, call emitHeartbeat() or startHeartbeatLoop() with agent_name matching the registry row`);
+    details.push(`opt-out (rare): set agent_registry.meta.heartbeat_exempt=true with reason in meta.heartbeat_exempt_reason`);
+  }
+  printCheck('Heartbeat coverage', status, details);
+}
+
 async function checkStuckCommands(filterProject) {
   const cutoff = new Date(Date.now() - 10 * 60_000).toISOString();
   let q = sb.from('agent_commands').select('id,from_agent,to_agent,command,status,created_at')
@@ -344,6 +373,7 @@ async function main() {
   } else {
     console.log(bold(`\n🛡️   Fleet Health Check · ${new Date().toISOString()}\n`));
     await checkHeartbeats();
+    await checkHeartbeatCoverage();
     await checkStuckCommands();
     await checkOrphanPRs();
     await checkMemoryActivity();
