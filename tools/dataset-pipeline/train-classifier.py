@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--epochs', type=int, default=2)
     p.add_argument('--batch-size', type=int, default=8, help='per-device train batch size')
     p.add_argument('--grad-accum', type=int, default=2, help='effective batch = batch_size * grad_accum')
-    p.add_argument('--lr', type=float, default=2e-4)
+    p.add_argument('--lr', type=float, default=1e-4)
     p.add_argument('--max-length', type=int, default=512, help='max tokens per example')
     p.add_argument('--lora-r', type=int, default=16)
     p.add_argument('--lora-alpha', type=int, default=32)
@@ -114,8 +114,12 @@ def main() -> int:
         tok.pad_token = tok.eos_token
     tok.padding_side = 'right'
 
+    # ROCm Navi31 (RX 7900 XTX gfx1100) NaN fix — sdpa attention is experimental
+    # on this arch and produces NaN losses in eval mode. Force eager attention.
+    # See feedback memory + smoke test 2026-05-04: NaN with sdpa, real losses with eager.
     model = AutoModelForCausalLM.from_pretrained(
-        args.base, dtype=torch.bfloat16, device_map='auto', trust_remote_code=True,
+        args.base, dtype=torch.float32, device_map='auto',
+        trust_remote_code=True, attn_implementation='eager',
     )
     model.config.use_cache = False  # required for gradient checkpointing later
 
@@ -127,6 +131,8 @@ def main() -> int:
                         'gate_proj', 'up_proj', 'down_proj'],
     )
     model = get_peft_model(model, lora_cfg)
+    if hasattr(model, 'enable_input_require_grads'):
+        model.enable_input_require_grads()  # required when grad checkpointing + PEFT
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in model.parameters())
     print(f'  trainable  : {trainable:,} / {total:,} ({100 * trainable / total:.2f}%)')
@@ -167,12 +173,12 @@ def main() -> int:
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
-        gradient_checkpointing=True,
+        gradient_checkpointing=False,  # ROCm Navi31: sdpa-attn unstable; off for V1 1.5B base
         learning_rate=args.lr,
         lr_scheduler_type='cosine',
         warmup_ratio=0.05,
         weight_decay=0.01,
-        bf16=True,
+        bf16=False, fp16=False,  # ROCm Navi31: stick to fp32 until ROCm bf16 stable on this arch
         logging_steps=20,
         eval_strategy='steps',
         eval_steps=200,
