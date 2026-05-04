@@ -198,10 +198,28 @@ async function recordDecision({ awaiting, verdict, replyAt, replyBody }) {
 }
 
 // ── main ────────────────────────────────────────────────────────────
+async function emitOkBeat({ awaiting, dispatched, skipped }) {
+  // Single source-of-truth heartbeat for this cycle. Always called regardless
+  // of whether any awaiting rows existed — otherwise the dispatcher only beats
+  // when there's work, which can be hours apart, and supervisor flags it
+  // offline.
+  await emitHeartbeat({
+    agentName: 'pr-decision-dispatcher',
+    status: 'ok',
+    meta: { awaiting, dispatched, skipped, cycle_at: new Date().toISOString() },
+    brainUrl: URL,
+    serviceKey: KEY,
+  }).catch(err => console.error('[pr-dispatch] heartbeat fail:', err.message));
+}
+
 async function main() {
   let processed = 0, skipped = 0;
   const awaiting = await findAwaiting();
-  if (!awaiting?.length) { console.log('[pr-dispatch] no awaiting decisions'); return; }
+  if (!awaiting?.length) {
+    console.log('[pr-dispatch] no awaiting decisions');
+    await emitOkBeat({ awaiting: 0, dispatched: 0, skipped: 0 });
+    return;
+  }
 
   for (const a of awaiting) {
     const meta = a.metadata || {};
@@ -230,15 +248,7 @@ async function main() {
     }
   }
   console.log(`[pr-dispatch] cycle done — awaiting=${awaiting.length} dispatched=${processed} skipped=${skipped}`);
-  // Heartbeat — record this cycle so dashboards know we're running. launchd
-  // re-fires us every 30s; emitHeartbeat upserts on PK=agent_name.
-  await emitHeartbeat({
-    agentName: 'pr-decision-dispatcher',
-    status: 'ok',
-    meta: { awaiting: awaiting.length, dispatched: processed, skipped, cycle_at: new Date().toISOString() },
-    brainUrl: URL,
-    serviceKey: KEY,
-  }).catch(err => console.error('[pr-dispatch] heartbeat fail:', err.message));
+  await emitOkBeat({ awaiting: awaiting.length, dispatched: processed, skipped });
 }
 
 main().catch(async (e) => {
