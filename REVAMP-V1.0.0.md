@@ -1,0 +1,202 @@
+# Major Revamp NACA — Fix & Improvement v1.0.0
+
+**Started**: 2026-05-04
+**Owner**: Neo (broneotodak) · driving sessions: Claude Code on Neo's Mac
+**Status**: 🚧 in progress · Step 1 done, Steps 2–7 pending
+**One-line mission**: From organic chaos → canonical workflow + verifiable health, without scrapping working infra or losing memories.
+
+---
+
+## Why this exists
+
+Over the last week, mostly from Neo's frustration patterns:
+
+1. **Siti getting overwhelmed** — personal recall ("remember the Pi 4") was pulling PR briefs into context. Mixed scopes, no partition. (Layer A scope tagging just landed in siti#40.)
+2. **Notification spam** — every PR merge triggered ~5 messages (dev-agent + planner narration ×N + CI/CD ×N). (Layer B digest mode just landed in siti#41.)
+3. **Each agent's system prompt is bespoke** — reviewer, planner, dev-agent, verifier all have different historical patches. No shared discipline.
+4. **No canonical "starting work on a project" flow** — every CC session and every agent guesses based on cwd or keywords. Drift inevitable.
+5. **Fleet load imbalance** — Siti VPS runs 10 agents while tr-home (Threadripper, idle) runs 1. CLAW MBA carries 3, NAS hosts 1. No discipline for placement.
+6. **Unfix list grows faster than it shrinks** — person-sync 10d offline, neo-twin no heartbeat, xiaozhi-dog no monitor, etc.
+
+**Plumbing is fine. Discipline is missing.** This revamp adds the discipline layer on top of working infra. No data loss, no live-service downtime.
+
+---
+
+## Definition of Done
+
+We're done when, on a random Tuesday morning:
+
+1. ☐ Open a fresh CC session, paste the focus prompt for whatever host, work without re-explaining
+2. ☐ Ask Siti "how's the fleet?" and get a coherent one-glance answer
+3. ☐ Trust that any merged PR was actually deployed and is actually running
+4. ☐ Get one digest message per hour, max — actionable items real-time only (Layer B already gets us partway)
+5. ☐ Search neo-brain and only see relevant scope (Layer A already gets us partway)
+6. ☐ See `naca_milestones` and trust it reflects reality
+
+Today's score: roughly **3 of 6**. Target end-of-revamp: **6 of 6**.
+
+---
+
+## Baseline snapshot
+
+Captured **2026-05-04T04:36:58Z**. Used as the rollback reference point — if any step degrades these numbers, investigate before continuing.
+
+```
+FLEET (21 agents)
+  live   (<5m)   : 17
+  stale  (<60m)  : 0
+  offline(>60m)  : 2
+  no-heartbeat   : 2
+
+MEMORY (top categories, 1000-row sample)
+  claude_code_session    633
+  ClaudeN                266
+  ARS                     37
+  Academy Project         15
+  business                15
+  ClassroomNeo            12
+  Agentic Centre           9
+  claude-tools-kit         5
+
+SCOPE TAGGING (last 7d, 1000-row sample)
+  ops          0
+  knowledge    0
+  personal     2
+  untagged   998   ← will grow organically after Layer A; consider backfill in Step 6
+
+MILESTONES (naca_milestones)
+  phases: 10 done · 3 partial · 2 new
+  items : 94 done · 3 partial · 3 new · 21 todo
+
+HEALTH CHECKS
+  stuck commands (>10m, pending/claimed/running)  : 0  ✓
+  orphan pr-awaiting-decision (>6h, no recorded)  : 0  ✓ (after CTK#11 manual unblock)
+```
+
+Live unfix list (separate from snapshot — these need fixing in Step 6):
+
+- `person-sync` offline ≥10d (Siti VPS)
+- `backup-sync` offline ≥7h (CLAW)
+- `neo-twin` no heartbeat at all (Twin VPS)
+- `xiaozhi-dog` no monitor for "device offline"
+- siti `hold-guard` fix (commit `bc91bcc`) lost in yesterday's squash
+- App icon still Lan's CCC icon (cosmetic)
+- SITI tab still hardcodes `'VPS 178.156.241.204:3800'` as a display string (cosmetic, stale)
+
+---
+
+## The 7 Steps
+
+### Step 1 — Snapshot ☑ DONE (2026-05-04)
+
+Baseline captured (above). Saved to neo-brain memory tagged `revamp_baseline`. No infra changes.
+
+### Step 2 — Write the canonical `WORKFLOW.md` ☐ NEXT
+
+**Single source of truth** for every CC session and every agent. Lives at `claude-tools-kit/WORKFLOW.md`. Referenced from `~/.claude/CLAUDE.md` (auto-loads in every session) and from each agent's system prompt.
+
+Covers:
+- 5-phase project flow: Orient → Plan → Execute → Save → Verify
+- Memory discipline: when to save, what scope, what category, what importance, what tag
+- PR/merge/deploy flow: copy-pastable shell commands
+- Multi-session coordination: existing CTK §9, integrated
+- Health-check protocol: which queries surface what kinds of breakage
+
+**Acceptance**:
+- `WORKFLOW.md` exists, peer-reviewed by Neo, committed to main
+- `~/.claude/CLAUDE.md` references it
+- Reviewer-agent / planner-agent / dev-agent system prompts reference it
+
+**Estimate**: ~2 hours.
+
+### Step 3 — Health check tooling ☐
+
+Build `tools/check-project-health.js <project>` that runs the verify steps and prints a pass/fail report. Reuses the queries from this baseline doc + the orphan-PR / stuck-command queries.
+
+Should answer in <30s:
+- Are this project's agents alive?
+- Has this project saved memories recently? (Stale = signal nothing happening OR signal something broken silently.)
+- Are there stuck commands targeting this project?
+- Does `naca_milestones` for this project match recent commits / merged PRs?
+- Does the project's presentation page exist + match the milestone state?
+
+**Acceptance**: script runs, output is readable, runs as a cron job once trusted.
+
+**Estimate**: ~2 hours.
+
+### Step 4 — Per-host focus prompts ☐
+
+Six focus docs at `claude-tools-kit/prompts/focus/`:
+- `SITI.md` (move yesterday's `SITI-FOCUS-SESSION-PROMPT.md` here)
+- `TR-HOME.md`
+- `NAS-UGREEN.md`
+- `CLAW.md`
+- `SLAVE-MBP.md`
+- `NACA-APP.md`
+
+Plus `INDEX.md` listing them. Each one: live layout, what runs there, deploy flow, debug entry points, hard rules, what NOT to touch, memory categories to save into.
+
+**Acceptance**: every fleet host that hosts ≥1 agent has a focus prompt. Pasting it into a new CC session = full context.
+
+**Estimate**: ~3 hours.
+
+### Step 5 — Agent system prompt rewrite ☐
+
+Each long-running agent (reviewer, planner, dev-agent, verifier, dispatcher, supervisor, toolsmith) gets its system prompt rewritten from a single template. Template structure:
+
+1. Read `WORKFLOW.md` first (reference, not full inline copy)
+2. Your role-specific section (what THIS agent does)
+3. Capabilities (which tools, which DBs, which endpoints)
+4. Constraints (what NOT to do — destructive ops, push-to-main, hallucinated success on failed gh, etc.)
+5. Escalation: when to ping Neo via Siti
+
+**Acceptance**: every agent's system prompt follows the same template. Changing the workflow once → every agent picks it up.
+
+**Estimate**: ~4 hours.
+
+### Step 6 — Selective scrap & migrate (the unfix list) ☐
+
+Each unfix item gets its own PR. Each updates `WORKFLOW.md` if a new pattern emerges. Listed in priority order:
+
+1. `siti` hold-guard fix (cherry-pick lost commit `bc91bcc`) — small, ships first
+2. `neo-twin` heartbeat publisher — diagnose why it never fired
+3. `person-sync` 10d offline — diagnose, fix or kill
+4. `backup-sync` 7h offline — fix CLAW rclone
+5. `xiaozhi-dog` monitor — add a "device-offline" alert
+6. App icon swap (cosmetic; needs an icon master from Neo)
+7. SITI tab hardcoded display string (cosmetic)
+8. Hardcoded paths (`178.156.241.204:3800` everywhere) → migrate to `agent_registry.host` lookup
+9. Scope-tag backfill: classify the 998 untagged memories from the last 7d (optional — depends on whether Layer A's organic adoption is enough)
+
+**Acceptance**: all 9 closed (or explicitly deferred with reason).
+
+**Estimate**: variable. Spread across days, each independently shippable.
+
+### Step 7 — Soak (1 week) ☐
+
+Run with the new discipline. **No new phases, no feature work.** Watch what breaks. Fix what surfaces. End-of-soak: re-run baseline snapshot, compare.
+
+**Acceptance**:
+- All 6 "Definition of Done" criteria green
+- No new items added to the unfix list during soak (or if added, with root-cause documented)
+- Health-check script: green for ≥5 consecutive days
+
+**Estimate**: 7 calendar days. ~30min/day actively responding to surfaced issues.
+
+---
+
+## Risks & Rollback
+
+| Risk | Mitigation | Rollback |
+|---|---|---|
+| Workflow doc too prescriptive → friction | Tier rules: normative for shared infra (CTK §9), recommended for cosmetic local | Soften wording per-section in soak week |
+| Agent prompt rewrite breaks an agent | One agent at a time, test in isolation, keep `*.bak` of prior prompt | Restore from `.bak` |
+| Health-check false positives → alarm fatigue | Tune thresholds during soak (start strict, loosen) | Comment out noisy checks |
+| Scope backfill mis-tags → recall regression | Backfill is opt-in (Step 6 item 9). Compare recall hit rate before/after. | Reset `metadata.scope` to null on affected rows |
+| Other CC sessions running concurrently → revert war | Per Neo's choice today: only this session active during the revamp | n/a |
+
+---
+
+## Status log (append-only)
+
+- **2026-05-04T04:37Z** — Step 1 complete. Baseline snapshot captured. Doc created. Memory `revamp_baseline` saved with pointer to this file.
