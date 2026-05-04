@@ -124,7 +124,7 @@ Should answer in <30s:
 
 **Estimate**: ~2 hours.
 
-### Step 4 — Per-host focus prompts ☐
+### Step 4 — Per-host focus prompts ☑ DONE (2026-05-04)
 
 Six focus docs at `claude-tools-kit/prompts/focus/`:
 - `SITI.md` (move yesterday's `SITI-FOCUS-SESSION-PROMPT.md` here)
@@ -203,3 +203,4 @@ Run with the new discipline. **No new phases, no feature work.** Watch what brea
 - **2026-05-04T05:10Z** — Pre-Step-2 project audit complete. 28 existing `project_registry` rows verified with Neo + classified. 9 missing fleet agents (reviewer/planner/dev/verifier/dispatcher/supervisor/browser/publisher/poster) backfilled. Migration `project_registry_add_tier_column` applied — `tier` column live with check constraint. Final distribution: tier_1=20 · tier_2=8 · tier_3=6 · decommissioned=2 · transferred=1. WORKFLOW.md (Step 2) will query `project_registry.tier` instead of hardcoded lists.
 - **2026-05-04T05:13Z** — Step 2 complete. `WORKFLOW.md` v1.0 written and merged (claude-tools-kit#14). 5 phases (Orient → Plan → Execute → Save → Verify) with copy-pastable shell, tier rules table, 10 hard rules, common-scenario shortcuts. `~/.claude/CLAUDE.md` updated locally to reference the doc as session-start reading. Step 5 will wire each NACA agent's system prompt to it. Score now ~4/6 on Definition of Done.
 - **2026-05-04T05:31Z** — Step 3 complete. `tools/check-project-health.js` shipped (claude-tools-kit#16). One-shot fleet-wide + project-specific health check. Exit codes 0/2/1 for cron. Smoke-tested: surfaces today's actual unfix items (person-sync 11d offline, backup-sync 10h, scope-adoption 0%) — real signal, not synthetic. Score now ~4.5/6 (criterion #2 — "Ask fleet status, get coherent answer" — partially satisfied; full answer needs Siti integration in a later step). Steps 4 + 5 + 6 + 7 remaining.
+- **2026-05-04T06:36Z** — Step 4 complete. Six per-host focus prompts + INDEX shipped at `prompts/focus/` (claude-tools-kit#18). 755 lines, ~100–160 each. Hosts covered: Siti (moved + tightened), NACA-app, CLAW (launchd jobs), tr-home (Threadripper / Phase 6 target), NAS-Ugreen (heartbeat + MinIO + Tailscale), Slave-MBP (browser-agent + publisher-agent). Each one captures host-specific gotchas (e.g. NAS SSH user is capital `Neo`, CLAW uses launchd not pm2, tr-home is sensitive to apt upgrades). Step 5 (agent system prompt rewrite) can now reference these instead of duplicating host context per-agent. Score now ~5/6 — criterion #1 ("open fresh session, paste prompt, work without re-explaining") fully satisfied.
