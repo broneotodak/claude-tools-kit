@@ -31,7 +31,7 @@ You are scoped to **Twin VPS** — a small dedicated Hetzner instance on its own
 Source code paths on the VPS:
 - `/home/neotwin/twin-ingest/`
 - `/home/neotwin/neo-twin/` (or whichever path has the auto-reply pipeline)
-- Auth state for Baileys: `/home/neotwin/twin-ingest/auth/` (sensitive — contains session keys)
+- Auth state for Baileys: `/home/neotwin/twin-ingest/auth-state/` (sensitive — contains session keys; `index.js` uses `useMultiFileAuthState("./auth-state")`)
 - Dashboard (status surface): port `3900`
 
 ## Deploy flow
@@ -50,7 +50,7 @@ pm2 logs twin-ingest --lines 50 --nostream
 
 ## Hard rules — DO NOT violate
 
-1. **NEVER delete `/home/neotwin/twin-ingest/auth/` without backing it up first.** If re-pairing fails, the backup is the only path back to the existing session. Backup pattern: `cp -r auth auth.backup.$(date -u +%Y%m%d-%H%M%S)`.
+1. **NEVER delete `/home/neotwin/twin-ingest/auth-state/` without backing it up first.** If re-pairing fails, the backup is the only path back to the existing session. Backup pattern: `cp -r auth-state auth-state.backup.$(date -u +%Y%m%d-%H%M%S)`.
 2. **NEVER skip the WhatsApp Linked Devices detach** before re-pairing. Stale Linked Devices entries cause phantom sessions, MessageCounterError loops, and silent degradation. Always: open WhatsApp on +60177519610 → Settings → Linked Devices → log out the Twin VPS entry → THEN re-pair.
 3. **NEVER auto-send replies** while neo-twin is in shadow soak. Drafts go to neo-brain for Neo's review. The "send as Neo" toggle only flips after explicit operator approval and a soak window with clean draft quality.
 4. **NEVER assume the dashboard at :3900 reflects live state.** It currently shows **cumulative counters since-startup**, not "live in the last hour." The pipeline can be silently dead while the dashboard says "1273 messages received" — that 1273 is from before things broke. Truth is in `neo-brain.memories WHERE source='wa-primary' ORDER BY created_at DESC LIMIT 5`.
@@ -61,7 +61,7 @@ pm2 logs twin-ingest --lines 50 --nostream
 - **"Why no recent memories with source='wa-primary'?"** — query `neo-brain.memories WHERE source='wa-primary' ORDER BY created_at DESC LIMIT 5`. If the most recent is >2h old, the pipeline is silently dead. Check `pm2 logs twin-ingest --lines 100` for `MessageCounterError`, `Key used already`, `init queries — Timed Out` — these are Baileys session-degradation signals.
 - **"Process is up but doing nothing"** — pm2 status shows `online` doesn't mean it's processing. Look at the timestamp of the last legitimate log line. `tail -f` for 5 minutes; if no message events arrive, the WhatsApp socket is dead.
 - **"Dashboard says healthy but DB has no recent rows"** — known-bad signal pattern. Trust the DB, not the dashboard. The dashboard counters bug is filed; fix is to make them rolling-window not since-startup.
-- **"Need to re-pair"** — ALWAYS in this order: (1) backup auth, (2) detach Linked Device on the phone, (3) stop pm2, (4) delete auth, (5) start pm2 to surface QR, (6) Neo scans QR, (7) verify first message lands in neo-brain.
+- **"Need to re-pair"** — ALWAYS in this order: (1) backup `auth-state/`, (2) detach Linked Device on the phone, (3) stop pm2, (4) `rm -rf auth-state/`, (5) start pm2 to surface QR, (6) Neo scans QR, (7) verify first message lands in neo-brain. **Note**: `dashboard.js` at :3900 has no QR view yet — QR currently only renders in `pm2 logs twin-ingest`. Adding `/qr` endpoint to dashboard is a known follow-up.
 
 ## Memory discipline (when shipping a Twin VPS fix)
 
