@@ -200,3 +200,4 @@ Run with the new discipline. **No new phases, no feature work.** Watch what brea
 ## Status log (append-only)
 
 - **2026-05-04T04:37Z** — Step 1 complete. Baseline snapshot captured. Doc created. Memory `revamp_baseline` saved with pointer to this file.
+- **2026-05-04T05:10Z** — Pre-Step-2 project audit complete. 28 existing `project_registry` rows verified with Neo + classified. 9 missing fleet agents (reviewer/planner/dev/verifier/dispatcher/supervisor/browser/publisher/poster) backfilled. Migration `project_registry_add_tier_column` applied — `tier` column live with check constraint. Final distribution: tier_1=20 · tier_2=8 · tier_3=6 · decommissioned=2 · transferred=1. WORKFLOW.md (Step 2) will query `project_registry.tier` instead of hardcoded lists.
