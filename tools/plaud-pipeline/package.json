@@ -1,0 +1,10 @@
+{
+  "name": "plaud-ingest",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Plaud Note Pro transcript ingest service — WhatsApp approval → pgVector storage",
+  "main": "server.js",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1"
+  }
+}
