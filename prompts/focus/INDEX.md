@@ -14,6 +14,7 @@ These pair with `~/Projects/claude-tools-kit/WORKFLOW.md` (the canonical 5-phase
 | tr-home (Threadripper desktop) — FCC dashboard sidecar, Ollama, future Phase 6 local LLM serving | [`TR-HOME.md`](TR-HOME.md) |
 | NAS-Ugreen — heartbeat publisher, MinIO media store, n8n, business docs, Tailscale exit-node | [`NAS-UGREEN.md`](NAS-UGREEN.md) |
 | Slave-MBP (Imel's MBA repurposed) — browser-agent (UI posting) + publisher-agent (API posting), TikTok/IG/LinkedIn flow | [`SLAVE-MBP.md`](SLAVE-MBP.md) |
+| Twin VPS — twin-ingest (memory pipeline off Neo's primary WhatsApp) + neo-twin (Phase 6 two-tier auto-reply, shadow soak). HIGH-RISK: Baileys session state. | [`TWIN-VPS.md`](TWIN-VPS.md) |
 
 ## Hosts that don't have focus prompts (yet)
 
