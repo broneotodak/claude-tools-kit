@@ -91,7 +91,7 @@ Live unfix list (separate from snapshot — these need fixing in Step 6):
 
 Baseline captured (above). Saved to neo-brain memory tagged `revamp_baseline`. No infra changes.
 
-### Step 2 — Write the canonical `WORKFLOW.md` ☐ NEXT
+### Step 2 — Write the canonical `WORKFLOW.md` ☑ DONE (2026-05-04)
 
 **Single source of truth** for every CC session and every agent. Lives at `claude-tools-kit/WORKFLOW.md`. Referenced from `~/.claude/CLAUDE.md` (auto-loads in every session) and from each agent's system prompt.
 
@@ -201,3 +201,4 @@ Run with the new discipline. **No new phases, no feature work.** Watch what brea
 
 - **2026-05-04T04:37Z** — Step 1 complete. Baseline snapshot captured. Doc created. Memory `revamp_baseline` saved with pointer to this file.
 - **2026-05-04T05:10Z** — Pre-Step-2 project audit complete. 28 existing `project_registry` rows verified with Neo + classified. 9 missing fleet agents (reviewer/planner/dev/verifier/dispatcher/supervisor/browser/publisher/poster) backfilled. Migration `project_registry_add_tier_column` applied — `tier` column live with check constraint. Final distribution: tier_1=20 · tier_2=8 · tier_3=6 · decommissioned=2 · transferred=1. WORKFLOW.md (Step 2) will query `project_registry.tier` instead of hardcoded lists.
+- **2026-05-04T05:13Z** — Step 2 complete. `WORKFLOW.md` v1.0 written and merged (claude-tools-kit#14). 5 phases (Orient → Plan → Execute → Save → Verify) with copy-pastable shell, tier rules table, 10 hard rules, common-scenario shortcuts. `~/.claude/CLAUDE.md` updated locally to reference the doc as session-start reading. Step 5 will wire each NACA agent's system prompt to it. Score now ~4/6 on Definition of Done.
