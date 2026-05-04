@@ -71,32 +71,64 @@ function fmtAge(iso) {
 // ── individual checks ────────────────────────────────────────────────
 
 async function checkHeartbeats() {
-  const [{ data: reg }, { data: hb }] = await Promise.all([
+  const [{ data: reg }, { data: hb }, { data: agents }] = await Promise.all([
     sb.from('project_registry').select('project,tier,active').eq('active', true),
     sb.from('agent_heartbeats').select('agent_name,status,reported_at'),
+    // agent_registry — used to look up cadence metadata (scheduled vs always-running)
+    // AND to filter out archived agents whose stale heartbeats would otherwise show as offline.
+    sb.from('agent_registry').select('agent_name,status,meta'),
   ]);
   const hbMap = new Map((hb||[]).map(h => [h.agent_name, h]));
-  // We care most about tier_1 agents (fleet-critical).
-  // Note: project_registry.project values may not match agent_name exactly.
-  // For now we use the project name as the lookup key; in practice they
-  // mostly align (siti=='siti' via 'nclaw-dashboard'? no — different).
-  // Fallback: check ALL heartbeats for liveness signal.
+  const agentMeta = new Map((agents||[]).map(a => [a.agent_name, a]));
   const t1Projects = (reg||[]).filter(r => r.tier === 'tier_1');
-  let liveCount = 0, staleCount = 0, offlineCount = 0;
-  const offline = [], stale = [];
-  for (const h of hb||[]) {
+  // Filter out heartbeats from agents whose registry status is 'archived' or
+  // who don't appear in registry at all (could be ghost rows from removed agents).
+  // We intentionally include unregistered agents so we don't silently miss
+  // an agent that was added via PM2 but never registered — but skip explicitly-archived.
+  const liveHb = (hb || []).filter(h => {
+    const ag = agentMeta.get(h.agent_name);
+    return !ag || ag.status !== 'archived';
+  });
+  let liveCount = 0, staleCount = 0, offlineCount = 0, scheduledOkCount = 0;
+  const offline = [], stale = [], scheduledOk = [];
+  for (const h of liveHb) {
     const ageMin = (Date.now() - new Date(h.reported_at).getTime()) / 60000;
+    const ag = agentMeta.get(h.agent_name);
+    const isScheduled = ag?.meta?.always_running === false;
+    const cadence = ag?.meta?.cadence;
+    // Scheduled job: it's "OK" if it ran within its expected cadence window.
+    // daily_03_myt = ran some time in the last ~25h (allow slop)
+    // hourly = ran in last 70min
+    // weekly = ran in last 8 days
+    if (isScheduled) {
+      const okThresholdMin =
+        cadence === 'hourly' ? 70 :
+        cadence?.startsWith('daily') ? 25 * 60 :
+        cadence === 'weekly' ? 8 * 24 * 60 :
+        24 * 60; // unknown cadence → assume daily-ish
+      if (ageMin < okThresholdMin) {
+        scheduledOkCount++;
+        scheduledOk.push(`${h.agent_name} (${cadence || 'scheduled'}, ${fmtAge(h.reported_at)} ago)`);
+        continue;
+      }
+      // Scheduled job missed its window → real offline.
+      offlineCount++;
+      offline.push(`${h.agent_name} (scheduled ${cadence}, ${fmtAge(h.reported_at)} — missed window)`);
+      continue;
+    }
+    // Always-running agent: 5min/60min thresholds
     if (ageMin < 5) liveCount++;
     else if (ageMin < 60) { staleCount++; stale.push(`${h.agent_name} (${fmtAge(h.reported_at)})`); }
     else { offlineCount++; offline.push(`${h.agent_name} (${fmtAge(h.reported_at)})`); }
   }
-  const total = liveCount + staleCount + offlineCount;
+  const total = liveCount + staleCount + offlineCount + scheduledOkCount;
   const status = offlineCount === 0 && staleCount === 0 ? 'PASS'
     : offlineCount <= 2 && staleCount <= 1 ? 'WARN'
     : 'FAIL';
-  const details = [`${liveCount}/${total} agents live (<5min) · ${t1Projects.length} tier_1 projects in registry`];
+  const details = [`${liveCount} live (<5min) · ${scheduledOkCount} scheduled-ok · ${staleCount} stale · ${offlineCount} offline · ${t1Projects.length} tier_1 in registry`];
   if (stale.length) details.push(`stale (5–60m): ${stale.slice(0,5).join(', ')}${stale.length>5?` +${stale.length-5} more`:''}`);
-  if (offline.length) details.push(`offline (>60m): ${offline.slice(0,5).join(', ')}${offline.length>5?` +${offline.length-5} more`:''}`);
+  if (offline.length) details.push(`offline: ${offline.slice(0,5).join(', ')}${offline.length>5?` +${offline.length-5} more`:''}`);
+  if (scheduledOk.length) details.push(`scheduled-ok: ${scheduledOk.slice(0,3).join(', ')}${scheduledOk.length>3?` +${scheduledOk.length-3} more`:''}`);
   printCheck('Heartbeats', status, details);
 }
 
