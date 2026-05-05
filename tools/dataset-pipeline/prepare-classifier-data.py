@@ -95,6 +95,8 @@ def parse_args() -> argparse.Namespace:
                    help='drop rows where metadata.classification_score < this (default 5)')
     p.add_argument('--min-class-count', type=int, default=50,
                    help='drop categories with fewer examples than this (default 50)')
+    p.add_argument('--exclude-class', action='append', default=[],
+                   help='exclude a specific category (repeatable). Useful for dropping junk-drawer classes like "general"')
     p.add_argument('--seed', type=int, default=42, help='RNG seed for split (default 42)')
     p.add_argument('--dry-run', action='store_true', help='print stats but write nothing')
     return p.parse_args()
@@ -176,8 +178,16 @@ def main() -> int:
 
     # 2. Class distribution + filter
     label_counts_pre = Counter(r['label'] for r in parsed)
-    dropped_classes = [l for l, c in label_counts_pre.items() if c < args.min_class_count]
-    kept_classes = sorted(l for l, c in label_counts_pre.items() if c >= args.min_class_count)
+    excluded = set(args.exclude_class or [])
+    if excluded:
+        before = len(parsed)
+        parsed = [r for r in parsed if r['label'] not in excluded]
+        print(f'## Explicit exclusion (--exclude-class)')
+        print(f'  excluded labels: {sorted(excluded)}')
+        print(f'  rows dropped   : {before - len(parsed)}')
+        print()
+    dropped_classes = [l for l, c in label_counts_pre.items() if c < args.min_class_count and l not in excluded]
+    kept_classes = sorted(l for l, c in label_counts_pre.items() if c >= args.min_class_count and l not in excluded)
     if dropped_classes:
         before = len(parsed)
         parsed = [r for r in parsed if r['label'] in kept_classes]
