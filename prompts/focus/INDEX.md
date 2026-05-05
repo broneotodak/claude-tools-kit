@@ -15,11 +15,11 @@ These pair with `~/Projects/claude-tools-kit/WORKFLOW.md` (the canonical 5-phase
 | NAS-Ugreen — heartbeat publisher, MinIO media store, n8n, business docs, Tailscale exit-node | [`NAS-UGREEN.md`](NAS-UGREEN.md) |
 | Slave-MBP (Imel's MBA repurposed) — browser-agent (UI posting) + publisher-agent (API posting), TikTok/IG/LinkedIn flow | [`SLAVE-MBP.md`](SLAVE-MBP.md) |
 | Twin VPS — twin-ingest (memory pipeline off Neo's primary WhatsApp) + neo-twin (Phase 6 two-tier auto-reply, shadow soak). HIGH-RISK: Baileys session state. | [`TWIN-VPS.md`](TWIN-VPS.md) |
+| Todak Academy — React/Supabase student-portal v2, mid-cutover from legacy Laravel system at `todakacademy.edu.my`. Customer-facing (parents/students). | [`TODAK-ACADEMY.md`](TODAK-ACADEMY.md) |
 
-## Hosts that don't have focus prompts (yet)
+## Hosts / projects that don't have focus prompts (yet)
 
 - **Hetzner Siti VPS** itself — the agents that run there (siti, planner-agent, dev-agent, reviewer-agent, verifier-agent, toolsmith-agent, timekeeper-agent, naca-backend, poster-agent) are mostly covered by `SITI.md` for siti-specific work, or each agent's source repo + system prompt for the others. If we end up doing VPS-wide ops repeatedly, add `prompts/focus/HETZNER-VPS.md`.
-- **Twin VPS** (5.161.126.222 / 100.120.79.126) — hosts `twin-ingest` + `neo-twin`. Add `TWIN-VPS.md` if we revisit Phase 6 Step 9 in earnest.
 - **naca-pi** (Raspberry Pi 4 8GB, security recon node) — `tier_3` per the registry. Add `NACA-PI.md` if/when the security-agent project graduates from sandbox.
 - **xiaozhi-dog** (ESP32-S3 voice device) — currently `tier_3`. Hardware notes live in memory `project_dog_v2_xiaozhi` for now.
 
