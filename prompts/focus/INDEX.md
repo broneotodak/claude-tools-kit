@@ -8,7 +8,8 @@ These pair with `~/Projects/claude-tools-kit/WORKFLOW.md` (the canonical 5-phase
 
 | Working on … | Paste this |
 |---|---|
-| Siti — the WhatsApp bot pipeline (server.js, parseVerdict, scope tagging, digest, etc.) | [`SITI.md`](SITI.md) |
+| Siti — the WhatsApp bot pipeline (server.js, parseVerdict, scope tagging, digest, etc.) — *currently paused since 2026-05-05* | [`SITI.md`](SITI.md) |
+| **Siti rebuild** — Router + Specialists architecture replacing the paused monolith. Multi-week project. Don't unpause old siti. | [`SITI-REBUILD.md`](SITI-REBUILD.md) |
 | The NACA app itself — Flutter client, sound, bundle id, SITI tab, deploy via GitHub Actions / VPS / native | [`NACA-APP.md`](NACA-APP.md) |
 | CLAW (Imelda's MBA at home) — pr-decision-dispatcher, supervisor-agent, gateway, plaud-ingest, all launchd jobs | [`CLAW.md`](CLAW.md) |
 | tr-home (Threadripper desktop) — FCC dashboard sidecar, Ollama, future Phase 6 local LLM serving | [`TR-HOME.md`](TR-HOME.md) |
