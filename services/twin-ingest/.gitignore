@@ -1,0 +1,19 @@
+# Local node deps + lockfiles only at root
+node_modules/
+
+# Baileys session state — NEVER commit (contains WhatsApp session keys)
+auth-state/
+auth-state.backup.*/
+auth-state.*.backup/
+
+# Local backups created during VPS-side hotfixes
+*.bak.*
+*.backup
+*.backup.*
+
+# Logs
+*.log
+
+# Local env (canonical .env lives on VPS at /home/neotwin/twin-ingest/.env)
+.env
+.env.local
