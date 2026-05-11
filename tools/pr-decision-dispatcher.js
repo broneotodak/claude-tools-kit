@@ -212,6 +212,30 @@ async function emitOkBeat({ awaiting, dispatched, skipped }) {
   }).catch(err => console.error('[pr-dispatch] heartbeat fail:', err.message));
 }
 
+// Send a Siti clarification message via agent_commands. Used when bare-token
+// approval lands with >1 PRs awaiting — we dispatch to the most recent and
+// tell Neo about it so a wrong call is visible immediately, not silent.
+async function sendSitiClarification({ chosen, others, verdict, replyBody }) {
+  const meta = chosen.metadata || {};
+  const verbEmoji = verdict === 'approve' ? '✅ Approved' : verdict === 'reject' ? '❌ Rejected' : `Recorded ${verdict.toUpperCase()}`;
+  const chosenRef = `${meta.repo}#${meta.pr_number || '?'}`;
+  const othersList = others.map((o, i) => {
+    const om = o.metadata || {};
+    return `  ${i + 1}) ${om.repo}#${om.pr_number || '?'} — ${(om.pr_title || '').slice(0, 60)}`;
+  }).join('\n');
+  const message = `${verbEmoji} — most-recent: *${chosenRef}* (${meta.pr_title || ''}).\n\nYou had ${others.length + 1} PRs awaiting. The others stayed open:\n${othersList}\n\nIf you meant a different one, reply: \`${verdict} pr #<number>\` and I'll route it correctly.`;
+  await rest('agent_commands', {
+    method: 'POST',
+    body: JSON.stringify({
+      from_agent: ME,
+      to_agent: 'siti',
+      command: 'send_whatsapp_notification',
+      payload: { to: NEO_NUMBER_FOR_SITI, message },
+      priority: 2,
+    }),
+  });
+}
+
 async function main() {
   let processed = 0, skipped = 0;
   const awaiting = await findAwaiting();
@@ -221,11 +245,24 @@ async function main() {
     return;
   }
 
+  // Filter to undecided + pr_url-bearing awaiting rows up front so we know
+  // the real candidate set for disambiguation (vs naively counting all rows).
+  const candidates = [];
   for (const a of awaiting) {
     const meta = a.metadata || {};
     if (!meta.pr_url) { skipped++; continue; }
     if (await alreadyDecided(meta.pr_url)) { skipped++; continue; }
+    candidates.push(a);
+  }
 
+  // Track replies we've already "consumed" inside this cycle so a single
+  // bare-token "approve" doesn't fan-out to every awaiting row.
+  // Key: `<reply.created_at>|<reply.content>`.
+  const consumedReplies = new Set();
+  const replyKey = (r) => `${r.created_at}|${String(r.content).trim()}`;
+
+  for (const a of candidates) {
+    const meta = a.metadata || {};
     const replies = await neoRepliesAfter(a.created_at);
     if (!replies?.length) continue;
 
@@ -235,9 +272,38 @@ async function main() {
       // If the reply names an explicit PR number ("approve pr #8"), only
       // apply it to the awaiting row whose pr_number matches — prevents a
       // PR-specific verdict from being mis-routed to a different awaiting
-      // row that happens to be older. Bare-token replies (pr_number=null)
-      // keep the existing first-match-wins behavior.
+      // row that happens to be older.
       if (v.pr_number != null && Number(meta.pr_number) !== v.pr_number) continue;
+
+      // Bare-token disambiguation: if the reply has no explicit pr_number,
+      // it could in principle apply to ANY undecided awaiting. Pre-refactor
+      // the loop happily dispatched the SAME bare "approve" to every
+      // awaiting in turn — a silent fan-out merging PRs Neo never meant.
+      // Now: bare token applies ONCE per cycle, to the most-recent awaiting
+      // (candidates are ordered desc by findAwaiting). The chosen row gets
+      // the verdict; the others stay awaiting; Siti acks with the
+      // disambiguation note so the wrong call is visible immediately.
+      if (v.pr_number == null) {
+        if (consumedReplies.has(replyKey(r))) {
+          break; // this bare-token reply has already been used this cycle
+        }
+        consumedReplies.add(replyKey(r));
+
+        const othersInCycle = candidates.filter((c) => c.id !== a.id);
+        try {
+          await recordDecision({ awaiting: a, verdict: v.verdict, replyAt: r.created_at, replyBody: r.content });
+          processed++;
+          if (othersInCycle.length > 0) {
+            await sendSitiClarification({ chosen: a, others: othersInCycle, verdict: v.verdict, replyBody: r.content });
+            console.log(`[pr-dispatch] bare-token ${v.verdict.toUpperCase()} disambiguated to most-recent ${meta.pr_url}; ${othersInCycle.length} others left awaiting`);
+          }
+        } catch (e) {
+          console.error(`[pr-dispatch] dispatch failed for ${meta.pr_url}: ${e.message}`);
+        }
+        break; // first matching reply consumed for this awaiting; move on
+      }
+
+      // Explicit pr_number match — original safe path.
       try {
         await recordDecision({ awaiting: a, verdict: v.verdict, replyAt: r.created_at, replyBody: r.content });
         processed++;
@@ -247,7 +313,7 @@ async function main() {
       break; // only first matching reply per awaiting row
     }
   }
-  console.log(`[pr-dispatch] cycle done — awaiting=${awaiting.length} dispatched=${processed} skipped=${skipped}`);
+  console.log(`[pr-dispatch] cycle done — awaiting=${awaiting.length} candidates=${candidates.length} dispatched=${processed} skipped=${skipped}`);
   await emitOkBeat({ awaiting: awaiting.length, dispatched: processed, skipped });
 }
 
