@@ -788,7 +788,7 @@ async function ingestMessage(msg) {
     pf.person + ": " + (pf.facts || []).join("; ")
   ).join("\n");
 
-  const memoryEntry = {
+  const waEntry = {
     content: factsLines
       ? `[${chatType}${isGroup ? ": " + groupName : ""}] ${content}\n\nPerson facts:\n${factsLines}`
       : `[${chatType}${isGroup ? ": " + groupName : ""}] ${content}`,
@@ -798,15 +798,21 @@ async function ingestMessage(msg) {
     source: "wa-primary",
     visibility: classification.category === "finance" || classification.category === "family" ? "private" : "internal",
     subject_id: OWNER_ID,
+    // Denormalized WA columns (wa_messages schema, Phase 2 of
+    // memory-table-separation spec).
+    chat_jid: chatJid,
+    sender_phone: senderPhone,
+    push_name: pushName,
+    is_group: isGroup,
+    is_from_self: isFromMe,
+    // Catchall kept for forwards-compat with dashboard/orchestrator readers
+    // that still consume metadata fields (chat_type, group_name, etc.)
     metadata: {
       chat_type: chatType,
-      chat_jid: chatJid,
       group_name: isGroup ? groupName : null,
-      sender_phone: senderPhone,
       sender_name: pushName,
       is_from_owner: isFromMe,
       timestamp: timestamp,
-      // v2: store person_facts for enricher compatibility
       person_facts: personFacts.length > 0 ? personFacts : undefined,
       classification_score: classification.score,
     },
@@ -814,17 +820,14 @@ async function ingestMessage(msg) {
 
   try {
     // Generate 768-d embedding before insert. Failure is non-blocking — we
-    // save the row anyway so content is at least keyword-recallable. Without
-    // an enricher in place yet, a missed embedding becomes permanent for that
-    // row (3,107 such rows already exist from the pre-fix period; will need
-    // a one-shot backfill).
-    const embedding = await geminiEmbed(memoryEntry.content);
-    if (embedding) memoryEntry.embedding = embedding;
+    // save the row anyway so content is at least keyword-recallable.
+    const embedding = await geminiEmbed(waEntry.content);
+    if (embedding) waEntry.embedding = embedding;
     else stats.embedMisses = (stats.embedMisses || 0) + 1;
-    await brain.from("memories").insert(memoryEntry);
+    await brain.from("wa_messages").insert(waEntry);
     if (embedding) stats.embedHits = (stats.embedHits || 0) + 1;
   } catch (e) {
-    console.error("[twin] memory save error:", e.message?.slice(0, 80));
+    console.error("[twin] wa_messages save error:", e.message?.slice(0, 80));
   }
 
   // Save individual facts to people records

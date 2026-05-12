@@ -67,7 +67,7 @@ function logErr(msg, e) {
 async function fetchUnhandledMemories() {
   const cutoff = new Date(Date.now() - MEMORY_LOOKBACK_MIN * 60_000).toISOString();
   const { data, error } = await brain
-    .from("memories")
+    .from("wa_messages")
     .select("id, content, metadata, created_at")
     .eq("source", "wa-primary")
     .gte("created_at", cutoff)
@@ -316,9 +316,9 @@ async function sendViaTwinIngest(toJid, text, draftId) {
 // ─── 8. MARK MEMORY HANDLED ──────────────────────────────────────────────────
 async function markHandled(memoryId, statusVal, draftId) {
   // Read current metadata, merge handled_by_neo_twin field, write back
-  const { data: row } = await brain.from("memories").select("metadata").eq("id", memoryId).single();
+  const { data: row } = await brain.from("wa_messages").select("metadata").eq("id", memoryId).single();
   const meta = { ...(row?.metadata || {}), handled_by_neo_twin: statusVal, neo_twin_draft_id: draftId || null, neo_twin_handled_at: new Date().toISOString() };
-  const { error } = await brain.from("memories").update({ metadata: meta }).eq("id", memoryId);
+  const { error } = await brain.from("wa_messages").update({ metadata: meta }).eq("id", memoryId);
   if (error) logErr(`markHandled(${memoryId})`, error);
 }
 

@@ -112,17 +112,17 @@ export function startDashboard() {
       try {
         const since1h = new Date(Date.now() - 3600 * 1000).toISOString();
         const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-        const [memories, people, facts, last1h, last24h] = await Promise.all([
-          brain.from("memories").select("content,category,importance,metadata,source,source_ref,created_at").in("source", ["wa-primary","wa-chat-importer"]).is("metadata->archived_chat", null).order("created_at", { ascending: false }).limit(30),
+        const [messages, people, facts, last1h, last24h] = await Promise.all([
+          brain.from("wa_messages").select("content,category,importance,metadata,source,source_ref,push_name,sender_phone,is_from_self,created_at").in("source", ["wa-primary","wa-chat-importer"]).eq("archived_chat", false).order("created_at", { ascending: false }).limit(30),
           brain.from("people").select("id,display_name,kind,notes,metadata,bio,traits,facts,relationship,languages,full_name,push_name,nicknames,message_count,last_profile_extraction").is("metadata->merged_into", null).is("metadata->no_dm_history", null).neq("kind", "self").order("updated_at", { ascending: false }).limit(100),
           brain.from("facts").select("subject_id,fact,category,confidence,created_at").order("created_at", { ascending: false }).limit(30),
-          brain.from("memories").select("id", { count: "exact", head: true }).in("source", ["wa-primary","wa-chat-importer"]).is("metadata->archived_chat", null).gte("created_at", since1h),
-          brain.from("memories").select("id", { count: "exact", head: true }).in("source", ["wa-primary","wa-chat-importer"]).is("metadata->archived_chat", null).gte("created_at", since24h),
+          brain.from("wa_messages").select("id", { count: "exact", head: true }).in("source", ["wa-primary","wa-chat-importer"]).eq("archived_chat", false).gte("created_at", since1h),
+          brain.from("wa_messages").select("id", { count: "exact", head: true }).in("source", ["wa-primary","wa-chat-importer"]).eq("archived_chat", false).gte("created_at", since24h),
         ]);
-        const { data: catCounts } = await brain.from("memories").select("category").in("source", ["wa-primary","wa-chat-importer"]).is("metadata->archived_chat", null);
+        const { data: catCounts } = await brain.from("wa_messages").select("category").in("source", ["wa-primary","wa-chat-importer"]).eq("archived_chat", false);
         const categories = {};
         (catCounts || []).forEach(m => { categories[m.category] = (categories[m.category] || 0) + 1; });
-        const { count: totalIngested } = await brain.from("memories").select("id", { count: "exact", head: true }).in("source", ["wa-primary","wa-chat-importer"]).is("metadata->archived_chat", null);
+        const { count: totalIngested } = await brain.from("wa_messages").select("id", { count: "exact", head: true }).in("source", ["wa-primary","wa-chat-importer"]).eq("archived_chat", false);
 
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
@@ -130,15 +130,15 @@ export function startDashboard() {
           last_1h: last1h.count || 0,
           last_24h: last24h.count || 0,
           categories,
-          recent_memories: (memories.data || []).map(m => ({
+          recent_memories: (messages.data || []).map(m => ({
             content: scrubNoise(m.content?.slice(0, 400)),
             category: m.category,
             importance: m.importance,
             source: m.source,
             chat_name: m.source_ref?.chat_name,
             chat_type: m.metadata?.chat_type || m.source_ref?.chat_type,
-            sender: m.metadata?.sender_name || m.metadata?.sender_phone,
-            is_owner: m.metadata?.is_from_owner,
+            sender: m.push_name || m.sender_phone,
+            is_owner: m.is_from_self,
             time: m.created_at,
           })),
           people: await mergePeople(people.data || [], { lastFact: await lastFactByPerson() }),

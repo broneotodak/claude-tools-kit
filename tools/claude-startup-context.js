@@ -103,10 +103,14 @@ async function loadRelevantMemories(contextQuery, limit = 10) {
       return loadRecentMemories(limit);
     }
 
-    // Semantic search using pgvector
-    const { data, error } = await supabase.rpc('match_memories', {
+    // Semantic search using pgvector. match_memories_curated excludes WA
+    // conversation sources (wa-primary, siti-wa, wa-primary-media,
+    // wa-chat-importer, siti_group_summarizer, nclaw_whatsapp_conversation)
+    // at the RPC level — startup context should NEVER include personal-phone
+    // chat captures as "relevant memory." Spec: naca/docs/spec/memory-table-separation-v1.md
+    const { data, error } = await supabase.rpc('match_memories_curated', {
       query_embedding: embedding,
-      match_threshold: 0.7,
+      min_similarity: 0.7,
       match_count: limit,
     });
 
