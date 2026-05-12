@@ -142,15 +142,28 @@ class NeoBrain:
         emb = embed_text(query, api_key=self.gemini_api_key)
         if emb is None:
             return []
+        # match_memories_curated excludes WA conversation sources at the RPC
+        # level; the `source` parameter is preserved on this method for
+        # backward compatibility but is now ignored (curated already filters).
+        # If callers need WA-specific lookups, use match_wa_messages instead.
+        # Spec: broneotodak/naca/docs/spec/memory-table-separation-v1.md
+        if source:
+            import warnings
+            warnings.warn(
+                "search(source=...) is deprecated; match_memories_curated "
+                "filters WA sources automatically. Use a wa_messages query "
+                "path for conversation history.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         return self._rpc(
-            "match_memories",
+            "match_memories_curated",
             {
                 "query_embedding": emb,
                 "match_count": k,
                 "min_similarity": min_similarity,
                 "visibility_filter": list(visibility),
                 "p_subject_id": subject_id,
-                "source_filter": list(source) if source else None,
             },
         ) or []
 
