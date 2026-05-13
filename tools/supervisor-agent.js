@@ -15,6 +15,12 @@
 //   - ADDED    recovery notifications for cleared T3 alerts.
 //   - TAGS     all dry-run observations with metadata.supervisor_version="v2"
 //              so calibration queries can filter cleanly from v1 noise.
+//   - ADDED 2026-05-13: T3 demote-on-repeat. If any T3 activity (WA send or
+//              prior demoted memory) exists for the same (agent, symptom) in
+//              the last 7 days, the next fire is downgraded to a memory-only
+//              record — no WA spam. Re-arms after 7 days of complete silence.
+//              Caps WA alerts at 1 per 7d per signature when the symptom is
+//              actually a stale flag we can't resolve from supervisor side.
 //
 // Validated signal sources (per ~/.claude/MONITORING_ENFORCEMENT.md):
 //   1. agent_heartbeats.reported_at — client-set ISO timestamp; freshness only
@@ -164,11 +170,31 @@ async function priorFires(agent, symptomKey, nowMs) {
   const i = await rest(`agent_intents?source=eq.supervisor&source_ref=like.agent:${encodeURIComponent(agent)}*symptom:${encodeURIComponent(symptomKey)}*&created_at=gte.${cutoff}&order=created_at.desc&limit=1`);
   if (i?.[0] && (nowMs - new Date(i[0].created_at).getTime()) / 1000 < COOLDOWN_SEC[2]) out[2] = i[0].created_at;
 
+  // T3 cooldown: a "T3 fire" is either a real WA command OR a demoted-memory marker.
+  // Demoted markers count so the next cycle doesn't re-call tier3() every minute
+  // after the WA cooldown expires.
   const c = await rest(`agent_commands?from_agent=eq.${ME}&command=eq.send_whatsapp_notification&created_at=gte.${cutoff}&order=created_at.desc&limit=20`);
   const hit = (c || []).find(r => r.payload?.message?.includes(`*${agent}*`) && r.payload?.message?.includes(symptomKey));
   if (hit && (nowMs - new Date(hit.created_at).getTime()) / 1000 < COOLDOWN_SEC[3]) out[3] = hit.created_at;
+  if (!out[3]) {
+    const dm = await rest(`memories?source=eq.${ME}&category=eq.supervisor&metadata->>agent=eq.${encodeURIComponent(agent)}&metadata->>symptom=eq.${encodeURIComponent(symptomKey)}&metadata->>tier=eq.3&metadata->>demoted=eq.true&created_at=gte.${cutoff}&order=created_at.desc&limit=1`);
+    if (dm?.[0] && (nowMs - new Date(dm[0].created_at).getTime()) / 1000 < COOLDOWN_SEC[3]) out[3] = dm[0].created_at;
+  }
 
   return out;
+}
+
+// Look back 7 days for ANY T3 activity (WA command or demoted memory) on this
+// agent+symptom. Used by tier3() to decide first-fire vs repeat-fire.
+const REPEAT_T3_WINDOW_SEC = 7 * 86400;
+async function findRecentT3Activity(agent, symptomKey, nowMs) {
+  const cutoff = new Date(nowMs - REPEAT_T3_WINDOW_SEC * 1000).toISOString();
+  const c = await rest(`agent_commands?from_agent=eq.${ME}&command=eq.send_whatsapp_notification&created_at=gte.${cutoff}&order=created_at.desc&limit=50`);
+  const cmdHit = (c || []).find(r => r.payload?.message?.includes(`*${agent}*`) && r.payload?.message?.includes(symptomKey));
+  if (cmdHit) return { kind: 'wa', at: cmdHit.created_at };
+  const dm = await rest(`memories?source=eq.${ME}&category=eq.supervisor&metadata->>agent=eq.${encodeURIComponent(agent)}&metadata->>symptom=eq.${encodeURIComponent(symptomKey)}&metadata->>tier=eq.3&created_at=gte.${cutoff}&order=created_at.desc&limit=1`);
+  if (dm?.[0]) return { kind: 'memory', at: dm[0].created_at, demoted: dm[0].metadata?.demoted === true };
+  return null;
 }
 
 // ── tier dispatchers ────────────────────────────────────────────────
@@ -216,6 +242,26 @@ async function tier2(agent, cfg, symptom, runId) {
 }
 
 async function tier3(agent, cfg, symptom, runId, prior) {
+  // Demote-on-repeat: if there was any T3 activity for this agent+symptom in the
+  // last 7 days (WA send or prior demoted memory), this fire becomes memory-only.
+  // Stops stale-data alarms from spamming WA once per cooldown indefinitely
+  // (the 2026-05-13 incident — fcc_health_degraded kept re-firing daily because
+  // both root causes were stale flags, not real outages).
+  const recent = await findRecentT3Activity(agent, symptom.key, Date.now());
+  if (recent) {
+    const content = `supervisor v2 [tier 3 DEMOTED] '${agent}' on ${cfg.target_host} — ${symptom.key}: ${symptom.detail}. Prior T3 activity ${recent.kind === 'wa' ? 'WA-sent' : 'demoted'} at ${recent.at}. Memory-only this cycle to prevent stale-alarm spam; full T3 will re-arm after 7 days of silence.`;
+    if (DRY_RUN) { await logObservation({ agent, tier: 3, symptom, cfg, runId, plannedAction: 'alert_demoted' }); return { action: 'alert_demoted', stubbed: true }; }
+    await rest('memories', {
+      method: 'POST',
+      body: JSON.stringify({
+        content, category: 'supervisor', memory_type: 'incident', importance: 3, visibility: 'private', source: ME,
+        metadata: { supervisor_version: VERSION, agent, tier: 3, symptom: symptom.key, detail: symptom.detail, target_host: cfg.target_host, run_id: runId, demoted: true, prior_kind: recent.kind, prior_at: recent.at },
+      }),
+    });
+    return { action: 'alert_demoted', prior_kind: recent.kind };
+  }
+
+  // First T3 fire in 7 days — full WA alert.
   const crit = cfg.critical ? '🚨 *CRITICAL*' : '⚠️ *High*';
   const message = [
     `━━ 🛡️ supervisor ━━`,
