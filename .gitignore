@@ -18,8 +18,11 @@ Thumbs.db
 # Logs
 *.log
 
-# Personal claude.md (use template instead)
+# Personal claude.md (use template instead). Note: case-insensitive on macOS
+# APFS — the !CLAUDE.md negation keeps the project-level CLAUDE.md (rules for
+# fresh CC sessions) tracked.
 claude.md
+!CLAUDE.md
 
 # Temporary files
 *.tmp
