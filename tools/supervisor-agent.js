@@ -384,15 +384,25 @@ async function main() {
   const startMs = Date.now();
 
   // Pull state in parallel
-  const [hbRows, kumaData] = await Promise.all([
+  const [hbRows, kumaData, regRows] = await Promise.all([
     rest('agent_heartbeats?select=agent_name,status,reported_at,meta'),
     fetchKumaStatus(),
+    rest('agent_registry?select=agent_name,status,meta'),
   ]);
   const byName = Object.fromEntries((hbRows || []).map(h => [h.agent_name, h]));
+  // Registry meta is authoritative for "should I monitor this agent at all?".
+  // An agent flagged heartbeat_exempt is intentionally not pushing (on leave,
+  // firmware-side, ICMP-monitored, etc.) and must not trigger process_stale.
+  const regByName = Object.fromEntries((regRows || []).map(r => [r.agent_name, r]));
 
   const actions = [];
   // Per-agent symptom checks
   for (const [agent, cfg] of Object.entries(WATCH)) {
+    const reg = regByName[agent];
+    if (reg?.meta?.heartbeat_exempt === true) {
+      console.log(`[supervisor] ${agent} — heartbeat_exempt in registry, skipping symptom checks`);
+      continue;
+    }
     const symptoms = [];
     const stale = detectProcessStale(byName[agent], cfg, startMs);
     if (stale) symptoms.push(stale);
