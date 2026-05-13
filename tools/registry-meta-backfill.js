@@ -43,6 +43,7 @@ const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'applic
 const SUPERVISOR_WATCH = {
   'siti':          { monitor_threshold_sec: 360, is_critical: true },
   'twin-ingest':   { monitor_threshold_sec: 360, is_critical: true },
+  'neo-twin':      { monitor_threshold_sec: 360, is_critical: true },
   'naca-backend':  { monitor_threshold_sec: 240, is_critical: true },
   'dev-agent':     { monitor_threshold_sec: 600, is_critical: false },
   'planner-agent': { monitor_threshold_sec: 600, is_critical: false },
@@ -88,7 +89,7 @@ const KUMA_MONITOR_IDS = { 'siti': 13 };
 const RUNTIME_FALLBACK = {
   'dev-agent': 'pm2', 'planner-agent': 'pm2', 'reviewer': 'pm2',
   'naca-backend': 'pm2', 'siti-router': 'pm2', 'siti-ingest': 'pm2',
-  'naca-monitor': 'pm2', 'twin-ingest': 'pm2', 'twin-autoreply': 'pm2',
+  'naca-monitor': 'pm2', 'twin-ingest': 'pm2', 'neo-twin': 'pm2', 'twin-autoreply': 'pm2',
   'browser-agent': 'pm2', 'publisher-agent': 'pm2',
   'supervisor': 'launchd', 'claw-mac': 'launchd', 'plaud-pipeline': 'launchd',
   'pr-decision-dispatcher': 'launchd', 'backup-sync': 'launchd',
