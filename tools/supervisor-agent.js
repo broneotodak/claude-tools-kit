@@ -21,6 +21,13 @@
 //              record — no WA spam. Re-arms after 7 days of complete silence.
 //              Caps WA alerts at 1 per 7d per signature when the symptom is
 //              actually a stale flag we can't resolve from supervisor side.
+//   - ADDED 2026-05-13: refactor v2 step 2 — WATCH list + KNOWN_OUTSIDE_WATCH
+//              set deleted. WATCH now built per cycle from agent_registry via
+//              buildWatchList() — see naca docs/spec/agent-registry-schema-v1.md.
+//              Adding/removing an agent is now a one-row registry change, never
+//              a code edit here. detectSitiWaNotReady generalised to
+//              detectKumaMonitorDown so any agent with meta.kuma_monitor_id
+//              gets the same external-monitor check (today only siti).
 //
 // Validated signal sources (per ~/.claude/MONITORING_ENFORCEMENT.md):
 //   1. agent_heartbeats.reported_at — client-set ISO timestamp; freshness only
@@ -51,18 +58,36 @@ const NOTIFY_TO  = process.env.SUPERVISOR_NOTIFY_TO || '60177519610';
 const ME = 'supervisor';
 const VERSION = 'v2';
 
-// ── watchlist (continuous agents only — scheduled agents excluded) ──
-// max_age_sec is the staleness threshold AFTER which we consider the agent
-// dead-or-stuck. Generous to avoid false positives during normal pauses.
-const WATCH = {
-  'siti':          { max_age_sec: 360, critical: true,  target_host: 'siti-vps' },
-  'twin-ingest':   { max_age_sec: 360, critical: true,  target_host: 'neo-twin' },
-  'naca-backend':  { max_age_sec: 240, critical: true,  target_host: 'siti-vps' },
-  'dev-agent':     { max_age_sec: 600, critical: false, target_host: 'siti-vps' },
-  'planner-agent': { max_age_sec: 600, critical: false, target_host: 'siti-vps' },
-  'reviewer':      { max_age_sec: 600, critical: false, target_host: 'siti-vps' },
-  'claw-mac':      { max_age_sec: 240, critical: true,  target_host: 'claw' },
-};
+// ── watchlist · DERIVED FROM agent_registry (refactor v2 step 2, 2026-05-13) ─
+// No hardcoded list. buildWatchList() filters active rows that:
+//   - are not heartbeat_exempt (on leave / firmware / external monitor)
+//   - are not scheduled jobs (always_running !== false)
+//   - have a real runtime (pm2 / launchd / docker / systemd)
+//   - are not 'supervisor' itself (no self-watch)
+// Per-agent thresholds come from meta.monitor_threshold_sec (default 360s).
+// Per-agent criticality comes from meta.is_critical (default false).
+// Target host comes from meta.host. Schema: naca/docs/spec/agent-registry-schema-v1.md.
+const DEFAULT_THRESHOLD_SEC = 360;
+const MONITORABLE_RUNTIMES = new Set(['pm2', 'launchd', 'docker', 'systemd']);
+
+function buildWatchList(regRows) {
+  const out = {};
+  for (const r of regRows || []) {
+    if (r.status !== 'active') continue;
+    const m = r.meta || {};
+    if (m.heartbeat_exempt === true) continue;
+    if (m.always_running === false) continue;
+    if (!MONITORABLE_RUNTIMES.has(m.runtime)) continue;
+    if (r.agent_name === ME) continue;
+    out[r.agent_name] = {
+      max_age_sec: typeof m.monitor_threshold_sec === 'number' ? m.monitor_threshold_sec : DEFAULT_THRESHOLD_SEC,
+      critical: m.is_critical === true,
+      target_host: m.host || 'unknown',
+      kuma_monitor_id: m.kuma_monitor_id ?? null,
+    };
+  }
+  return out;
+}
 
 // ── cooldowns per tier (longer than v1) ─────────────────────────────
 const COOLDOWN_SEC = { 1: 3600, 2: 43200, 3: 86400 };  // 1h / 12h / 24h
@@ -104,13 +129,17 @@ function detectProcessStale(hb, cfg, nowMs) {
   return null;
 }
 
-function detectSitiWaNotReady(kumaData) {
+function detectKumaMonitorDown(kumaData, monitorId, agentName) {
   if (!kumaData) return null;  // Kuma unreachable — skip rather than false-alarm
-  const sitiBeats = kumaData.heartbeatList?.['13'];
-  if (!Array.isArray(sitiBeats) || !sitiBeats.length) return null;
-  const last = sitiBeats[sitiBeats.length - 1];
+  const beats = kumaData.heartbeatList?.[String(monitorId)];
+  if (!Array.isArray(beats) || !beats.length) return null;
+  const last = beats[beats.length - 1];
   // Kuma status: 0=DOWN, 1=UP, 2=PENDING. Only treat 0 as definitive (PENDING is mid-retry).
-  if (last.status === 0) return { key: 'siti_wa_not_ready', detail: `Kuma monitor 13 DOWN — ${last.msg || 'no detail'}` };
+  if (last.status === 0) {
+    // Keep agent-specific symptom keys so routing tables in ROUTING still match.
+    const key = agentName === 'siti' ? 'siti_wa_not_ready' : `kuma_monitor_down_${agentName}`;
+    return { key, detail: `Kuma monitor ${monitorId} DOWN — ${last.msg || 'no detail'}` };
+  }
   return null;
 }
 
@@ -288,20 +317,13 @@ async function tier3(agent, cfg, symptom, runId, prior) {
 const dispatch = { 1: tier1, 2: tier2, 3: tier3 };
 
 // ── Phase 4: fleet auto-discovery ───────────────────────────────────
-// Any agent_name reporting heartbeats that isn't in WATCH and isn't a known
-// scheduled agent → potentially a new fleet node we should introduce. On
-// first detection per agent_name, write a discovery memory + notify Neo via
-// Siti. Idempotent via the marker memory.
-const KNOWN_OUTSIDE_WATCH = new Set([
-  // Scheduled-cadence agents (heartbeats fire on their own schedule)
-  'backup-sync', 'person-sync', 'pr-decision-dispatcher',
-  // Specialist agents not in WATCH (still healthy by their own logic)
-  'dev-agent', 'planner-agent', 'reviewer', 'siti', 'naca-backend', 'twin-ingest', 'neo-twin-orchestrator', 'claw-mac', 'supervisor', 'toolsmith',
-]);
+// Any agent_name reporting heartbeats that isn't registered in agent_registry
+// → genuinely new node we should announce. Single source of truth = registry;
+// no hardcoded "known agents" list (refactor v2 step 2, 2026-05-13).
 
-async function discoverNewFleetNodes(byName, nowMs) {
+async function discoverNewFleetNodes(byName, regByName, nowMs) {
   const candidates = Object.values(byName).filter(hb =>
-    !WATCH[hb.agent_name] && !KNOWN_OUTSIDE_WATCH.has(hb.agent_name) && hb.agent_name !== ME
+    !regByName[hb.agent_name] && hb.agent_name !== ME
   );
   if (!candidates.length) return [];
 
@@ -395,20 +417,21 @@ async function main() {
   // firmware-side, ICMP-monitored, etc.) and must not trigger process_stale.
   const regByName = Object.fromEntries((regRows || []).map(r => [r.agent_name, r]));
 
+  // Build the live watch list from registry (refactor v2 step 2).
+  const WATCH = buildWatchList(regRows);
+  console.log(`[supervisor] watch list built from registry: ${Object.keys(WATCH).length} agents`);
+
   const actions = [];
   // Per-agent symptom checks
   for (const [agent, cfg] of Object.entries(WATCH)) {
-    const reg = regByName[agent];
-    if (reg?.meta?.heartbeat_exempt === true) {
-      console.log(`[supervisor] ${agent} — heartbeat_exempt in registry, skipping symptom checks`);
-      continue;
-    }
     const symptoms = [];
     const stale = detectProcessStale(byName[agent], cfg, startMs);
     if (stale) symptoms.push(stale);
-    if (agent === 'siti') {
-      const wa = detectSitiWaNotReady(kumaData);
-      if (wa) symptoms.push(wa);
+    // Generic Kuma check: any watched agent with a kuma_monitor_id gets one.
+    // Today only siti's monitor (id=13) exists; this is a no-op for everyone else.
+    if (cfg.kuma_monitor_id != null) {
+      const kuma = detectKumaMonitorDown(kumaData, cfg.kuma_monitor_id, agent);
+      if (kuma) symptoms.push(kuma);
     }
     const stuck = await detectCommandStuck(agent);
     if (stuck) symptoms.push(stuck);
@@ -429,8 +452,8 @@ async function main() {
     }
   }
 
-  // Phase 4: fleet auto-discovery — find any new agent_names + announce once.
-  const discovered = await discoverNewFleetNodes(byName, startMs);
+  // Phase 4: fleet auto-discovery — heartbeating agents not in agent_registry.
+  const discovered = await discoverNewFleetNodes(byName, regByName, startMs);
   if (discovered.length) actions.push({ kind: 'fleet_discovery', new_nodes: discovered });
 
   // Phase 5.5: Fleet Command Center self-assessed health
