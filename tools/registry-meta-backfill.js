@@ -81,6 +81,23 @@ const CORE_SERVICES = new Set(['dev-agent', 'siti', 'reviewer', 'planner-agent']
 // Kuma monitor ids. Source: supervisor-agent.js line 109 (`heartbeatList?.['13']`).
 const KUMA_MONITOR_IDS = { 'siti': 13 };
 
+// Explicit fallback: agent_name → runtime, for agents whose meta keys don't
+// already reveal it. Verified against live pm2/launchd/docker state on each
+// host as of 2026-05-13. tr-home + nas-ugreen are host self-registrations
+// (heartbeat-only, no service process) — marked 'n/a' so supervisor skips them.
+const RUNTIME_FALLBACK = {
+  'dev-agent': 'pm2', 'planner-agent': 'pm2', 'reviewer': 'pm2',
+  'naca-backend': 'pm2', 'siti-router': 'pm2', 'siti-ingest': 'pm2',
+  'naca-monitor': 'pm2', 'twin-ingest': 'pm2', 'twin-autoreply': 'pm2',
+  'browser-agent': 'pm2', 'publisher-agent': 'pm2',
+  'supervisor': 'launchd', 'claw-mac': 'launchd', 'plaud-pipeline': 'launchd',
+  'pr-decision-dispatcher': 'launchd', 'backup-sync': 'launchd',
+  'timekeeper': 'docker', 'toolsmith': 'docker', 'verifier-agent': 'docker',
+  'poster-agent': 'docker', 'daily-checkup': 'docker',
+  // Host self-registrations (heartbeat-only, no service process)
+  'tr-home': 'n/a', 'nas-ugreen': 'n/a',
+};
+
 // ── host + runtime inference from existing meta clues ───────────────
 function inferHostAndRuntime(name, meta) {
   const out = {};
@@ -93,6 +110,7 @@ function inferHostAndRuntime(name, meta) {
   else if (m.container_name) out.runtime = 'docker';
   else if (m.firmware) out.runtime = 'n/a';                  // ESP32 etc
   else if (m.hardware && /Pi /.test(m.hardware)) out.runtime = 'n/a';
+  else if (RUNTIME_FALLBACK[name]) out.runtime = RUNTIME_FALLBACK[name];
 
   // host
   const pathHint = m.path || m.host_path || m.vps_path || m.docker_compose_path || m.source_path || '';
