@@ -15,6 +15,7 @@ These pair with `~/Projects/claude-tools-kit/WORKFLOW.md` (the canonical 5-phase
 | tr-home (Threadripper desktop) — FCC dashboard sidecar, Ollama, future Phase 6 local LLM serving | [`TR-HOME.md`](TR-HOME.md) |
 | NAS-Ugreen — heartbeat publisher, MinIO media store, n8n, business docs, Tailscale exit-node | [`NAS-UGREEN.md`](NAS-UGREEN.md) |
 | Slave-MBP (Imel's MBA repurposed) — browser-agent (UI posting) + publisher-agent (API posting), TikTok/IG/LinkedIn flow | [`SLAVE-MBP.md`](SLAVE-MBP.md) |
+| **NACA daily-content pipeline revamp** — multi-fleet, multi-CLI flow (CLAW cron → Higgsfield image gen → NAS → naca-app approval → multi-channel post). Two known issues: legacy image gen has Penang theme bias; need to switch to Higgsfield CLI on Siti VPS for persona-aware Soul-quality output. | [`NACA-CONTENT-REVAMP.md`](NACA-CONTENT-REVAMP.md) |
 | Twin VPS — twin-ingest (memory pipeline off Neo's primary WhatsApp) + neo-twin orchestrator (Phase 6 two-tier auto-reply, shadow soak). HIGH-RISK: Baileys session state. **Code lives in `broneotodak/neo-twin`** — not CTK. | [`TWIN-VPS.md`](TWIN-VPS.md) |
 | Todak Academy — React/Supabase student-portal v2, mid-cutover from legacy Laravel system at `todakacademy.edu.my`. Customer-facing (parents/students). | [`TODAK-ACADEMY.md`](TODAK-ACADEMY.md) |
 
