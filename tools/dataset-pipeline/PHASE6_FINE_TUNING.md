@@ -140,4 +140,4 @@ After each tr-home training run:
 - This file: `claude-tools-kit/tools/dataset-pipeline/PHASE6_FINE_TUNING.md`
 - Related milestones: `project_milestones WHERE project='naca-app' AND phase_code LIKE 'phase-6%'` (rendered on `presentation.neotodak.com/naca-overview.html`)
 - Neo-brain memories: tag `category='phase6-experiment-N'` (per-run notes), `category='shared_infra_change'` (decisions)
-- Companion neo-twin spec: `claude-tools-kit/specs/neo-twin-v2.md` (covers the Tier 2 inference seat that Phase 6.2 voice rewriter eventually fills)
+- Companion neo-twin spec: `broneotodak/neo-twin/docs/spec/neo-twin-v2.md` (extracted 2026-05-13; covers the Tier 2 inference seat that Phase 6.2 voice rewriter eventually fills)
