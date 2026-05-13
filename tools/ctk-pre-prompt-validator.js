@@ -18,7 +18,8 @@ class CTKValidator {
         this.databases = {
             THR: 'ftbtsxlujsnobujwekwx',
             ATLAS: 'ftbtsxlujsnobujwekwx',
-            MEMORY: 'uzamamymfzhelvkwpvgt'
+            MEMORY: 'xsunmervpyrplzarebva',
+            MEMORY_LEGACY: 'uzamamymfzhelvkwpvgt'
         };
     }
 
@@ -44,8 +45,8 @@ class CTKValidator {
         const currentUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 
         if (this.projectType === 'THR' || this.projectType === 'ATLAS') {
-            if (currentUrl && currentUrl.includes('uzamamymfzhelvkwpvgt')) {
-                this.violations.push('❌ WRONG DATABASE! THR uses ftbtsxlujsnobujwekwx, not memory DB!');
+            if (currentUrl && (currentUrl.includes(this.databases.MEMORY) || currentUrl.includes(this.databases.MEMORY_LEGACY))) {
+                this.violations.push(`❌ WRONG DATABASE! THR uses ${this.databases.THR}, not memory DB!`);
             }
         }
     }
