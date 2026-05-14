@@ -110,7 +110,36 @@ Don't use this from agent code. Don't use it to "just get past" a rejection — 
 **Upgrades pending** (deferred from 2026-05-14):
 - Layer 2 (code-level): `@naca/core saveKnowledgeMemory()` single helper, replaces every direct `rest('memories', POST)` in fleet-agent code. Scoped in `prompts/focus/NACA-MEMORY-DISCIPLINE.md`.
 - Layer 3 (CI-level): `scripts/lint-no-hardcoded-agents.sh`-style guard that fails PRs containing direct memories INSERTs from non-allowlisted files.
-- Layer 4 (audit-level): daily-checkup runs a recurring memory-hygiene scan; alerts if NULL knowledge rows appear in last 24h.
+
+### 3.4b Daily memory-hygiene audit (added 2026-05-14)
+
+The **daily-checkup-agent** runs `checkMemoryHygiene()` as part of its 09:00 MYT digest. It counts `embedding IS NULL` rows in the last 24h whose category is NOT in the event allowlist. Should always be 0 because the Layer 1 trigger blocks them — if anything ever appears here it means either the trigger was disabled or an unknown source found a bypass. Either way Neo gets the alert in his daily WhatsApp digest.
+
+For one-off checks from any CC session: `node ~/Projects/claude-tools-kit/tools/memory-hygiene-check.js` (add `--json` for piping, `--since 24h` to scope).
+
+### 3.4c Session pre-flight (added 2026-05-14) · the "have you read the room?" check
+
+**The blunt observation:** sessions kept making their own assumptions even with rules in CLAUDE.md / docs / focus prompts. Reason: those rules are passive — a session has to remember to read them. Pre-flight makes it active — every session SEES the state before it acts.
+
+**Run this at the start of every CC session that touches NACA shared infra:**
+```bash
+node ~/Projects/claude-tools-kit/tools/ctk-preflight.js
+```
+
+It prints: trigger health, fleet status, memory hygiene, pending operator items, **the last 24h of `shared_infra_change` activity from OTHER sessions** (so you know who deployed what before you touch it), and the top-5 rules digest. Exit code 0 = clean, 1 = soft warnings, 2 = fatal.
+
+**Install as automatic session-start hook** so no session goodwill is required. Add to `~/.claude/settings.json` under `"hooks"`:
+```json
+"SessionStart": [{
+  "matcher": "",
+  "hooks": [{
+    "type": "command",
+    "command": "node /Users/broneotodak/Projects/claude-tools-kit/tools/ctk-preflight.js",
+    "timeout": 15
+  }]
+}]
+```
+Once installed, every fresh CC session opens with the orientation printed automatically. No "did you read CLAUDE.md?" guesswork.
 
 ### 3.5 Doc/Memory Pattern (added 2026-04-26)
 
