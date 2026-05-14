@@ -1,0 +1,288 @@
+{
+  "version": "1.0",
+  "created": "2026-05-15",
+  "memory_state_at_creation": {
+    "total_rows": 14128,
+    "null_embedding_on_knowledge": 0,
+    "note": "Built after the 2026-05-14 memory-hygiene pass + DB-trigger enforcement landed. Phase 0 of the RAG upgrade arc."
+  },
+  "methodology": "For each question, the expected_ids[] were identified via DETERMINISTIC neo-brain lookups (category + content ilike + recency) — NOT via the SDK's semantic search. This avoids the circular 'does retrieval find what retrieval finds' bias. The eval then tests whether NeoBrain.search() retrieves those canonical IDs.",
+  "cases": [
+    {
+      "id": "person-01",
+      "question": "Who is Lan? Is he the same person as Rokiah?",
+      "expected_ids": [
+        "f59a5e0f-4685-444c-b5ef-d72bce529edd"
+      ],
+      "category": "person-lookup",
+      "notes": "Canonical identity-disambiguation memory shipped 2026-05-13. Phone 60123072191 was Lan's, now Rokiah (his AI assistant). Real Lan = uuid 0000...000002."
+    },
+    {
+      "id": "person-02",
+      "question": "Who is Imel and what does she do in the fleet?",
+      "expected_ids": [
+        "611c2797-4633-4e46-8555-da383fc844bf"
+      ],
+      "category": "person-lookup",
+      "notes": "Most direct mention: home power/earthing risk memo identifies CLAW = Imel's MBA, Cyberjaya. Sparse coverage — only 2 strong candidates."
+    },
+    {
+      "id": "person-03",
+      "question": "What does Mudzakkir Hasan do at Todak Studios?",
+      "expected_ids": [
+        "25a98909-aadd-4956-adb3-2f3f1634074c"
+      ],
+      "category": "person-lookup",
+      "notes": "Phase 6 shadow draft feedback memory references Mudzakkir in the Lan-Epul-Neo group context. Person info IS thin in memories table — this is a known-weak retrieval test."
+    },
+    {
+      "id": "project-01",
+      "question": "What is NACA Refactor v2 / Agent Plug and Play?",
+      "expected_ids": [
+        "329ff39e-9351-472a-9e7a-2a1ec5b7b662",
+        "900883cb-9269-4e01-afe1-db1af9237680"
+      ],
+      "category": "project-state",
+      "notes": "Two co-canonical: 329ff39e is the architecture-milestone summary (7/7 shipped); 900883cb is the grand-session day-of memory."
+    },
+    {
+      "id": "project-02",
+      "question": "Is the Todak Academy cutover going ahead or postponed?",
+      "expected_ids": [
+        "11bdb0b4-25a4-4259-bf53-87d9065e69a2",
+        "bebf22ef-ebc2-444e-9332-b34ab10d1e05"
+      ],
+      "category": "project-state",
+      "notes": "Cutover postponed 2026-05-09 by Neo (bebf22ef). Session-wrap 11bdb0b4 captures the broader 'postponed + CHIP brand verification pending' state."
+    },
+    {
+      "id": "project-03",
+      "question": "What phase is the neo-twin / digital twin in right now?",
+      "expected_ids": [
+        "ccaa771e-7ce9-449a-8b17-54fe9d782e1e"
+      ],
+      "category": "project-state",
+      "notes": "Canonical = the neo-twin-orchestrator deployment memory ccaa771e (Phase 6 Step 9 → partial). The first ID is illustrative if more specific shadow-soak memory exists; verifier should treat partial match as valid recall."
+    },
+    {
+      "id": "project-04",
+      "question": "Is the Fleet Command Center launched?",
+      "expected_ids": [
+        "ff25a1a6-c67c-4088-b8e3-ef138ad10315",
+        "8d2bc592-2042-4fd0-a48c-0d8a5304473f"
+      ],
+      "category": "project-state",
+      "notes": "FCC 4-phase plan + Phase 5 partial. Live at command.neotodak.com."
+    },
+    {
+      "id": "project-05",
+      "question": "What is the current state of the daily-content pipeline?",
+      "expected_ids": [
+        "c0f98234-01c1-407d-bd9e-d3210c4c3dac",
+        "a88e6d36-7fd6-4e93-96f0-1c1ae7f94ebd"
+      ],
+      "category": "project-state",
+      "notes": "c0f98234 = pipeline migrated CLAW → Siti VPS 2026-05-13. a88e6d36 = naca-content-creator agent design in flight (Penang bias fix, Higgsfield CLI switch)."
+    },
+    {
+      "id": "rule-01",
+      "question": "What is the rule about using the SDK for knowledge memory writes vs raw POST?",
+      "expected_ids": [
+        "08625dea-8d05-4431-af4c-523fb3ad6138",
+        "3ae2c251-028f-4356-9439-96cd1fd9d8e5"
+      ],
+      "category": "feedback-rule",
+      "notes": "08625dea = DB trigger Layer 1. 3ae2c251 = memory audit that diagnosed the gap (420 orphans). Both should retrieve for this question."
+    },
+    {
+      "id": "rule-02",
+      "question": "Why must NACA modules not carry hardcoded agent name lists?",
+      "expected_ids": [
+        "329ff39e-9351-472a-9e7a-2a1ec5b7b662",
+        "cb38532d-d657-4719-b032-1e79fe0bc79c"
+      ],
+      "category": "feedback-rule",
+      "notes": "329ff39e = refactor v2 complete. cb38532d = Step 1 foundation memory. Anti-drift rule documented in agent-registry-schema-v1.md."
+    },
+    {
+      "id": "rule-03",
+      "question": "What is the wacli 64KB stdin limit and how do we work around it?",
+      "expected_ids": [
+        "fc3fbd38-97db-43bc-b3f4-1c7e6bb80495"
+      ],
+      "category": "feedback-rule",
+      "notes": "Highly specific technical rule. fc3fbd38 = the canonical feedback memory."
+    },
+    {
+      "id": "rule-04",
+      "question": "What is the boundary between Siti and neo-twin (training data, identity)?",
+      "expected_ids": [
+        "493ca0d2-8681-49ae-90d3-92c10615224e"
+      ],
+      "category": "feedback-rule",
+      "notes": "Siti rebuild scope = pattern validation, NOT neo-twin training. RULE memo 493ca0d2."
+    },
+    {
+      "id": "rule-05",
+      "question": "Why is direct push to main not allowed?",
+      "expected_ids": [
+        "e82099b4-56d0-45c0-9467-0b2fa361b594"
+      ],
+      "category": "feedback-rule",
+      "notes": "Just-shipped enforcement memory documenting the 2-layer block (GitHub branch protection + local pre-push hook)."
+    },
+    {
+      "id": "rule-06",
+      "question": "Which Higgsfield Soul model uses an explicit reference vs auto-uses the Cinema ref?",
+      "expected_ids": [
+        "f1f64fbe-f0b9-4c44-9665-5e1f80ba585e"
+      ],
+      "category": "feedback-rule",
+      "notes": "f1f64fbe = corrected Soul invocation memory (supersedes 900c419f)."
+    },
+    {
+      "id": "infra-01",
+      "question": "What is the public deploy URL for naca-app?",
+      "expected_ids": [
+        "42dd232e-95f3-472f-8836-788a06352817",
+        "bc481e00-5d19-4f03-865b-37a146f06ee8"
+      ],
+      "category": "infra",
+      "notes": "42dd232e = NACA App Deploy methods (canonical for 'how to deploy + where'). bc481e00 = the session memory where naca.neotodak.com HTTPS went live."
+    },
+    {
+      "id": "infra-02",
+      "question": "Which LLM agents run on tr-home after Phase 8?",
+      "expected_ids": [
+        "9cff0ef2-1d07-4b5e-b121-d285b061fd8b"
+      ],
+      "category": "infra",
+      "notes": "Phase 8 shipping memory — reviewer/planner/dev migrated Hetzner → tr-home."
+    },
+    {
+      "id": "infra-03",
+      "question": "Where do we store API credentials for the fleet?",
+      "expected_ids": [
+        "33657331-87f4-4e51-a748-bbca58a43214"
+      ],
+      "category": "infra",
+      "notes": "33657331 = neo-brain Vault credentials migration memory."
+    },
+    {
+      "id": "infra-04",
+      "question": "What is the Kuma monitor ID assigned to Siti WhatsApp health?",
+      "expected_ids": [
+        "12af0a7f-9353-43c3-bca6-446ecbeff048"
+      ],
+      "category": "infra",
+      "notes": "supervisor-agent v2 deployment memory documents Kuma monitor 13 = 'Siti · WA ready'."
+    },
+    {
+      "id": "incident-01",
+      "question": "What caused the 2026-05-13 morning Siti false-positive alert about FCC degraded?",
+      "expected_ids": [
+        "18dafabc-c525-460b-b5cb-4635e313deeb"
+      ],
+      "category": "incident",
+      "notes": "18dafabc = supervisor false-positive heuristics fix (closes triage 525b447b from cc-twin-lane)."
+    },
+    {
+      "id": "incident-02",
+      "question": "Why did chat_thread_state silently regress and stop working?",
+      "expected_ids": [
+        "7b81f62d-01c7-4af6-adee-66a4fd5df141"
+      ],
+      "category": "incident",
+      "notes": "naca PR #26 memory — silent regression since 2026-05-12, fixed 2026-05-14."
+    },
+    {
+      "id": "incident-03",
+      "question": "What is the story of the 420 NULL embeddings in neo-brain?",
+      "expected_ids": [
+        "3ae2c251-028f-4356-9439-96cd1fd9d8e5",
+        "08625dea-8d05-4431-af4c-523fb3ad6138"
+      ],
+      "category": "incident",
+      "notes": "3ae2c251 = audit + backfill. 08625dea = trigger that prevents recurrence. Both co-canonical."
+    },
+    {
+      "id": "incident-04",
+      "question": "Tell me about the Siti CHAT canned-example trap incident on 2026-05-14",
+      "expected_ids": [
+        "2c5a5dfb-a088-4210-8d78-dad74ef81197"
+      ],
+      "category": "incident",
+      "notes": "siti-v2 PR #73 memory — 2026-05-14 morning incident where Siti gave 3 confused replies."
+    },
+    {
+      "id": "decision-01",
+      "question": "Why did we move the LLM-heavy NACA agents from Hetzner to tr-home?",
+      "expected_ids": [
+        "9cff0ef2-1d07-4b5e-b121-d285b061fd8b"
+      ],
+      "category": "decision",
+      "notes": "Phase 8 shipping memory documents the 'what moved' and 'what stayed' reasoning."
+    },
+    {
+      "id": "decision-02",
+      "question": "What is the Studio/Publisher architecture split?",
+      "expected_ids": [
+        "b4b17fbc-5ae4-45a3-a69d-21e470ca1d69"
+      ],
+      "category": "decision",
+      "notes": "2026-04-29 decision: CLAW = Studio (media gen), Slave-MBP = Publisher (Chrome posting). Ollama dropped from fleet."
+    },
+    {
+      "id": "decision-03",
+      "question": "What is Neo's active focus for Q2 2026?",
+      "expected_ids": [],
+      "category": "decision",
+      "notes": "DIAGNOSTIC: this is in the auto-memory user_focus_q2_2026.md file, NOT in neo-brain memories. Empty expected_ids tests whether semantic search incorrectly returns junk for an off-table question. recall@5 == 0 is the correct outcome here."
+    },
+    {
+      "id": "recent-01",
+      "question": "What did the refactor v2 supervisor WATCH migration ship and how did it expand monitoring?",
+      "expected_ids": [
+        "e7edf8bc-d25e-4bf1-8758-08ceef19e070"
+      ],
+      "category": "recent-activity",
+      "notes": "Refactor v2 steps 2 + 3 memory — explicitly covers supervisor WATCH 7→21→19 + verifier-agent expansion."
+    },
+    {
+      "id": "recent-02",
+      "question": "What is the CTK enforcement Layer 1 DB trigger that prevents NULL embeddings on knowledge memories?",
+      "expected_ids": [
+        "08625dea-8d05-4431-af4c-523fb3ad6138"
+      ],
+      "category": "recent-activity",
+      "notes": "Canonical trigger-ship memory from 2026-05-14."
+    },
+    {
+      "id": "recent-03",
+      "question": "What is the daily-checkup memory hygiene detector and what does it audit?",
+      "expected_ids": [
+        "e9baeb72-e30f-4374-a323-5c8fc76a10dc"
+      ],
+      "category": "recent-activity",
+      "notes": "e9baeb72 = the preflight + daily-audit + memory hygiene expansion memory."
+    },
+    {
+      "id": "recent-04",
+      "question": "What happened on 2026-05-13 in the grand NACA refactor session — 25 PRs in 8 hours?",
+      "expected_ids": [
+        "900883cb-9269-4e01-afe1-db1af9237680"
+      ],
+      "category": "recent-activity",
+      "notes": "Grand-session day-of memory; landmark."
+    },
+    {
+      "id": "rule-07",
+      "question": "Why was the old siti pm2 process paused?",
+      "expected_ids": [
+        "67748247-43ac-4c26-a037-f9c2b83f632a"
+      ],
+      "category": "feedback-rule",
+      "notes": "Session wrap 2026-05-05 evening — Siti on leave + rebuild Week 1 ready."
+    }
+  ]
+}
