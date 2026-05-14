@@ -62,11 +62,13 @@ REPOS=(
 # The exact protection body. `required_status_checks: null` because we don't
 # have CI gates yet; `enforce_admins: true` because the whole point is to stop
 # even admin (Neo) from direct-pushing by accident.
+## Personal-account repos don't support dismissal_restrictions or restrictions
+## (those are org-only). Keep the body minimal — PR-required + no force-push +
+## no deletion + admins-bound is enough to block direct push.
 PROTECTION_BODY='{
   "required_status_checks": null,
   "enforce_admins": true,
   "required_pull_request_reviews": {
-    "dismissal_restrictions": {},
     "dismiss_stale_reviews": false,
     "require_code_owner_reviews": false,
     "required_approving_review_count": 0,
@@ -75,10 +77,8 @@ PROTECTION_BODY='{
   "restrictions": null,
   "allow_force_pushes": false,
   "allow_deletions": false,
-  "block_creations": false,
   "required_conversation_resolution": false,
-  "lock_branch": false,
-  "allow_fork_syncing": false
+  "lock_branch": false
 }'
 
 apply_one() {

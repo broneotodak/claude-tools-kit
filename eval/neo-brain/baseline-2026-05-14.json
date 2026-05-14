@@ -1,0 +1,1618 @@
+{
+  "summary": {
+    "ran_at": "2026-05-14T17:42:45.686Z",
+    "eval_set": "./eval/neo-brain/eval-set-v1.json",
+    "search_opts": {
+      "k": 10,
+      "minSimilarity": 0.35
+    },
+    "total_cases": 30,
+    "cases_with_expected": 29,
+    "diagnostic_cases_no_expected": 1,
+    "metrics": {
+      "recall@5": 0.5689655172413793,
+      "recall@10": 0.6551724137931034,
+      "hit@5": 0.6206896551724138,
+      "hit@10": 0.7241379310344828,
+      "MRR": 0.5894088669950739
+    }
+  },
+  "per_question": [
+    {
+      "id": "person-01",
+      "question": "Who is Lan? Is he the same person as Rokiah?",
+      "category": "person-lookup",
+      "expected_ids": [
+        "f59a5e0f-4685-444c-b5ef-d72bce529edd"
+      ],
+      "returned_top10": [
+        "a9dc47b9-4e41-404d-a0fb-21dae7488ee2",
+        "edb987a7-12ef-4be8-b2cd-9d4d7b187f82",
+        "2d5d21e1-cc7a-4664-b2cc-fe79ca619ccc",
+        "bef5b8d5-6635-4454-ba13-a8bb34a7afb9",
+        "2c87fb35-6858-49a6-bb36-41a2d4d2033e",
+        "24e76098-b384-4315-8de1-5cfe68b6a056",
+        "40015fcf-606f-43e2-a2de-f0fcf7531ce7",
+        "0e7f0f96-cb10-4fff-8412-c4c3695551e6",
+        "73639b09-c2c9-46a9-a5c1-bd7e024f421b",
+        "f0bac016-a087-42cb-b948-3c1e0a49010d"
+      ],
+      "first_hit_rank": null,
+      "recall5": 0,
+      "recall10": 0,
+      "hit5": 0,
+      "hit10": 0,
+      "mrr_contribution": 0,
+      "top5_preview": [
+        {
+          "id": "a9dc47b9-4e41-404d-a0fb-21dae7488ee2",
+          "similarity": 0.649775693312849,
+          "content_preview": "Phone call with Lan (+601111011111) on 2026-05-04.\nDuration: 71s. 2 turns.\n\nTranscript:\nSiti: Assalamualaikum Lan! Ini S"
+        },
+        {
+          "id": "edb987a7-12ef-4be8-b2cd-9d4d7b187f82",
+          "similarity": 0.613136508399976,
+          "content_preview": "Lan Todak user access created for shared memory system with cursor integration. Access level: READ-WRITE on shared memor"
+        },
+        {
+          "id": "2d5d21e1-cc7a-4664-b2cc-fe79ca619ccc",
+          "similarity": 0.606396248929904,
+          "content_preview": "Phone call with Lan (+601111011111) on 2026-05-04.\nDuration: 41s. 3 turns.\n\nTranscript:\nSiti: Assalamualaikum Lan! Ini S"
+        },
+        {
+          "id": "bef5b8d5-6635-4454-ba13-a8bb34a7afb9",
+          "similarity": 0.598009019170011,
+          "content_preview": "[image] inbound in group \"Lan Epul Neo\", sent by Broneotodak\nRecent thread: Broneotodak: aku sedar ada few ‘term’ yang d"
+        },
+        {
+          "id": "2c87fb35-6858-49a6-bb36-41a2d4d2033e",
+          "similarity": 0.596291838210756,
+          "content_preview": "[image] inbound in group \"TODAK®️ Strategic Council\", sent by Roslan Rashid\nCaption: Kalau ikutkan ni pun kristian juga\n"
+        }
+      ]
+    },
+    {
+      "id": "person-02",
+      "question": "Who is Imel and what does she do in the fleet?",
+      "category": "person-lookup",
+      "expected_ids": [
+        "611c2797-4633-4e46-8555-da383fc844bf"
+      ],
+      "returned_top10": [
+        "90aaf60e-6330-4b50-82cb-a552cf3b26bd",
+        "fd941015-5395-4e76-a54b-f107e72ce4b2",
+        "5199ac75-deb7-4868-84e7-a96c82871911",
+        "153bb100-ccd0-49aa-92bc-b10847d0dfbb",
+        "5b27019b-ffba-41e7-9a8a-a94cbf1d43d9",
+        "52ee43dc-7dea-4028-b707-6ba97cc90584",
+        "ff25a1a6-c67c-4088-b8e3-ef138ad10315",
+        "3374c704-bb84-4ba3-a59f-03d5b0cbc3a2",
+        "fc0135ac-6a99-4bee-84ca-971734dd4370",
+        "9a31ce7f-7724-449a-b254-a9029891ded9"
+      ],
+      "first_hit_rank": null,
+      "recall5": 0,
+      "recall10": 0,
+      "hit5": 0,
+      "hit10": 0,
+      "mrr_contribution": 0,
+      "top5_preview": [
+        {
+          "id": "90aaf60e-6330-4b50-82cb-a552cf3b26bd",
+          "similarity": 0.605307670524905,
+          "content_preview": "Plan for Imel to visit Malaysia from April 25th to May 2nd to learn Claude Code and ecosystem. She needs to provide cost"
+        },
+        {
+          "id": "fd941015-5395-4e76-a54b-f107e72ce4b2",
+          "similarity": 0.558309185373575,
+          "content_preview": "Phase 4 Step A SHIPPED 2026-04-25 — fleet auto-discovery for new MBP nodes.\nPieces: mac-heartbeat.js (generic Mac heartb"
+        },
+        {
+          "id": "5199ac75-deb7-4868-84e7-a96c82871911",
+          "similarity": 0.546152356114743,
+          "content_preview": "PR awaiting decision: broneotodak/claude-tools-kit#2 — spec: mark Fleet Command Center Phase 2 + 3 as shipped. Reviewer "
+        },
+        {
+          "id": "153bb100-ccd0-49aa-92bc-b10847d0dfbb",
+          "similarity": 0.53888625928771,
+          "content_preview": "NACA Fleet screen v1 implemented (2026-05-03): First screen of the NACA UI pivot is built and compiles clean against rea"
+        },
+        {
+          "id": "5b27019b-ffba-41e7-9a8a-a94cbf1d43d9",
+          "similarity": 0.535648829478481,
+          "content_preview": "NACA app current state — for Fleet Command Center consolidation review (2026-05-03): Snapshot requested by command.neoto"
+        }
+      ]
+    },
+    {
+      "id": "person-03",
+      "question": "What does Mudzakkir Hasan do at Todak Studios?",
+      "category": "person-lookup",
+      "expected_ids": [
+        "25a98909-aadd-4956-adb3-2f3f1634074c"
+      ],
+      "returned_top10": [
+        "ae912300-abf0-4ab7-8b1c-a9338b645e0d",
+        "10a3ccae-fe06-4722-8332-59ec4bd2556c",
+        "52bbda5f-d21a-4feb-95b7-704da713470a",
+        "a13ec8cb-2b6c-4ee6-9e4f-acdb728f5dbe",
+        "f3034e7b-c49d-44dd-9a8b-489ef6eceddf",
+        "857e70db-e7c2-4d9f-9a29-ec8d3d959bbc",
+        "95762f05-9bfe-4dcc-b3f1-2030dc1d7732",
+        "f03d0fbd-2b7a-40a9-a33f-d98adc84322e",
+        "47f50d0d-2a0c-4b30-b909-7e8bdb16c172",
+        "8b22477d-047a-4c09-b1c3-3e22205316ab"
+      ],
+      "first_hit_rank": null,
+      "recall5": 0,
+      "recall10": 0,
+      "hit5": 0,
+      "hit10": 0,
+      "mrr_contribution": 0,
+      "top5_preview": [
+        {
+          "id": "ae912300-abf0-4ab7-8b1c-a9338b645e0d",
+          "similarity": 0.652896296869047,
+          "content_preview": "MASTRA GAME INFO: A 5v5 MOBA (Multiplayer Online Battle Arena) game inspired by Southeast Asian culture and mythology, s"
+        },
+        {
+          "id": "10a3ccae-fe06-4722-8332-59ec4bd2556c",
+          "similarity": 0.651898066975993,
+          "content_preview": "TODAK ECOSYSTEM COMPREHENSIVE OVERVIEW\n=======================================\n\n🏢 TODAK HOLDING STRUCTURE:\n• TODAK Hold"
+        },
+        {
+          "id": "52bbda5f-d21a-4feb-95b7-704da713470a",
+          "similarity": 0.647822171850403,
+          "content_preview": "TODAK AI HQ (active): AI-powered digital headquarters. URL: https://todak.ai"
+        },
+        {
+          "id": "a13ec8cb-2b6c-4ee6-9e4f-acdb728f5dbe",
+          "similarity": 0.644171202829851,
+          "content_preview": "Dokumen Tenancy Assignment diterima. Ia merekodkan pemindahan hak sewaan dari Todak Digitech Sdn. Bhd. kepada Todak Stud"
+        },
+        {
+          "id": "f3034e7b-c49d-44dd-9a8b-489ef6eceddf",
+          "similarity": 0.641905114132439,
+          "content_preview": "[generated image] A group of people from Todak Studios having a conversation, in a casual, friendly setting. Focus on th"
+        }
+      ]
+    },
+    {
+      "id": "project-01",
+      "question": "What is NACA Refactor v2 / Agent Plug and Play?",
+      "category": "project-state",
+      "expected_ids": [
+        "329ff39e-9351-472a-9e7a-2a1ec5b7b662",
+        "900883cb-9269-4e01-afe1-db1af9237680"
+      ],
+      "returned_top10": [
+        "900883cb-9269-4e01-afe1-db1af9237680",
+        "4f7285cf-1738-4a12-9806-a53542400f71",
+        "152b36a2-3326-4da4-9433-5fca2ec1605d",
+        "1b9be30d-7c78-4527-85fb-2c1a4cadcde2",
+        "fc9690d8-f0d2-465d-a498-b3f51916bd4e",
+        "c1a9b95f-8f86-40db-a7b6-1f75208ce161",
+        "f5bb30e4-cdc3-4d60-9dac-ad19312316c9",
+        "8ff49154-410b-40fb-9828-9f2b6f91404d",
+        "8e111b05-745f-41fb-af24-578443b4c8e7",
+        "d9f23ed6-1af4-45e8-a3c5-83ad167020fc"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 0.5,
+      "recall10": 0.5,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "900883cb-9269-4e01-afe1-db1af9237680",
+          "similarity": 0.685765678992195,
+          "content_preview": "2026-05-13 NACA grand session — 25 PRs in 8 hours, one persistent NACA CC + parallel Siti CC.\n\nTHE DAY IN ONE PARAGRAPH:"
+        },
+        {
+          "id": "4f7285cf-1738-4a12-9806-a53542400f71",
+          "similarity": 0.668760472212185,
+          "content_preview": "NACA (Neo Agentic Centre Application) is Neo's unified command centre app built with Flutter. It runs on the same VPS as"
+        },
+        {
+          "id": "152b36a2-3326-4da4-9433-5fca2ec1605d",
+          "similarity": 0.664780394103037,
+          "content_preview": "PR awaiting decision: broneotodak/naca-app#21 — probe. Reviewer verdict: approve."
+        },
+        {
+          "id": "1b9be30d-7c78-4527-85fb-2c1a4cadcde2",
+          "similarity": 0.65746832683977,
+          "content_preview": "NACA platform refactor — spec locked at broneotodak/naca (2026-05-11): ================================================="
+        },
+        {
+          "id": "fc9690d8-f0d2-465d-a498-b3f51916bd4e",
+          "similarity": 0.656620585910335,
+          "content_preview": "NACA agents vs hardware — the classification rule: Two separate concepts that must NEVER be mixed:\n\n1. AGENTS / DEPARTME"
+        }
+      ]
+    },
+    {
+      "id": "project-02",
+      "question": "Is the Todak Academy cutover going ahead or postponed?",
+      "category": "project-state",
+      "expected_ids": [
+        "11bdb0b4-25a4-4259-bf53-87d9065e69a2",
+        "bebf22ef-ebc2-444e-9332-b34ab10d1e05"
+      ],
+      "returned_top10": [
+        "bebf22ef-ebc2-444e-9332-b34ab10d1e05",
+        "e88b62fc-22d7-4d3e-a271-1f72090cf0b7",
+        "47f50d0d-2a0c-4b30-b909-7e8bdb16c172",
+        "4be862ba-af78-45b1-b276-af9f2d4e5428",
+        "08b07076-4ff1-4cba-b1f9-40d19f37b775",
+        "1cdd9efc-1a62-4add-b0f7-a12cc767632e",
+        "4b076ac8-fb36-4d59-8e2f-e41e35d09c5e",
+        "caa04fec-cca2-48c8-85ee-a0b6d714d3c1",
+        "f03d0fbd-2b7a-40a9-a33f-d98adc84322e",
+        "741db3e6-5897-42dc-b957-4277ea015a42"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 0.5,
+      "recall10": 0.5,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "bebf22ef-ebc2-444e-9332-b34ab10d1e05",
+          "similarity": 0.720533520526839,
+          "content_preview": "Neo pulled the plug on the Sat 2026-05-09 midnight cutover. Reason: finance accuracy fixes from this week (PR #18 invert"
+        },
+        {
+          "id": "e88b62fc-22d7-4d3e-a271-1f72090cf0b7",
+          "similarity": 0.699205389592835,
+          "content_preview": "Starting fresh cleanup of TODAK AI project - removing old files, keeping minimal approach"
+        },
+        {
+          "id": "47f50d0d-2a0c-4b30-b909-7e8bdb16c172",
+          "similarity": 0.699025992060132,
+          "content_preview": "Current project: neotodak.com portal transformation. Previous: KENAL admin via Cursor AI."
+        },
+        {
+          "id": "4be862ba-af78-45b1-b276-af9f2d4e5428",
+          "similarity": 0.683473904760166,
+          "content_preview": "Analyzed neotodak-ai-labs portfolio site. Updates needed: 1) ARS is now ACTIVE with landing page at ars.neotodak.com (co"
+        },
+        {
+          "id": "08b07076-4ff1-4cba-b1f9-40d19f37b775",
+          "similarity": 0.679090285408007,
+          "content_preview": "academy.neotodak.com is the staging environment for Todak Academy team feedback during the postponed cutover (decided 20"
+        }
+      ]
+    },
+    {
+      "id": "project-03",
+      "question": "What phase is the neo-twin / digital twin in right now?",
+      "category": "project-state",
+      "expected_ids": [
+        "ccaa771e-7ce9-449a-8b17-54fe9d782e1e"
+      ],
+      "returned_top10": [
+        "281fd0e4-be35-45bf-a3f1-caa517f7d0bc",
+        "ccaa771e-7ce9-449a-8b17-54fe9d782e1e",
+        "665336f4-74e7-44fd-938c-251a0f6c9c1f",
+        "96ab7efd-a768-492e-b511-425f4dd428e7",
+        "c7cbb56b-a81b-42fd-8ce5-6d4314e6a5d7",
+        "43619262-7593-4537-a0ff-29322a73c905",
+        "ff25a1a6-c67c-4088-b8e3-ef138ad10315",
+        "2a255884-fded-443d-b165-9d795871814b",
+        "8d3ff416-67f9-4c3d-8a95-97531ed32b3b",
+        "87f1347f-0f3c-4aa5-ad7f-b8f2eff0e3c3"
+      ],
+      "first_hit_rank": 2,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 0.5,
+      "top5_preview": [
+        {
+          "id": "281fd0e4-be35-45bf-a3f1-caa517f7d0bc",
+          "similarity": 0.651808698702088,
+          "content_preview": "FULL migration complete + NClaw cutover: Apr 19 2026 — all four phases shipped. Phase 3: migrated claude_desktop_memory("
+        },
+        {
+          "id": "ccaa771e-7ce9-449a-8b17-54fe9d782e1e",
+          "similarity": 0.647512182292521,
+          "content_preview": "shared_infra_change — neo-twin-orchestrator deployed + agent_registry row + Phase 6 Step 9 → partial (2026-05-03).\n\nPhas"
+        },
+        {
+          "id": "665336f4-74e7-44fd-938c-251a0f6c9c1f",
+          "similarity": 0.644535541386602,
+          "content_preview": "neo-twin extraction Phase A complete — repo scaffolded + staged on Twin VPS: Phase A of broneotodak/claude-tools-kit#46 "
+        },
+        {
+          "id": "96ab7efd-a768-492e-b511-425f4dd428e7",
+          "similarity": 0.637147903997322,
+          "content_preview": "[SUPERSEDED 2026-04-11 — see row 4898 for authoritative public contact card. This row has stale handles and follower cou"
+        },
+        {
+          "id": "c7cbb56b-a81b-42fd-8ce5-6d4314e6a5d7",
+          "similarity": 0.635075863128843,
+          "content_preview": "Comprehensive Phase 1-3 progress doc updated 2026-04-25 (~22:30 MYT). Status: Phase 1 (Foundation) DONE — Uptime Kuma + "
+        }
+      ]
+    },
+    {
+      "id": "project-04",
+      "question": "Is the Fleet Command Center launched?",
+      "category": "project-state",
+      "expected_ids": [
+        "ff25a1a6-c67c-4088-b8e3-ef138ad10315",
+        "8d2bc592-2042-4fd0-a48c-0d8a5304473f"
+      ],
+      "returned_top10": [
+        "ff25a1a6-c67c-4088-b8e3-ef138ad10315",
+        "5199ac75-deb7-4868-84e7-a96c82871911",
+        "53f4aab1-54dd-4310-b670-b37c790fc9d2",
+        "fc0135ac-6a99-4bee-84ca-971734dd4370",
+        "8d2bc592-2042-4fd0-a48c-0d8a5304473f",
+        "033b9e6d-fe68-472f-a324-8eec3be2941e",
+        "c470f8c7-7570-45b7-98f4-12051d483589",
+        "3374c704-bb84-4ba3-a59f-03d5b0cbc3a2",
+        "5b27019b-ffba-41e7-9a8a-a94cbf1d43d9",
+        "5d7ce9ac-6080-473d-9b80-b81fea3fba0a"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "ff25a1a6-c67c-4088-b8e3-ef138ad10315",
+          "similarity": 0.671113686904854,
+          "content_preview": "Fleet Command Center — 4-phase plan (decision): Decision (Neo, 2026-05-03): split tr-home box dashboard from a separate "
+        },
+        {
+          "id": "5199ac75-deb7-4868-84e7-a96c82871911",
+          "similarity": 0.667221317748057,
+          "content_preview": "PR awaiting decision: broneotodak/claude-tools-kit#2 — spec: mark Fleet Command Center Phase 2 + 3 as shipped. Reviewer "
+        },
+        {
+          "id": "53f4aab1-54dd-4310-b670-b37c790fc9d2",
+          "similarity": 0.657118296413321,
+          "content_preview": "Fleet Command Center Phase 2 shipped — command.neotodak.com: DEPLOYED 2026-05-03 — Phase 2 of Fleet Command Center plan "
+        },
+        {
+          "id": "fc0135ac-6a99-4bee-84ca-971734dd4370",
+          "similarity": 0.646627097609201,
+          "content_preview": "PR awaiting decision: broneotodak/claude-tools-kit#3 — spec: address reviewer feedback on fleet-command-center. Reviewer"
+        },
+        {
+          "id": "8d2bc592-2042-4fd0-a48c-0d8a5304473f",
+          "similarity": 0.629604066728983,
+          "content_preview": "FCC Phase 5 partial — autostart + /api/health + NACA consumption + linger: DEPLOYED 2026-05-03 — Phase 5 of Fleet Comman"
+        }
+      ]
+    },
+    {
+      "id": "project-05",
+      "question": "What is the current state of the daily-content pipeline?",
+      "category": "project-state",
+      "expected_ids": [
+        "c0f98234-01c1-407d-bd9e-d3210c4c3dac",
+        "a88e6d36-7fd6-4e93-96f0-1c1ae7f94ebd"
+      ],
+      "returned_top10": [
+        "c0f98234-01c1-407d-bd9e-d3210c4c3dac",
+        "a88e6d36-7fd6-4e93-96f0-1c1ae7f94ebd",
+        "7dd97fe0-04a6-417f-88e1-74ea540cedb8",
+        "216767bd-2815-4271-b470-e8dd8b0e4167",
+        "aeb1889d-e3f0-4e47-8060-58ad2073c7a6",
+        "9583fa2a-f74a-4010-aae3-1a52934c290e",
+        "ceaafe27-8c07-4817-9a70-a61c85197784",
+        "f288306b-4a9e-46ee-acd2-1f7a3de4f28c",
+        "6984d1d1-5158-4518-955e-e933be1a85ba",
+        "af9a0aaf-effa-4478-831b-9536491794c3"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "c0f98234-01c1-407d-bd9e-d3210c4c3dac",
+          "similarity": 0.652924788431617,
+          "content_preview": "NACA daily-content pipeline revamp shipped 2026-05-13: NACA daily-content pipeline migrated from CLAW (Mac) to Siti VPS,"
+        },
+        {
+          "id": "a88e6d36-7fd6-4e93-96f0-1c1ae7f94ebd",
+          "similarity": 0.633538283485253,
+          "content_preview": "naca-content-creator agent design in flight 2026-05-14: A new NACA agent — `content-creator` (working name) — is being d"
+        },
+        {
+          "id": "7dd97fe0-04a6-417f-88e1-74ea540cedb8",
+          "similarity": 0.619464162076537,
+          "content_preview": "First fully-autonomous daily-content cycle live (2026-04-30): End-to-end NACA content pipeline shipped + verified. CLAW "
+        },
+        {
+          "id": "216767bd-2815-4271-b470-e8dd8b0e4167",
+          "similarity": 0.614333827793588,
+          "content_preview": "daily-checkup-agent shipped (Phase 7 Step 1, Phase 1 detector-only): New fleet member: daily-checkup, 5th NAS Docker age"
+        },
+        {
+          "id": "aeb1889d-e3f0-4e47-8060-58ad2073c7a6",
+          "similarity": 0.609642465993505,
+          "content_preview": "Fixed 14-day silent daily-content failure: CLAW daily-content has been GENERATING content fine for 14 days but failing t"
+        }
+      ]
+    },
+    {
+      "id": "rule-01",
+      "question": "What is the rule about using the SDK for knowledge memory writes vs raw POST?",
+      "category": "feedback-rule",
+      "expected_ids": [
+        "08625dea-8d05-4431-af4c-523fb3ad6138",
+        "3ae2c251-028f-4356-9439-96cd1fd9d8e5"
+      ],
+      "returned_top10": [
+        "86089328-29dc-4784-b777-6f8fd67a1f91",
+        "f434512e-fb0c-4452-ba97-68d03af719e1",
+        "9ae6ec6f-e091-4a87-b116-e06f9e94f531",
+        "0b51659b-60b5-42da-8877-1bb9876f1b8a",
+        "af618cec-6f3c-478f-b82f-780a60afc7d7",
+        "e1bc12ce-6cbb-4a8c-978b-1ff825a2c256",
+        "f3aac30f-9e5a-4624-a0fb-9071fb5efa46",
+        "08625dea-8d05-4431-af4c-523fb3ad6138",
+        "7e1f7d78-9154-411c-9c6b-01e4e8be4a10",
+        "f56c9607-796f-4414-9d8f-7640c354c1e4"
+      ],
+      "first_hit_rank": 8,
+      "recall5": 0,
+      "recall10": 0.5,
+      "hit5": 0,
+      "hit10": 1,
+      "mrr_contribution": 0.125,
+      "top5_preview": [
+        {
+          "id": "86089328-29dc-4784-b777-6f8fd67a1f91",
+          "similarity": 0.614649581662766,
+          "content_preview": "## User Requests\n- yeah, just send it to claw, this sucks though.. our communication with claw have so many imperfection"
+        },
+        {
+          "id": "f434512e-fb0c-4452-ba97-68d03af719e1",
+          "similarity": 0.612911977949061,
+          "content_preview": "Phase 4 WIP audit on Hetzner Siti VPS (178.156.241.204), 2026-04-29:\n\nFINDING 1 — @todak/memory SDK is NOT used by any N"
+        },
+        {
+          "id": "9ae6ec6f-e091-4a87-b116-e06f9e94f531",
+          "similarity": 0.612212573621017,
+          "content_preview": "Higgsfield MCP vs Direct REST — keep poster-agent on REST · 2026-05-05: Both paths hit the same Higgsfield account/billi"
+        },
+        {
+          "id": "0b51659b-60b5-42da-8877-1bb9876f1b8a",
+          "similarity": 0.609357008903016,
+          "content_preview": "CURSOR-PGVECTOR MEMORY WORKFLOW (CORRECTED)\n\n✅ CORRECT COLUMN USAGE:\n- **source**: The TOOL/APPLICATION creating the mem"
+        },
+        {
+          "id": "af618cec-6f3c-478f-b82f-780a60afc7d7",
+          "similarity": 0.608246359072141,
+          "content_preview": "Migration complete verify dual-write: Testing that save-memory.js now dual-writes to both legacy and neo-brain after mig"
+        }
+      ]
+    },
+    {
+      "id": "rule-02",
+      "question": "Why must NACA modules not carry hardcoded agent name lists?",
+      "category": "feedback-rule",
+      "expected_ids": [
+        "329ff39e-9351-472a-9e7a-2a1ec5b7b662",
+        "cb38532d-d657-4719-b032-1e79fe0bc79c"
+      ],
+      "returned_top10": [
+        "fc9690d8-f0d2-465d-a498-b3f51916bd4e",
+        "d6c0a02a-6bea-45c0-847b-aac2c98462bc",
+        "4f7285cf-1738-4a12-9806-a53542400f71",
+        "900883cb-9269-4e01-afe1-db1af9237680",
+        "cb38532d-d657-4719-b032-1e79fe0bc79c",
+        "0bb66e82-0365-40fe-a3b8-8df7f3480823",
+        "1b9be30d-7c78-4527-85fb-2c1a4cadcde2",
+        "6c146ace-9385-47c3-b485-c72a5c5a3b40",
+        "95054e99-f242-4c39-857a-b6f78c4c1282",
+        "49557f7e-3523-4dd7-abd4-451226283793"
+      ],
+      "first_hit_rank": 5,
+      "recall5": 0.5,
+      "recall10": 0.5,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 0.2,
+      "top5_preview": [
+        {
+          "id": "fc9690d8-f0d2-465d-a498-b3f51916bd4e",
+          "similarity": 0.704698513043638,
+          "content_preview": "NACA agents vs hardware — the classification rule: Two separate concepts that must NEVER be mixed:\n\n1. AGENTS / DEPARTME"
+        },
+        {
+          "id": "d6c0a02a-6bea-45c0-847b-aac2c98462bc",
+          "similarity": 0.672330642042463,
+          "content_preview": "Phase 5 Step 4 — agent_registry table + dual-panel refactor: Built the agent registry: single source of truth for the NA"
+        },
+        {
+          "id": "4f7285cf-1738-4a12-9806-a53542400f71",
+          "similarity": 0.664660285577537,
+          "content_preview": "NACA (Neo Agentic Centre Application) is Neo's unified command centre app built with Flutter. It runs on the same VPS as"
+        },
+        {
+          "id": "900883cb-9269-4e01-afe1-db1af9237680",
+          "similarity": 0.662170430705401,
+          "content_preview": "2026-05-13 NACA grand session — 25 PRs in 8 hours, one persistent NACA CC + parallel Siti CC.\n\nTHE DAY IN ONE PARAGRAPH:"
+        },
+        {
+          "id": "cb38532d-d657-4719-b032-1e79fe0bc79c",
+          "similarity": 0.661821980451041,
+          "content_preview": "Registry-driven core (v2) Step 1 shipped 2026-05-13.\n\nFoundation: lock the canonical shape of agent_registry.meta + proj"
+        }
+      ]
+    },
+    {
+      "id": "rule-03",
+      "question": "What is the wacli 64KB stdin limit and how do we work around it?",
+      "category": "feedback-rule",
+      "expected_ids": [
+        "fc3fbd38-97db-43bc-b3f4-1c7e6bb80495"
+      ],
+      "returned_top10": [
+        "fc3fbd38-97db-43bc-b3f4-1c7e6bb80495",
+        "c446085d-0a97-4d17-b7cf-c33b1d7171f3",
+        "55714cb7-2897-4679-9963-20a496c38c6e",
+        "b9ae5c4e-f4ac-4c18-8ac3-0ee326536b12",
+        "1842cb86-d9ab-4335-9b1a-8d3540b8ed0b",
+        "566902b5-cebe-4c92-a1be-eea36b1c2a8b",
+        "33d22039-2af6-466b-b24e-3752264d4c0a",
+        "716f195e-848d-40cb-8615-fe5de98642d4",
+        "09446e10-4eb7-4e91-bcf6-cd3b76e4b728",
+        "580d933e-894f-4395-a3da-ab34a405c806"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "fc3fbd38-97db-43bc-b3f4-1c7e6bb80495",
+          "similarity": 0.771032647263405,
+          "content_preview": "wacli reads stdin via Go bufio.Scanner — 64KB limit; bridge media via tempfile: wacli (nclaw-wacli) reads stdin commands"
+        },
+        {
+          "id": "c446085d-0a97-4d17-b7cf-c33b1d7171f3",
+          "similarity": 0.628987867339275,
+          "content_preview": "## User Requests\n- whew our wacli will takes a long time. maybe because it's sooo huge : Connected.\n\nProcessing history "
+        },
+        {
+          "id": "55714cb7-2897-4679-9963-20a496c38c6e",
+          "similarity": 0.627460638618302,
+          "content_preview": "## User Requests\n- broneotodak@Mac ~ %  wacli auth \nstore is locked (another wacli is running?): resource temporarily un"
+        },
+        {
+          "id": "b9ae5c4e-f4ac-4c18-8ac3-0ee326536b12",
+          "similarity": 0.620793168521195,
+          "content_preview": "wacli send_document added — Siti can now send PDFs/files via WA: 2026-04-27 added send_document case to /home/openclaw/n"
+        },
+        {
+          "id": "1842cb86-d9ab-4335-9b1a-8d3540b8ed0b",
+          "similarity": 0.607036063131595,
+          "content_preview": "siti-ingest /send endpoint live · wacliHttpTransport ready · 2026-05-07: PR-A complete · Week 2 day 1.\n\n== SHIPPED ==\n\n1"
+        }
+      ]
+    },
+    {
+      "id": "rule-04",
+      "question": "What is the boundary between Siti and neo-twin (training data, identity)?",
+      "category": "feedback-rule",
+      "expected_ids": [
+        "493ca0d2-8681-49ae-90d3-92c10615224e"
+      ],
+      "returned_top10": [
+        "493ca0d2-8681-49ae-90d3-92c10615224e",
+        "d086d0d4-d90f-4f68-8e6b-5ce5337a6cd1",
+        "03cd81a5-40fa-4b0a-8297-190611dcb38b",
+        "b44dd580-6e1b-404f-aece-d7a194358305",
+        "1e07cb72-513a-4f16-b575-1343b057dcc2",
+        "75d67259-c8f6-43fd-bb44-0b2f6d4c52bf",
+        "c1ee67d4-88ab-4c86-9c50-60e3c859e1c5",
+        "0e70dbf0-315f-4f1b-aee6-4306f07800e7",
+        "93bf76ca-aae2-445f-a996-3cc93d3bcafb",
+        "ed99e41f-70dc-4b60-a186-e35939e7a1f7"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "493ca0d2-8681-49ae-90d3-92c10615224e",
+          "similarity": 0.737300269845117,
+          "content_preview": "Siti rebuild scope: pattern validation, NOT Neo-twin training: RULE: When working on the Siti rebuild (broneotodak/siti-"
+        },
+        {
+          "id": "d086d0d4-d90f-4f68-8e6b-5ce5337a6cd1",
+          "similarity": 0.681551793084052,
+          "content_preview": "twin-ingest got polluted by reusing one project for Siti AND tr-home: Said by Neo on 2026-05-09 after we found 235 peopl"
+        },
+        {
+          "id": "03cd81a5-40fa-4b0a-8297-190611dcb38b",
+          "similarity": 0.668562104679336,
+          "content_preview": "PLANNED: Face Recognition Pipeline for Siti (NClaw VPS)\n\nGoal: Send a photo of a contact → Siti remembers their face → f"
+        },
+        {
+          "id": "b44dd580-6e1b-404f-aece-d7a194358305",
+          "similarity": 0.659240616963308,
+          "content_preview": "Phone call between Siti and Neo (Apr 22 2026, 68 seconds):\nSiti called Neo on behalf of himself (test call). Conversatio"
+        },
+        {
+          "id": "1e07cb72-513a-4f16-b575-1343b057dcc2",
+          "similarity": 0.65006401556425,
+          "content_preview": "Siti VPS — Face Recognition DEPLOYED (Apr 22, 2026)\n\n== INFRASTRUCTURE ==\n- Python microservice: /home/openclaw/face-ser"
+        }
+      ]
+    },
+    {
+      "id": "rule-05",
+      "question": "Why is direct push to main not allowed?",
+      "category": "feedback-rule",
+      "expected_ids": [
+        "e82099b4-56d0-45c0-9467-0b2fa361b594"
+      ],
+      "returned_top10": [
+        "dfa4ab20-50cd-4fc9-957e-2ef0a888c85a",
+        "6e72d609-bec0-4781-af71-95bf91fc21ee",
+        "892f4aa5-8839-4c83-a01a-16aeeceb70f1",
+        "efe33e0f-9d05-495a-bb5b-061059a3ac32",
+        "83a81488-02b9-43d9-bb63-177b92c0c098",
+        "d5a9019b-29d8-4c4a-8a7c-5b4f2aae196d",
+        "33f07aad-bbda-4559-a9f2-a12e49cd6164",
+        "befc9797-1f75-41d7-bfed-bec597d1b946",
+        "0ba4a366-d004-4c38-9b8e-fa586106b547",
+        "ae313e9e-a4b3-4aff-9f41-b0b2b00f8aad"
+      ],
+      "first_hit_rank": null,
+      "recall5": 0,
+      "recall10": 0,
+      "hit5": 0,
+      "hit10": 0,
+      "mrr_contribution": 0,
+      "top5_preview": [
+        {
+          "id": "dfa4ab20-50cd-4fc9-957e-2ef0a888c85a",
+          "similarity": 0.620017038534048,
+          "content_preview": "Human-driven PRs from terminal: merge directly, skip WA loop: Rule (effective 2026-04-28): when Claude Code session crea"
+        },
+        {
+          "id": "6e72d609-bec0-4781-af71-95bf91fc21ee",
+          "similarity": 0.596998280722979,
+          "content_preview": "## User Requests\n- Yeah, let's pull the entire project into my machine. in the same time,you want me to create a github "
+        },
+        {
+          "id": "892f4aa5-8839-4c83-a01a-16aeeceb70f1",
+          "similarity": 0.593034475717807,
+          "content_preview": "INTENT (source: github_webhook, reporter: TodakSoftware):\n\"[github] push to broneotodak/presentation@main — 1 commit(s)."
+        },
+        {
+          "id": "efe33e0f-9d05-495a-bb5b-061059a3ac32",
+          "similarity": 0.586003694556701,
+          "content_preview": "PR for project=nclaw-dashboard, repo=broneotodak/siti:\nBUG: \"Anomalous commit detected on broneotodak/siti@main via GitH"
+        },
+        {
+          "id": "83a81488-02b9-43d9-bb63-177b92c0c098",
+          "similarity": 0.585813240377723,
+          "content_preview": "## User Requests\n- Same risk applies to the 9 Tencent accounts — are those also under a Digitech reseller umbrella?    -"
+        }
+      ]
+    },
+    {
+      "id": "rule-06",
+      "question": "Which Higgsfield Soul model uses an explicit reference vs auto-uses the Cinema ref?",
+      "category": "feedback-rule",
+      "expected_ids": [
+        "f1f64fbe-f0b9-4c44-9665-5e1f80ba585e"
+      ],
+      "returned_top10": [
+        "f1f64fbe-f0b9-4c44-9665-5e1f80ba585e",
+        "900c419f-a08c-4e0d-a01d-667b82d42583",
+        "9ae6ec6f-e091-4a87-b116-e06f9e94f531",
+        "04bb84d8-c1a3-4aae-bf21-bad613469152",
+        "b7cd06b5-f10d-47f2-826b-b4a5dd9438e1",
+        "c0f98234-01c1-407d-bd9e-d3210c4c3dac",
+        "ff19bff4-46b6-4dde-a863-8a9ddbfab743",
+        "dc7c893f-64ce-4254-8129-3c19cb3047af",
+        "417d7516-47c1-4a6c-a0e6-63d3c0d898ce",
+        "b4b17fbc-5ae4-45a3-a69d-21e470ca1d69"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "f1f64fbe-f0b9-4c44-9665-5e1f80ba585e",
+          "similarity": 0.706469480261444,
+          "content_preview": "Neo's Higgsfield Soul ID — CORRECTED invocation (supersedes 900c419f): Neo has a trained Higgsfield Soul for himself.\n\nS"
+        },
+        {
+          "id": "900c419f-a08c-4e0d-a01d-667b82d42583",
+          "similarity": 0.682438128102611,
+          "content_preview": "Neo's Higgsfield Soul ID — for image generation as Neo: Neo has a trained Higgsfield Soul for himself.\n\nSoul ID: 9f89d33"
+        },
+        {
+          "id": "9ae6ec6f-e091-4a87-b116-e06f9e94f531",
+          "similarity": 0.631050015054032,
+          "content_preview": "Higgsfield MCP vs Direct REST — keep poster-agent on REST · 2026-05-05: Both paths hit the same Higgsfield account/billi"
+        },
+        {
+          "id": "04bb84d8-c1a3-4aae-bf21-bad613469152",
+          "similarity": 0.611777979856028,
+          "content_preview": "Old pipeline re-disabled + SOUL.md Higgsfield fix + ig-post.py upload_via_cdp restored: Per Neo correction referencing p"
+        },
+        {
+          "id": "b7cd06b5-f10d-47f2-826b-b4a5dd9438e1",
+          "similarity": 0.609405437878998,
+          "content_preview": "SOUL.md modular trim — 29K→9.5K, no more truncation: 2026-04-16: SOUL.md was 29,941 chars but OpenClaw's limit is 20,000"
+        }
+      ]
+    },
+    {
+      "id": "infra-01",
+      "question": "What is the public deploy URL for naca-app?",
+      "category": "infra",
+      "expected_ids": [
+        "42dd232e-95f3-472f-8836-788a06352817",
+        "bc481e00-5d19-4f03-865b-37a146f06ee8"
+      ],
+      "returned_top10": [
+        "41694e9d-f578-4fea-9ef8-74efac762e98",
+        "6ec105ca-0ef4-4ea0-9138-c62117bd0306",
+        "8614e351-0703-40c6-a1c8-037608aae3d7",
+        "6e6c19a6-a629-462e-97b1-ce8dd8ec8134",
+        "4d1e3edc-ee83-4e5a-8e70-17ee2f0bf4c5",
+        "6341c55d-e5e3-47ef-b9d1-ec7132d0c88b",
+        "8727d82f-a5c5-497b-8723-d0bc64b45b1e",
+        "cd36d8d3-052d-4dcb-b332-bd180391d172",
+        "4f7285cf-1738-4a12-9806-a53542400f71",
+        "dd36daf5-fb04-4265-b55c-a599c7729180"
+      ],
+      "first_hit_rank": null,
+      "recall5": 0,
+      "recall10": 0,
+      "hit5": 0,
+      "hit10": 0,
+      "mrr_contribution": 0,
+      "top5_preview": [
+        {
+          "id": "41694e9d-f578-4fea-9ef8-74efac762e98",
+          "similarity": 0.801193442298469,
+          "content_preview": "Deploy verified live: naca-app (PR https://github.com/broneotodak/naca-app/pull/7) — HTTP 200 on https://naca.neotodak.c"
+        },
+        {
+          "id": "6ec105ca-0ef4-4ea0-9138-c62117bd0306",
+          "similarity": 0.799245767855931,
+          "content_preview": "Deploy verified live: naca-app (PR https://github.com/broneotodak/naca-app/pull/8) — HTTP 200 on https://naca.neotodak.c"
+        },
+        {
+          "id": "8614e351-0703-40c6-a1c8-037608aae3d7",
+          "similarity": 0.797496248426942,
+          "content_preview": "Deploy verified live: naca-app (PR https://github.com/broneotodak/naca-app/pull/9) — HTTP 200 on https://naca.neotodak.c"
+        },
+        {
+          "id": "6e6c19a6-a629-462e-97b1-ce8dd8ec8134",
+          "similarity": 0.79718776026178,
+          "content_preview": "Deploy verified live: naca-app (PR https://github.com/broneotodak/naca-app/pull/13) — HTTP 200 on https://naca.neotodak."
+        },
+        {
+          "id": "4d1e3edc-ee83-4e5a-8e70-17ee2f0bf4c5",
+          "similarity": 0.796760549558934,
+          "content_preview": "Deploy verified live: naca-app (PR https://github.com/broneotodak/naca-app/pull/12) — HTTP 200 on https://naca.neotodak."
+        }
+      ]
+    },
+    {
+      "id": "infra-02",
+      "question": "Which LLM agents run on tr-home after Phase 8?",
+      "category": "infra",
+      "expected_ids": [
+        "9cff0ef2-1d07-4b5e-b121-d285b061fd8b"
+      ],
+      "returned_top10": [
+        "9cff0ef2-1d07-4b5e-b121-d285b061fd8b",
+        "8d52eea1-7fd2-43d2-858b-45d630629de1",
+        "2e843212-43fe-4211-b24e-e6e0272b5818",
+        "3374c704-bb84-4ba3-a59f-03d5b0cbc3a2",
+        "c779c602-3d12-4822-b0b6-c57dc38a47ed",
+        "8df2e1b2-a5c0-46ce-830e-1fd4c824ee9b",
+        "87d0dedd-9ce6-44aa-9f21-0cfebe7b561e",
+        "329ff39e-9351-472a-9e7a-2a1ec5b7b662",
+        "c7cbb56b-a81b-42fd-8ce5-6d4314e6a5d7",
+        "069cfcb6-d298-4fa0-ab6a-1b44f16ec0e0"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "9cff0ef2-1d07-4b5e-b121-d285b061fd8b",
+          "similarity": 0.747283105689665,
+          "content_preview": "Phase 8 shipped — LLM agents reviewer/planner/dev moved Hetzner → tr-home: Phase 8 of platform-refactor-v1 shipped 2026-"
+        },
+        {
+          "id": "8d52eea1-7fd2-43d2-858b-45d630629de1",
+          "similarity": 0.729339395172921,
+          "content_preview": "tr-home onboarded — Threadripper LLM server live on tailnet: NEW FLEET MEMBER: tr-home (Threadripper 7970X / 64GB DDR5 /"
+        },
+        {
+          "id": "2e843212-43fe-4211-b24e-e6e0272b5818",
+          "similarity": 0.682308699985871,
+          "content_preview": "Registry hygiene + naca-overview fleet sync post-revamp: APPLIED 2026-05-04 — small cleanups after the v1.0.0 revamp + a"
+        },
+        {
+          "id": "3374c704-bb84-4ba3-a59f-03d5b0cbc3a2",
+          "similarity": 0.67566543142754,
+          "content_preview": "tr-home-dashboard deployed (Phase 1 of Fleet Command Center): DEPLOYED 2026-05-03 — Phase 1 of Fleet Command Center plan"
+        },
+        {
+          "id": "c779c602-3d12-4822-b0b6-c57dc38a47ed",
+          "similarity": 0.667851990947333,
+          "content_preview": "toolsmith-agent migrated Siti VPS → NAS Ugreen Docker (REVAMP v1.0.0 Step 6 Phase B move 1/2): 2026-05-04 — third agent "
+        }
+      ]
+    },
+    {
+      "id": "infra-03",
+      "question": "Where do we store API credentials for the fleet?",
+      "category": "infra",
+      "expected_ids": [
+        "33657331-87f4-4e51-a748-bbca58a43214"
+      ],
+      "returned_top10": [
+        "705f5e6f-99a8-4574-a756-573e6d0dbfe2",
+        "dfc85938-68e7-4f63-8f00-19afa6efdf3c",
+        "9ce44c3f-d659-4f31-a3b4-5cd3a74b29c4",
+        "3f8dac5c-ed42-423d-b429-d51c5e5acdba",
+        "f49de726-68fa-49c8-a379-1d61bc5c2778",
+        "d8c68527-aa05-4198-b65c-2a1de12db759",
+        "5ee25e02-e024-4774-b922-57c46db47ab4",
+        "98dc9a5e-4fe4-4448-ae86-cf5e4178499b",
+        "de80549b-05e2-41fa-bdb8-196fcdc14880",
+        "682d4f63-ede8-4019-bcda-5067f37c8904"
+      ],
+      "first_hit_rank": null,
+      "recall5": 0,
+      "recall10": 0,
+      "hit5": 0,
+      "hit10": 0,
+      "mrr_contribution": 0,
+      "top5_preview": [
+        {
+          "id": "705f5e6f-99a8-4574-a756-573e6d0dbfe2",
+          "similarity": 0.657153208872803,
+          "content_preview": "CTK Credential Management Issue Identified: Current problem - credentials scattered across project folders, exposed in G"
+        },
+        {
+          "id": "dfc85938-68e7-4f63-8f00-19afa6efdf3c",
+          "similarity": 0.654358907300357,
+          "content_preview": "All API keys collected and .env.netlify file created for easy upload. Keys stored: OpenAI (existing), Google Gemini (AIz"
+        },
+        {
+          "id": "9ce44c3f-d659-4f31-a3b4-5cd3a74b29c4",
+          "similarity": 0.646953359508251,
+          "content_preview": "COMPREHENSIVE CREDENTIAL INVENTORY (2025-06-15):\n\nNETLIFY:\n- Neo Todak: nfp_Yifs93kTRsUyPodBAnmDskPJW3hVhME1d0d0 (Primar"
+        },
+        {
+          "id": "3f8dac5c-ed42-423d-b429-d51c5e5acdba",
+          "similarity": 0.63374165293256,
+          "content_preview": "TODAK AI Consolidated Credentials:\n- Anthropic API: [REDACTED-ANTHROPIC-KEY]"
+        },
+        {
+          "id": "f49de726-68fa-49c8-a379-1d61bc5c2778",
+          "similarity": 0.631096518391964,
+          "content_preview": "SECURITY POLICY: ClaudeN AI Query must NEVER display actual credentials, API keys, tokens, or passwords. When queried ab"
+        }
+      ]
+    },
+    {
+      "id": "infra-04",
+      "question": "What is the Kuma monitor ID assigned to Siti WhatsApp health?",
+      "category": "infra",
+      "expected_ids": [
+        "12af0a7f-9353-43c3-bca6-446ecbeff048"
+      ],
+      "returned_top10": [
+        "c1ee67d4-88ab-4c86-9c50-60e3c859e1c5",
+        "e357df4f-0c17-464c-a15b-7f8b9432cd5a",
+        "18148de1-6ba9-473d-9ca8-10b2772c5022",
+        "c4e8e62f-95b2-4d85-a45c-8a2875b35b16",
+        "c7cbb56b-a81b-42fd-8ce5-6d4314e6a5d7",
+        "640b8117-ef81-4273-b56f-c5f08196d519",
+        "1bd32f15-60b8-4a2f-80e7-0d69b2cb0679",
+        "12af0a7f-9353-43c3-bca6-446ecbeff048",
+        "525b447b-6566-40a5-a3c5-21e4cea9adcc",
+        "93bf76ca-aae2-445f-a996-3cc93d3bcafb"
+      ],
+      "first_hit_rank": 8,
+      "recall5": 0,
+      "recall10": 1,
+      "hit5": 0,
+      "hit10": 1,
+      "mrr_contribution": 0.125,
+      "top5_preview": [
+        {
+          "id": "c1ee67d4-88ab-4c86-9c50-60e3c859e1c5",
+          "similarity": 0.638398258073687,
+          "content_preview": "Phone call with +60123117444 (+60123117444) on 2026-04-26.\nDuration: 78s. 2 turns.\n\nTranscript:\nSiti: Assalamualaikum +6"
+        },
+        {
+          "id": "e357df4f-0c17-464c-a15b-7f8b9432cd5a",
+          "similarity": 0.637935233922319,
+          "content_preview": "Resolved 2026-05-13: zombie 'siti' heartbeat root cause + fix.\n\nPROBLEM: agent_heartbeats row agent_name='siti' was bein"
+        },
+        {
+          "id": "18148de1-6ba9-473d-9ca8-10b2772c5022",
+          "similarity": 0.634682121937311,
+          "content_preview": "siti, save this: Kak Riz prefers WhatsApp voice notes over text"
+        },
+        {
+          "id": "c4e8e62f-95b2-4d85-a45c-8a2875b35b16",
+          "similarity": 0.633422628735981,
+          "content_preview": "CTK rule (mandatory for all agents): Validate every monitoring signal end-to-end before trusting it. (1) Read the source"
+        },
+        {
+          "id": "c7cbb56b-a81b-42fd-8ce5-6d4314e6a5d7",
+          "similarity": 0.629951360963542,
+          "content_preview": "Comprehensive Phase 1-3 progress doc updated 2026-04-25 (~22:30 MYT). Status: Phase 1 (Foundation) DONE — Uptime Kuma + "
+        }
+      ]
+    },
+    {
+      "id": "incident-01",
+      "question": "What caused the 2026-05-13 morning Siti false-positive alert about FCC degraded?",
+      "category": "incident",
+      "expected_ids": [
+        "18dafabc-c525-460b-b5cb-4635e313deeb"
+      ],
+      "returned_top10": [
+        "525b447b-6566-40a5-a3c5-21e4cea9adcc",
+        "e357df4f-0c17-464c-a15b-7f8b9432cd5a",
+        "5d7ce9ac-6080-473d-9b80-b81fea3fba0a",
+        "4335a800-1884-43d5-b7ca-b57ac902d70f",
+        "c697029e-5447-42e3-a390-d7cd4d561add",
+        "f3a4a060-efad-41fd-a8a5-8bea896e679b",
+        "18dafabc-c525-460b-b5cb-4635e313deeb",
+        "67748247-43ac-4c26-a037-f9c2b83f632a",
+        "93bf76ca-aae2-445f-a996-3cc93d3bcafb",
+        "59481eee-df4d-4294-8718-74d3dd88a01d"
+      ],
+      "first_hit_rank": 7,
+      "recall5": 0,
+      "recall10": 1,
+      "hit5": 0,
+      "hit10": 1,
+      "mrr_contribution": 0.14285714285714285,
+      "top5_preview": [
+        {
+          "id": "525b447b-6566-40a5-a3c5-21e4cea9adcc",
+          "similarity": 0.7479884403824,
+          "content_preview": "FCC supervisor false-positive triage 2026-05-13 10:05 MYT — for NACA session pickup.\n\nAlert fired: \"agent fleet-command-"
+        },
+        {
+          "id": "e357df4f-0c17-464c-a15b-7f8b9432cd5a",
+          "similarity": 0.72723200826658,
+          "content_preview": "Resolved 2026-05-13: zombie 'siti' heartbeat root cause + fix.\n\nPROBLEM: agent_heartbeats row agent_name='siti' was bein"
+        },
+        {
+          "id": "5d7ce9ac-6080-473d-9b80-b81fea3fba0a",
+          "similarity": 0.710927048431415,
+          "content_preview": "supervisor v2 [tier 3 DEMOTED] 'fleet-command-center' on command.neotodak.com — fcc_health_degraded: 1 agent(s) offline;"
+        },
+        {
+          "id": "4335a800-1884-43d5-b7ca-b57ac902d70f",
+          "similarity": 0.68015687517911,
+          "content_preview": "Cross-session resolution note 2026-05-13 — siti-heartbeat zombie + supervisor false-positive.\n\nBoth sides shipped today,"
+        },
+        {
+          "id": "c697029e-5447-42e3-a390-d7cd4d561add",
+          "similarity": 0.67503868228138,
+          "content_preview": "Siti notification digest mode restored — Phase 7 Layer B regression fixed 2026-05-11: Phase 7 Layer B (Siti notification"
+        }
+      ]
+    },
+    {
+      "id": "incident-02",
+      "question": "Why did chat_thread_state silently regress and stop working?",
+      "category": "incident",
+      "expected_ids": [
+        "7b81f62d-01c7-4af6-adee-66a4fd5df141"
+      ],
+      "returned_top10": [
+        "7b81f62d-01c7-4af6-adee-66a4fd5df141",
+        "80d6013d-ca7e-4234-9b51-a2c9068e7a9a",
+        "3abf5aa7-82f4-4a9f-81b3-ef63dddb9de5",
+        "2c5a5dfb-a088-4210-8d78-dad74ef81197",
+        "5a4557a1-b03d-4854-a2a3-f215654f5dcd",
+        "87c44f3c-e4bb-4723-98a6-147fbcc19ad3",
+        "89d264b8-bb3f-4ad2-90e4-53586d11fe72",
+        "24806c07-87af-41c3-9431-2db7f50e7eb1",
+        "4b0232a0-c238-428f-80bb-262e589cf2d6",
+        "cb8b9375-7203-4bc7-af67-2b7d16384468"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "7b81f62d-01c7-4af6-adee-66a4fd5df141",
+          "similarity": 0.69386801145987,
+          "content_preview": "naca PR #26 — chat_thread_state rewired to wa_messages (silent regression since 2026-05-12): naca PR #26 merged + deploy"
+        },
+        {
+          "id": "80d6013d-ca7e-4234-9b51-a2c9068e7a9a",
+          "similarity": 0.68668372678365,
+          "content_preview": "PR awaiting decision: broneotodak/siti-v2#43 — feat(tools): chat_thread_state — deterministic state-query for WA chats. "
+        },
+        {
+          "id": "3abf5aa7-82f4-4a9f-81b3-ef63dddb9de5",
+          "similarity": 0.664200228243225,
+          "content_preview": "PR awaiting decision: broneotodak/siti-v2#50 — fix(router+chat): \"who is this?\" → CHAT (not MEDIA); fix chat_thread_stat"
+        },
+        {
+          "id": "2c5a5dfb-a088-4210-8d78-dad74ef81197",
+          "similarity": 0.654742294106482,
+          "content_preview": "siti-v2 PR #73 — CHAT canned-example trap fixed + deployed: PR #73 (siti-v2) merged and deployed 2026-05-14 ~09:46 UTC. "
+        },
+        {
+          "id": "5a4557a1-b03d-4854-a2a3-f215654f5dcd",
+          "similarity": 0.638533637469259,
+          "content_preview": "[twin-ingest: WhatsApp Status broadcasts filtered + 962 historical entries archived]\n\n# Issue\nNeo spotted in INTELLIGENC"
+        }
+      ]
+    },
+    {
+      "id": "incident-03",
+      "question": "What is the story of the 420 NULL embeddings in neo-brain?",
+      "category": "incident",
+      "expected_ids": [
+        "3ae2c251-028f-4356-9439-96cd1fd9d8e5",
+        "08625dea-8d05-4431-af4c-523fb3ad6138"
+      ],
+      "returned_top10": [
+        "3ae2c251-028f-4356-9439-96cd1fd9d8e5",
+        "ac0a69d2-eb65-48b2-9e56-02154216ef88",
+        "08625dea-8d05-4431-af4c-523fb3ad6138",
+        "78773f28-afe6-40f1-9d11-460c34168ddc",
+        "65e840be-5f29-4433-b47a-acc4258b5bb2",
+        "8aad87fa-5d9f-4cc5-883c-f2c277039596",
+        "281fd0e4-be35-45bf-a3f1-caa517f7d0bc",
+        "5949d158-7901-47ec-9dec-900544931be6",
+        "ed99e41f-70dc-4b60-a186-e35939e7a1f7",
+        "eaa09226-e4bb-4309-be8c-5186059462d9"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "3ae2c251-028f-4356-9439-96cd1fd9d8e5",
+          "similarity": 0.693035908052269,
+          "content_preview": "Memory audit + backfill 2026-05-14. 420 orphan NULL-embedding rows healed; 7286 operational rows correctly preserved as "
+        },
+        {
+          "id": "ac0a69d2-eb65-48b2-9e56-02154216ef88",
+          "similarity": 0.637375105714161,
+          "content_preview": "twin-ingest embedding gap fixed (FIX #1): ROOT CAUSE: twin-ingest at /home/neotwin/twin-ingest/index.js was inserting wa"
+        },
+        {
+          "id": "08625dea-8d05-4431-af4c-523fb3ad6138",
+          "similarity": 0.636193020959157,
+          "content_preview": "DB-level memory-write enforcement (Layer 1) shipped 2026-05-14 on neo-brain.\n\nTRIGGER: enforce_memory_embedding_for_know"
+        },
+        {
+          "id": "78773f28-afe6-40f1-9d11-460c34168ddc",
+          "similarity": 0.635410657973042,
+          "content_preview": "wa-primary embedding gap CLOSED + backfill complete: Twin-ingest embedding bug fully resolved 2026-04-27 ~14:15 MYT.\n\nLI"
+        },
+        {
+          "id": "65e840be-5f29-4433-b47a-acc4258b5bb2",
+          "similarity": 0.632286889670671,
+          "content_preview": "Neo's framework patterns: Component-Based Architecture, React Hooks/Context patterns, Serverless Functions, Webhook-Driv"
+        }
+      ]
+    },
+    {
+      "id": "incident-04",
+      "question": "Tell me about the Siti CHAT canned-example trap incident on 2026-05-14",
+      "category": "incident",
+      "expected_ids": [
+        "2c5a5dfb-a088-4210-8d78-dad74ef81197"
+      ],
+      "returned_top10": [
+        "2c5a5dfb-a088-4210-8d78-dad74ef81197",
+        "a9dc47b9-4e41-404d-a0fb-21dae7488ee2",
+        "0e70dbf0-315f-4f1b-aee6-4306f07800e7",
+        "2d5d21e1-cc7a-4664-b2cc-fe79ca619ccc",
+        "b44dd580-6e1b-404f-aece-d7a194358305",
+        "d9351a74-7612-4b6b-a77b-a2fb50d54858",
+        "93bf76ca-aae2-445f-a996-3cc93d3bcafb",
+        "f92cb9ce-299e-4880-b416-c5c4739a23f5",
+        "982eacfe-6775-4f53-a8dc-dfc614e16194",
+        "c1ee67d4-88ab-4c86-9c50-60e3c859e1c5"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "2c5a5dfb-a088-4210-8d78-dad74ef81197",
+          "similarity": 0.721401520265615,
+          "content_preview": "siti-v2 PR #73 — CHAT canned-example trap fixed + deployed: PR #73 (siti-v2) merged and deployed 2026-05-14 ~09:46 UTC. "
+        },
+        {
+          "id": "a9dc47b9-4e41-404d-a0fb-21dae7488ee2",
+          "similarity": 0.672632304243803,
+          "content_preview": "Phone call with Lan (+601111011111) on 2026-05-04.\nDuration: 71s. 2 turns.\n\nTranscript:\nSiti: Assalamualaikum Lan! Ini S"
+        },
+        {
+          "id": "0e70dbf0-315f-4f1b-aee6-4306f07800e7",
+          "similarity": 0.669352936723774,
+          "content_preview": "Phone call with +601111011111 (+601111011111) on 2026-04-23.\nDuration: 54s. 5 turns.\n\nTranscript:\nSiti: Assalamualaikum "
+        },
+        {
+          "id": "2d5d21e1-cc7a-4664-b2cc-fe79ca619ccc",
+          "similarity": 0.66836206098852,
+          "content_preview": "Phone call with Lan (+601111011111) on 2026-05-04.\nDuration: 41s. 3 turns.\n\nTranscript:\nSiti: Assalamualaikum Lan! Ini S"
+        },
+        {
+          "id": "b44dd580-6e1b-404f-aece-d7a194358305",
+          "similarity": 0.667610989427639,
+          "content_preview": "Phone call between Siti and Neo (Apr 22 2026, 68 seconds):\nSiti called Neo on behalf of himself (test call). Conversatio"
+        }
+      ]
+    },
+    {
+      "id": "decision-01",
+      "question": "Why did we move the LLM-heavy NACA agents from Hetzner to tr-home?",
+      "category": "decision",
+      "expected_ids": [
+        "9cff0ef2-1d07-4b5e-b121-d285b061fd8b"
+      ],
+      "returned_top10": [
+        "9cff0ef2-1d07-4b5e-b121-d285b061fd8b",
+        "8d52eea1-7fd2-43d2-858b-45d630629de1",
+        "2e843212-43fe-4211-b24e-e6e0272b5818",
+        "0bb66e82-0365-40fe-a3b8-8df7f3480823",
+        "94d1f23a-77f2-445b-9c25-928e70bc68b8",
+        "87d0dedd-9ce6-44aa-9f21-0cfebe7b561e",
+        "611c2797-4633-4e46-8555-da383fc844bf",
+        "fc9690d8-f0d2-465d-a498-b3f51916bd4e",
+        "a09feca4-b3f4-4f23-8ddb-6fb9fc7608f4",
+        "069cfcb6-d298-4fa0-ab6a-1b44f16ec0e0"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "9cff0ef2-1d07-4b5e-b121-d285b061fd8b",
+          "similarity": 0.760015172549518,
+          "content_preview": "Phase 8 shipped — LLM agents reviewer/planner/dev moved Hetzner → tr-home: Phase 8 of platform-refactor-v1 shipped 2026-"
+        },
+        {
+          "id": "8d52eea1-7fd2-43d2-858b-45d630629de1",
+          "similarity": 0.757349237255235,
+          "content_preview": "tr-home onboarded — Threadripper LLM server live on tailnet: NEW FLEET MEMBER: tr-home (Threadripper 7970X / 64GB DDR5 /"
+        },
+        {
+          "id": "2e843212-43fe-4211-b24e-e6e0272b5818",
+          "similarity": 0.716046484901749,
+          "content_preview": "Registry hygiene + naca-overview fleet sync post-revamp: APPLIED 2026-05-04 — small cleanups after the v1.0.0 revamp + a"
+        },
+        {
+          "id": "0bb66e82-0365-40fe-a3b8-8df7f3480823",
+          "similarity": 0.71600276923126,
+          "content_preview": "Multi-model per-specialist routing — direction decision 2026-05-14: DECISION (leaning, not yet shipped): upgrade Siti's "
+        },
+        {
+          "id": "94d1f23a-77f2-445b-9c25-928e70bc68b8",
+          "similarity": 0.697494169093337,
+          "content_preview": "Siti LLM upgrade DEPLOYED — CHAT→Sonnet 4.6, GROUP_OP summarize→Haiku 4.5 (naca #27 + siti-v2 #74): Multi-model per-spec"
+        }
+      ]
+    },
+    {
+      "id": "decision-02",
+      "question": "What is the Studio/Publisher architecture split?",
+      "category": "decision",
+      "expected_ids": [
+        "b4b17fbc-5ae4-45a3-a69d-21e470ca1d69"
+      ],
+      "returned_top10": [
+        "691135ea-0904-4635-b66a-70e994b51922",
+        "a88e6d36-7fd6-4e93-96f0-1c1ae7f94ebd",
+        "af328687-d310-4207-9b79-03bb94de8707",
+        "7d543736-0c51-45af-9e51-7091ccae7fe1",
+        "cb2c3d41-d45c-4ed1-aaaa-a554aa4e742c",
+        "3ba80b37-c82f-4da9-a400-ac314965566f",
+        "f3a21a14-af99-4e24-aeb4-89a7f8327294",
+        "1b9be30d-7c78-4527-85fb-2c1a4cadcde2",
+        "15798e27-54ec-4134-a510-7a580d9046b9",
+        "5d4d861d-cc36-4097-98ca-d7c5c3c7fe10"
+      ],
+      "first_hit_rank": null,
+      "recall5": 0,
+      "recall10": 0,
+      "hit5": 0,
+      "hit10": 0,
+      "mrr_contribution": 0,
+      "top5_preview": [
+        {
+          "id": "691135ea-0904-4635-b66a-70e994b51922",
+          "similarity": 0.565755127253904,
+          "content_preview": "Local ARS system file comparison (2025-06-23): Found TWO separate ARS directories: 1) /Projects/ARS - Working directory "
+        },
+        {
+          "id": "a88e6d36-7fd6-4e93-96f0-1c1ae7f94ebd",
+          "similarity": 0.561069262951622,
+          "content_preview": "naca-content-creator agent design in flight 2026-05-14: A new NACA agent — `content-creator` (working name) — is being d"
+        },
+        {
+          "id": "af328687-d310-4207-9b79-03bb94de8707",
+          "similarity": 0.553725686958847,
+          "content_preview": "Tool Strategy for TODAK AI: Use Claude Desktop for architecture, planning, database ops, MCP tools, and memory persisten"
+        },
+        {
+          "id": "7d543736-0c51-45af-9e51-7091ccae7fe1",
+          "similarity": 0.551897487869673,
+          "content_preview": "Started researching local LLM setup for offline Claude backup. User has LMStudio running on 127.0.0.1:8000 with download"
+        },
+        {
+          "id": "cb2c3d41-d45c-4ed1-aaaa-a554aa4e742c",
+          "similarity": 0.55174278125222,
+          "content_preview": "TODAK Fix Clarification: Database function changes (like trigger fixes) are live immediately in both localhost and produ"
+        }
+      ]
+    },
+    {
+      "id": "decision-03",
+      "question": "What is Neo's active focus for Q2 2026?",
+      "category": "decision",
+      "expected_ids": [],
+      "returned_top10": [
+        "d0a9dddc-13c6-4cf6-be11-1f4d5c81788f",
+        "c0fd7472-271f-4c8a-b309-b89ddac44ef0",
+        "9cca1e4e-216f-48e2-9836-ab8bd730f91d",
+        "8048f1b3-3179-4d2e-87c3-ffde98e4047d",
+        "16a2f347-14f3-45ab-a4fb-d0955fd3ad5c",
+        "8fda6c73-bf1a-40f0-ae47-a5d0288d9985",
+        "de98d65d-018f-45bc-91fd-ae2f5b4ec235",
+        "47f50d0d-2a0c-4b30-b909-7e8bdb16c172",
+        "2a255884-fded-443d-b165-9d795871814b",
+        "bebf22ef-ebc2-444e-9332-b34ab10d1e05"
+      ],
+      "first_hit_rank": null,
+      "recall5": null,
+      "recall10": null,
+      "hit5": null,
+      "hit10": null,
+      "mrr_contribution": 0,
+      "top5_preview": [
+        {
+          "id": "d0a9dddc-13c6-4cf6-be11-1f4d5c81788f",
+          "similarity": 0.687625291986706,
+          "content_preview": "Neo prefers PASTEL COLOR THEMES, especially PASTEL BLUE. Use soft, muted colors with lower saturation for all projects. "
+        },
+        {
+          "id": "c0fd7472-271f-4c8a-b309-b89ddac44ef0",
+          "similarity": 0.673708177010831,
+          "content_preview": "## User Requests\n- my question : what's neo working on now?.. the answer : Right now, I'm focused on a few active projec"
+        },
+        {
+          "id": "9cca1e4e-216f-48e2-9836-ab8bd730f91d",
+          "similarity": 0.669136313772688,
+          "content_preview": "Neo's KITAS (Limited Stay Permit) details: Permit Number E232C22AD003640-C, Stay Permit Expiry 14 April 2027. Passport N"
+        },
+        {
+          "id": "8048f1b3-3179-4d2e-87c3-ffde98e4047d",
+          "similarity": 0.667217524094756,
+          "content_preview": "## User Requests\n- it seems like our semantic or context reader does not really understand the question in query.. this "
+        },
+        {
+          "id": "16a2f347-14f3-45ab-a4fb-d0955fd3ad5c",
+          "similarity": 0.659620626474386,
+          "content_preview": "Started building futuristic landing page for neotodak.com portal at [2025-06-16]. Design: Dark atom-inspired UI with cen"
+        }
+      ]
+    },
+    {
+      "id": "recent-01",
+      "question": "What did the refactor v2 supervisor WATCH migration ship and how did it expand monitoring?",
+      "category": "recent-activity",
+      "expected_ids": [
+        "e7edf8bc-d25e-4bf1-8758-08ceef19e070"
+      ],
+      "returned_top10": [
+        "e7edf8bc-d25e-4bf1-8758-08ceef19e070",
+        "12af0a7f-9353-43c3-bca6-446ecbeff048",
+        "59481eee-df4d-4294-8718-74d3dd88a01d",
+        "cb38532d-d657-4719-b032-1e79fe0bc79c",
+        "18dafabc-c525-460b-b5cb-4635e313deeb",
+        "960550cc-cac6-4290-8faa-75fcfc3b995d",
+        "edd40c0b-46c2-4ebe-835b-886ff414c3fd",
+        "07a2d052-1ecc-4db8-91ab-d18fe1d91ddf",
+        "820a0ef9-0143-4a9a-806f-9fc644eb8487",
+        "2616aa38-76e3-46a4-9fe9-34765b015502"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "e7edf8bc-d25e-4bf1-8758-08ceef19e070",
+          "similarity": 0.682187287004501,
+          "content_preview": "Refactor v2 steps 2 + 3 shipped 2026-05-13. Registry-driven core progress: 3/7.\n\nSTEP 2 · supervisor WATCH from registry"
+        },
+        {
+          "id": "12af0a7f-9353-43c3-bca6-446ecbeff048",
+          "similarity": 0.675489005080557,
+          "content_preview": "supervisor-agent v2 deployed on CLAW (DRY_RUN, launchd ai.openclaw.supervisor, 60s). Built per MONITORING_ENFORCEMENT.md"
+        },
+        {
+          "id": "59481eee-df4d-4294-8718-74d3dd88a01d",
+          "similarity": 0.658802351512231,
+          "content_preview": "Phase 5.5 supervisor /api/health watch — PR #10 opened: PR OPENED 2026-05-03 — Phase 5.5 (last open Phase 5 item) shippe"
+        },
+        {
+          "id": "cb38532d-d657-4719-b032-1e79fe0bc79c",
+          "similarity": 0.649743655048907,
+          "content_preview": "Registry-driven core (v2) Step 1 shipped 2026-05-13.\n\nFoundation: lock the canonical shape of agent_registry.meta + proj"
+        },
+        {
+          "id": "18dafabc-c525-460b-b5cb-4635e313deeb",
+          "similarity": 0.646726611482407,
+          "content_preview": "Supervisor false-positive heuristics shipped 2026-05-13 — completes triage memory 525b447b (cc-twin-lane).\n\nSHIPPED:\n1) "
+        }
+      ]
+    },
+    {
+      "id": "recent-02",
+      "question": "What is the CTK enforcement Layer 1 DB trigger that prevents NULL embeddings on knowledge memories?",
+      "category": "recent-activity",
+      "expected_ids": [
+        "08625dea-8d05-4431-af4c-523fb3ad6138"
+      ],
+      "returned_top10": [
+        "08625dea-8d05-4431-af4c-523fb3ad6138",
+        "e9baeb72-e30f-4374-a323-5c8fc76a10dc",
+        "3ae2c251-028f-4356-9439-96cd1fd9d8e5",
+        "33b5a84c-17aa-4f70-8e91-e1254c5b0824",
+        "03ffae3a-f3af-4c7f-b574-00696de8420c",
+        "827edefb-490f-4132-ad7e-122c07c694dc",
+        "713efcca-11fa-4a63-9f28-41547b265ea0",
+        "b07418d3-a633-4a4f-9c20-77c0ad52dd61",
+        "ac0a69d2-eb65-48b2-9e56-02154216ef88",
+        "7e1f7d78-9154-411c-9c6b-01e4e8be4a10"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "08625dea-8d05-4431-af4c-523fb3ad6138",
+          "similarity": 0.786911814610909,
+          "content_preview": "DB-level memory-write enforcement (Layer 1) shipped 2026-05-14 on neo-brain.\n\nTRIGGER: enforce_memory_embedding_for_know"
+        },
+        {
+          "id": "e9baeb72-e30f-4374-a323-5c8fc76a10dc",
+          "similarity": 0.727614766387378,
+          "content_preview": "CTK enforcement Layer 1 expanded 2026-05-14 evening: preflight + daily memory-hygiene audit + DB trigger.\n\nSHIPPED (3 PR"
+        },
+        {
+          "id": "3ae2c251-028f-4356-9439-96cd1fd9d8e5",
+          "similarity": 0.723824844997753,
+          "content_preview": "Memory audit + backfill 2026-05-14. 420 orphan NULL-embedding rows healed; 7286 operational rows correctly preserved as "
+        },
+        {
+          "id": "33b5a84c-17aa-4f70-8e91-e1254c5b0824",
+          "similarity": 0.69525392139964,
+          "content_preview": "CTK CRITICAL LEARNING: Never Make Assumptions About Database Structure. When working with databases, always QUERY the ac"
+        },
+        {
+          "id": "03ffae3a-f3af-4c7f-b574-00696de8420c",
+          "similarity": 0.690686089164047,
+          "content_preview": "Comprehensive CTK Enforcement System Created\n\nA complete solution has been implemented to enforce CTK (Check-Think-Know)"
+        }
+      ]
+    },
+    {
+      "id": "recent-03",
+      "question": "What is the daily-checkup memory hygiene detector and what does it audit?",
+      "category": "recent-activity",
+      "expected_ids": [
+        "e9baeb72-e30f-4374-a323-5c8fc76a10dc"
+      ],
+      "returned_top10": [
+        "e9baeb72-e30f-4374-a323-5c8fc76a10dc",
+        "216767bd-2815-4271-b470-e8dd8b0e4167",
+        "6217d4f3-aa86-4298-953c-1dd71c4227d8",
+        "801fcf59-acf9-4bdd-84b0-dcb11636a523",
+        "50cc2ccd-766b-4df3-b968-81321224788d",
+        "4c947d96-afa9-428b-aa68-716f8719d224",
+        "31044cbd-f637-4e26-b6ca-afcc50c6f4f8",
+        "87ee36ad-cccf-4ebc-9f1b-5b35d942d1ba",
+        "d2c20451-7e99-4f12-8249-b401468f5394",
+        "42bc13ec-f97d-4a79-b260-b9d0ed2ca0da"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "e9baeb72-e30f-4374-a323-5c8fc76a10dc",
+          "similarity": 0.707657771208464,
+          "content_preview": "CTK enforcement Layer 1 expanded 2026-05-14 evening: preflight + daily memory-hygiene audit + DB trigger.\n\nSHIPPED (3 PR"
+        },
+        {
+          "id": "216767bd-2815-4271-b470-e8dd8b0e4167",
+          "similarity": 0.678211662822431,
+          "content_preview": "daily-checkup-agent shipped (Phase 7 Step 1, Phase 1 detector-only): New fleet member: daily-checkup, 5th NAS Docker age"
+        },
+        {
+          "id": "6217d4f3-aa86-4298-953c-1dd71c4227d8",
+          "similarity": 0.659139738562231,
+          "content_preview": "MEMORY MAINTENANCE SYSTEM ANALYSIS COMPLETE: Found built-in perform_memory_maintenance() function that auto-regulates im"
+        },
+        {
+          "id": "801fcf59-acf9-4bdd-84b0-dcb11636a523",
+          "similarity": 0.650893530481807,
+          "content_preview": "daily-checkup first scheduled run verified · 2026-05-05 09:00 MYT: Phase 7 Step 1 daily-checkup-agent first real schedul"
+        },
+        {
+          "id": "50cc2ccd-766b-4df3-b968-81321224788d",
+          "similarity": 0.636975623367633,
+          "content_preview": "MORNING ROUTINE: When Neo says \"morning routine\", execute these checks:\n  1. Check system prompt (verify ClaudeN V15 loa"
+        }
+      ]
+    },
+    {
+      "id": "recent-04",
+      "question": "What happened on 2026-05-13 in the grand NACA refactor session — 25 PRs in 8 hours?",
+      "category": "recent-activity",
+      "expected_ids": [
+        "900883cb-9269-4e01-afe1-db1af9237680"
+      ],
+      "returned_top10": [
+        "900883cb-9269-4e01-afe1-db1af9237680",
+        "c1a9b95f-8f86-40db-a7b6-1f75208ce161",
+        "d9191fa2-24c4-47e7-aff8-0b7b5d72fbc5",
+        "f5bb30e4-cdc3-4d60-9dac-ad19312316c9",
+        "cf68e06c-2aca-4c9e-9543-8da3b0efbdb1",
+        "70c88009-1eda-48c2-bdbc-08ea12c60e4b",
+        "62ecce97-6b09-4c4a-b37e-8755297964ad",
+        "67748247-43ac-4c26-a037-f9c2b83f632a",
+        "1b9be30d-7c78-4527-85fb-2c1a4cadcde2",
+        "bc481e00-5d19-4f03-865b-37a146f06ee8"
+      ],
+      "first_hit_rank": 1,
+      "recall5": 1,
+      "recall10": 1,
+      "hit5": 1,
+      "hit10": 1,
+      "mrr_contribution": 1,
+      "top5_preview": [
+        {
+          "id": "900883cb-9269-4e01-afe1-db1af9237680",
+          "similarity": 0.813968082709708,
+          "content_preview": "2026-05-13 NACA grand session — 25 PRs in 8 hours, one persistent NACA CC + parallel Siti CC.\n\nTHE DAY IN ONE PARAGRAPH:"
+        },
+        {
+          "id": "c1a9b95f-8f86-40db-a7b6-1f75208ce161",
+          "similarity": 0.747906012132145,
+          "content_preview": "NACA Platform Refactor — 2026-05-11 session COMPLETE: 10/11 phases shipped (~91%): Single 6+hr session on 2026-05-11 shi"
+        },
+        {
+          "id": "d9191fa2-24c4-47e7-aff8-0b7b5d72fbc5",
+          "similarity": 0.740378945918718,
+          "content_preview": "NACA Platform Refactor — 2026-05-11 session: phases 1/2/3/4a/6 shipped: Single Claude Code session on 2026-05-11 shipped"
+        },
+        {
+          "id": "f5bb30e4-cdc3-4d60-9dac-ad19312316c9",
+          "similarity": 0.731596179003907,
+          "content_preview": "Single-source-of-truth audit + cleanup shipped 2026-05-13. Closes the consistency check after Refactor v2.\n\nAUDIT FINDIN"
+        },
+        {
+          "id": "cf68e06c-2aca-4c9e-9543-8da3b0efbdb1",
+          "similarity": 0.727049577354524,
+          "content_preview": "Session wrap 2026-05-05 morning · NACA app polish + Todak Academy session prep: SESSION WINDOW: 2026-05-04 evening throu"
+        }
+      ]
+    },
+    {
+      "id": "rule-07",
+      "question": "Why was the old siti pm2 process paused?",
+      "category": "feedback-rule",
+      "expected_ids": [
+        "67748247-43ac-4c26-a037-f9c2b83f632a"
+      ],
+      "returned_top10": [
+        "56f61890-e542-4b08-a9c1-fe1ed2cab1ab",
+        "e357df4f-0c17-464c-a15b-7f8b9432cd5a",
+        "93bf76ca-aae2-445f-a996-3cc93d3bcafb",
+        "f6100b3c-11dc-4196-a90f-3d4f1efaaee2",
+        "e00ba3a0-a41d-4fe3-b3ed-27daa1d5ce41",
+        "dfbb7a04-a7c6-4969-bfa5-56d668d5b03e",
+        "befc9797-1f75-41d7-bfed-bec597d1b946",
+        "a61daeca-5ef5-42a2-a4da-9e0de0a8418c",
+        "f003ab64-945e-4493-9e81-56937d084eba",
+        "f5f70fdd-340c-4786-ac9d-e01925787735"
+      ],
+      "first_hit_rank": null,
+      "recall5": 0,
+      "recall10": 0,
+      "hit5": 0,
+      "hit10": 0,
+      "mrr_contribution": 0,
+      "top5_preview": [
+        {
+          "id": "56f61890-e542-4b08-a9c1-fe1ed2cab1ab",
+          "similarity": 0.724524361040871,
+          "content_preview": "NEVER 'pm2 delete + pm2 start' a working process — env vanishes: On 2026-05-12 during Soul-routing hotfix testing I ran "
+        },
+        {
+          "id": "e357df4f-0c17-464c-a15b-7f8b9432cd5a",
+          "similarity": 0.713660383198181,
+          "content_preview": "Resolved 2026-05-13: zombie 'siti' heartbeat root cause + fix.\n\nPROBLEM: agent_heartbeats row agent_name='siti' was bein"
+        },
+        {
+          "id": "93bf76ca-aae2-445f-a996-3cc93d3bcafb",
+          "similarity": 0.706681247588093,
+          "content_preview": "Siti on extended leave · siti-ingest deployed · 2026-05-05: SITI IS ON EXTENDED LEAVE as of 2026-05-05 ~13:55 UTC. The f"
+        },
+        {
+          "id": "f6100b3c-11dc-4196-a90f-3d4f1efaaee2",
+          "similarity": 0.691106536440818,
+          "content_preview": "Phase 3 Step 4 — Siti git migration STARTING (2026-04-25, ~18:30 MYT). Pre-state: Siti runs from /home/openclaw/nclaw-da"
+        },
+        {
+          "id": "e00ba3a0-a41d-4fe3-b3ed-27daa1d5ce41",
+          "similarity": 0.689633083935125,
+          "content_preview": "twin-ingest paused — pollution of neo-brain.memories knowledge table: Stopped twin-ingest pm2 process on Twin VPS (5.161"
+        }
+      ]
+    }
+  ]
+}
