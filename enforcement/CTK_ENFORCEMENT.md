@@ -141,6 +141,40 @@ It prints: trigger health, fleet status, memory hygiene, pending operator items,
 ```
 Once installed, every fresh CC session opens with the orientation printed automatically. No "did you read CLAUDE.md?" guesswork.
 
+### 3.4d Git push enforcement (added 2026-05-15) · two-layer block on direct push to main
+
+**The blunt observation:** the moment this section was written, I had just shipped Hard Rule #1 ("never push directly to main") in `presentation/neo-todak-way.html` and 30 minutes later pushed `presentation/index.html` directly to main anyway. The rule was in documentation only. Even the author drifted.
+
+Two layers now physically prevent it:
+
+**Layer A · GitHub server-side branch protection** (applied to every NACA-fleet repo):
+
+```bash
+~/Projects/claude-tools-kit/scripts/apply-branch-protection.sh --apply
+```
+
+Configures on each repo's `main` branch:
+- `required_pull_request_reviews` (PR must exist; review-count = 0 to keep solo workflow fast)
+- `allow_force_pushes = false`
+- `allow_deletions = false`
+- `enforce_admins = true` (no admin bypass for direct push — even Neo gets stopped)
+- Repo-level: `delete_branch_on_merge = true` (auto-cleans merged branches; reduces email noise)
+
+Workflow stays identical: `git checkout -b feat/X → git push -u origin feat/X → gh pr create → gh pr merge --admin --squash --delete-branch`.
+What breaks intentionally: `git push origin main`, `git push --force`, `git push origin :main`.
+
+**Layer B · Local pre-push hook** (faster feedback before the network round-trip):
+
+```bash
+~/Projects/claude-tools-kit/scripts/install-pre-push-hook.sh
+```
+
+Symlinks `enforcement/git-hooks/pre-push` into each repo's `.git/hooks/`. When you run `git push origin main`, the hook prints a clear banner explaining the workflow and exits 1 — your push never leaves the laptop. Re-symlinked so updates to the canonical hook are picked up automatically.
+
+Both layers must agree for a push to succeed. `--no-verify` skips the local hook but still hits the server-side rule. By design.
+
+**Why both?** Server-side is the ultimate gate (cannot be bypassed). Local-side is the faster, friendlier UX (helpful banner, no waiting for GitHub to reject). Together they're idiot-proof — even when the idiot is the author of the rule.
+
 ### 3.5 Doc/Memory Pattern (added 2026-04-26)
 
 Don't duplicate progress notes between memory and code. Each goes to its natural home:

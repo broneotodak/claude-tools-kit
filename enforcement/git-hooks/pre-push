@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#
+# pre-push hook · refuses direct pushes to protected branches (main, master).
+# Server-side branch protection is the ultimate gate (scripts/apply-branch-protection.sh
+# applies it on every NACA-fleet repo), but this hook fails locally first — faster
+# feedback than waiting for GitHub to reject + saves a round-trip.
+#
+# INSTALL (per repo, one-time):
+#   ln -sf ~/Projects/claude-tools-kit/enforcement/git-hooks/pre-push .git/hooks/pre-push
+#   chmod +x .git/hooks/pre-push
+#
+# Or bulk-install via the companion script:
+#   ~/Projects/claude-tools-kit/scripts/install-pre-push-hook.sh
+#
+# BYPASS (use sparingly; logged in shell history):
+#   git push --no-verify origin main
+# The remote branch-protection rule will still reject this — by design.
+
+# Args from git: $1 = remote_name, $2 = remote_url
+# stdin: per push, lines of "<local_ref> <local_sha> <remote_ref> <remote_sha>"
+
+PROTECTED='^refs/heads/(main|master)$'
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" =~ $PROTECTED ]]; then
+    branch="${remote_ref#refs/heads/}"
+    cat >&2 <<EOF
+
+╔════════════════════════════════════════════════════════════════════╗
+║  ⛔  CTK pre-push: direct push to '${branch}' is blocked            ║
+╠════════════════════════════════════════════════════════════════════╣
+║  Use the standard flow:                                            ║
+║    git checkout -b feat/<short-name>                               ║
+║    git push -u origin feat/<short-name>                            ║
+║    gh pr create ...                                                ║
+║    gh pr merge --admin --squash --delete-branch                    ║
+║                                                                    ║
+║  Why: rules in docs are suggestions; rules in code are rules.      ║
+║  See: claude-tools-kit/enforcement/CTK_ENFORCEMENT.md §1 + §3.4d   ║
+║                                                                    ║
+║  (Bypass with --no-verify still hits GitHub's server-side          ║
+║   branch protection. Both layers must agree to let a push          ║
+║   through. By design.)                                             ║
+╚════════════════════════════════════════════════════════════════════╝
+
+EOF
+    exit 1
+  fi
+done
+
+exit 0
