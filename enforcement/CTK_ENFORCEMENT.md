@@ -82,6 +82,36 @@ If ≥5 significant changes since the last save: just save and mention it in one
 
 **Don't write a fill-in-the-blank template.** Capture what was accomplished, key decisions, problems solved, next steps. Length follows substance.
 
+### 3.4 DB-level enforcement (added 2026-05-14) · Layer 1
+
+**The `memories` table has a `BEFORE INSERT` trigger that rejects rows where `category` is a knowledge category and `embedding IS NULL`.** This is hard enforcement — there is no way to bypass it from a normal session, and it fails loudly at write time with a clear error message pointing the caller back here.
+
+**Why it exists:** the 2026-05-14 audit found that 420 knowledge rows had silently been saved with NULL embeddings (mostly from fleet agents writing via raw PostgREST POSTs, bypassing the SDK's Gemini-embed step). The backfill healed those rows; this trigger prevents the gap from reopening.
+
+**Event categories** (operational/audit data — embedding intentionally NULL) are listed in the trigger function `enforce_memory_embedding_for_knowledge()`. As of 2026-05-14:
+```
+naca_monitor_snapshot, kg_populator_state, pr-stuck-reminder,
+pr-decision-recorded, digest_queue, daily_checkup_run,
+supervisor-observation, vps_git_drift, fleet-node-discovered
+```
+The same list lives in `tools/backfill-missing-embeddings.js`. **Keep both in sync.**
+
+**If you see a trigger rejection** (`ERROR: 23514: memories: NULL embedding rejected for category X`):
+1. Are you writing *knowledge*? Then use `@todak/memory` SDK's `nb.save(content, opts)` (auto-embeds via Gemini), or `@naca/core saveKnowledgeMemory()` once it lands.
+2. Are you writing *operational/audit data*? Add the category to the trigger's `event_categories` array AND to `tools/backfill-missing-embeddings.js`. PR the change as a `shared_infra_change`.
+
+**Bypass for legitimate maintenance** (rare — schema migrations, seeding fixtures, etc.):
+```sql
+SET LOCAL session_replication_role = 'replica';
+-- INSERTs in this transaction bypass the trigger
+```
+Don't use this from agent code. Don't use it to "just get past" a rejection — the rejection is telling you the architecture is wrong for this write.
+
+**Upgrades pending** (deferred from 2026-05-14):
+- Layer 2 (code-level): `@naca/core saveKnowledgeMemory()` single helper, replaces every direct `rest('memories', POST)` in fleet-agent code. Scoped in `prompts/focus/NACA-MEMORY-DISCIPLINE.md`.
+- Layer 3 (CI-level): `scripts/lint-no-hardcoded-agents.sh`-style guard that fails PRs containing direct memories INSERTs from non-allowlisted files.
+- Layer 4 (audit-level): daily-checkup runs a recurring memory-hygiene scan; alerts if NULL knowledge rows appear in last 24h.
+
 ### 3.5 Doc/Memory Pattern (added 2026-04-26)
 
 Don't duplicate progress notes between memory and code. Each goes to its natural home:
