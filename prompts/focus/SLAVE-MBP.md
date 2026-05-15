@@ -1,12 +1,14 @@
 # SLAVE-MBP Focus CC Session Prompt
 
-Paste below into a fresh Claude Code session as the first message when working on **Slave-MBP** — Imel's MacBook Air repurposed as the fleet's "Publisher" node (browser-driven posting + API-driven posting + url fetching for auth-walled hosts).
+Paste below into a fresh Claude Code session as the first message when working on **Slave-MBP** — Imel's MacBook Air, the fleet's **"Creative Fleet"** node: creative-content generation + browser-driven posting + API-driven posting + url fetching for auth-walled hosts.
 
-**Before doing anything else, read `~/Projects/claude-tools-kit/WORKFLOW.md`** (canonical 5-phase work flow). The two agents that live here (browser-agent + publisher-agent) are `tier_1` per the registry → NORMATIVE rules apply.
+**Before doing anything else, read `~/Projects/claude-tools-kit/WORKFLOW.md`** (canonical 5-phase work flow). The agents that live here (content-creator + browser-agent + publisher-agent) are `tier_1` per the registry → NORMATIVE rules apply.
 
 ---
 
-You are scoped to **Slave-MBP** — Imel's MBA, M-series, repurposed as the fleet's posting + browser-fetch surface. Per the **Studio / Publisher split** decision (2026-04-29): CLAW = Studio (media generation via Higgsfield/Kling/cloud APIs), Slave-MBP = Publisher (Chrome with per-platform profiles for social posting). Ollama dropped from the fleet entirely.
+You are scoped to **Slave-MBP** — Imel's MBA, M-series, the fleet's **Creative Fleet** node: it both *creates* media and *publishes* it.
+
+**Architecture history:** The 2026-04-29 "Studio / Publisher split" (CLAW = media-gen Studio, Slave = Publisher) was **superseded 2026-05-15**. That split was only partially realized — CLAW never got a registered media-gen agent, just kept an anonymous `daily-content.sh` shell script. The creative fleet has since consolidated on Slave-MBP: the new `content-creator` agent (`broneotodak/naca-content-creator`) lives here alongside `browser-agent` + `publisher-agent`. CLAW now runs only worker/monitor/infra agents; its `daily-content.sh` is kept as a **fallback/reference only** until naca-content-creator v1.0. Ollama dropped from the fleet entirely.
 
 ## Live layout
 
@@ -18,17 +20,19 @@ You are scoped to **Slave-MBP** — Imel's MBA, M-series, repurposed as the flee
 | SSH cmd | `ssh slave@100.93.211.9` (or just `ssh slave@` from a known host) |
 | Local user | `slave` |
 | Browser | Chromium (Playwright-installed), separate **automation** profile from any human-Chrome on the same machine |
+| Content-creator repo | `broneotodak/naca-content-creator` |
 | Browser-agent repo | `broneotodak/browser-agent` |
 | Publisher-agent repo | `broneotodak/publisher-agent` |
-| `agent_registry` rows | `browser-agent`, `publisher-agent` (both tier_1, deploy_method `pm2_slave_mbp`) |
+| `agent_registry` rows | `content-creator`, `browser-agent`, `publisher-agent` (all tier_1, deploy_method `pm2_slave_mbp`) |
 
 ## What runs here
 
 | Service | Pattern | Purpose |
 |---|---|---|
+| **`content-creator`** | Queue listener + CLI + (planned) MCP | Creative-content generation (image / video / music / SFX) via pluggable tool plugins (Higgsfield, ElevenLabs, Gemini, …). Multi-trigger: cron, WA via Siti, scheduled_actions, MCP. Replaces CLAW's legacy `daily-content.sh`. Spec: `naca-content-creator/docs/spec/v1.md`. As of 2026-05-15 status `offline` — building toward v1.0. |
 | **`browser-agent`** | Pattern C: queue listener + HTTP server | UI-driven posting (TikTok / Instagram / Threads / IG) + URL fetcher fallback for auth-walled hosts (LinkedIn / X / TikTok / IG / Threads) + YouTube transcript via yt-dlp |
 | **`publisher-agent`** | API-driven | LinkedIn UGC API + other API-only platforms |
-| **NAS read access** | SSH key on slave-mbp authorized for NAS | Reads media from NAS MinIO at `/volume1/Todak Studios/naca/` |
+| **NAS read/write access** | SSH key on slave-mbp authorized for NAS | content-creator writes generated media to NAS MinIO; browser/publisher read from it. Path `/volume1/Todak Studios/naca/`. |
 
 The pair is the **only** path for Meta-blocked platforms (Instagram blocked broneotodak's API access, forcing the browser-driven pivot — that's what triggered Phase 4c "Browser Reach").
 
@@ -107,7 +111,8 @@ curl -X POST http://100.93.211.9:<port>/post -H 'content-type: application/json'
 
 - `~/Projects/claude-tools-kit/WORKFLOW.md` — canonical work flow
 - neo-brain: `reference_slave_mbp`, `project_studio_publisher_split`, `project_browser_agent`, `project_publisher_agent`, `project_naca_phase4c_browser_reach`
-- Companion node: CLAW (Studio side — see `prompts/focus/CLAW.md`)
+- Companion node: CLAW (worker/monitor/infra — see `prompts/focus/CLAW.md`). CLAW keeps `daily-content.sh` as a fallback only; the creative fleet is here.
+- New-agent build: `broneotodak/naca-content-creator` — spec `docs/spec/v1.md`, migration issues #1–#6
 
 ## Tone
 
