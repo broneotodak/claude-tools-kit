@@ -58,6 +58,73 @@ test('extract: multiple distinct secrets are all captured', () => {
   assert.equal(s.size, 3);
 });
 
+// ── 2026-05-15 Phase S.2 step A · expanded pattern registry ─────────
+// One positive + one negative per pattern. Positive = matches our shape.
+// Negative = looks similar but fails the length / structure requirement,
+// must NOT be flagged. Negative cases guard against false positives that
+// would block legitimate writes (docs strings, abbreviated examples).
+
+test('extract: Google OAuth client secret (GOCSPX-)', () => {
+  assert.equal(_extractCredentialMatches('secret=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').size, 1);
+  // Negative — too short (needs 20+ chars after prefix)
+  assert.equal(_extractCredentialMatches('GOCSPX-short').size, 0);
+});
+
+test('extract: Google API key (AIza)', () => {
+  // 35 char tail exactly
+  assert.equal(_extractCredentialMatches('AIza' + 'a'.repeat(35)).size, 1);
+  // Negative — too short
+  assert.equal(_extractCredentialMatches('AIza' + 'a'.repeat(10)).size, 0);
+});
+
+test('extract: Stripe live secret (sk_live_)', () => {
+  assert.equal(_extractCredentialMatches('sk_live_' + 'a'.repeat(30)).size, 1);
+  // Negative — too short (needs 24+ alphanumeric)
+  assert.equal(_extractCredentialMatches('sk_live_short').size, 0);
+});
+
+test('extract: Stripe restricted key (rk_live_)', () => {
+  assert.equal(_extractCredentialMatches('rk_live_' + 'a'.repeat(30)).size, 1);
+  assert.equal(_extractCredentialMatches('rk_live_short').size, 0);
+});
+
+test('extract: Twilio Account SID (AC + 32 hex)', () => {
+  assert.equal(_extractCredentialMatches('AC' + '0123456789abcdef0123456789abcdef').size, 1);
+  // Negative — only 30 hex
+  assert.equal(_extractCredentialMatches('AC' + '0123456789abcdef0123456789ab').size, 0);
+});
+
+test('extract: Twilio API key (SK + 32 hex)', () => {
+  assert.equal(_extractCredentialMatches('SK' + '0123456789abcdef0123456789abcdef').size, 1);
+  // Negative — uppercase hex would not match [a-f0-9]
+  assert.equal(_extractCredentialMatches('SK' + '0123456789ABCDEF0123456789ABCDEF').size, 0);
+});
+
+test('extract: SendGrid (SG.x.y)', () => {
+  const sg = 'SG.' + 'a'.repeat(22) + '.' + 'b'.repeat(43);
+  assert.equal(_extractCredentialMatches(sg).size, 1);
+  // Negative — wrong segment lengths
+  assert.equal(_extractCredentialMatches('SG.short.short').size, 0);
+});
+
+test('extract: HuggingFace token (hf_ + 34)', () => {
+  assert.equal(_extractCredentialMatches('hf_' + 'a'.repeat(34)).size, 1);
+  // Negative — wrong length (33)
+  assert.equal(_extractCredentialMatches('hf_' + 'a'.repeat(33)).size, 0);
+});
+
+test('extract: npm token (npm_ + 36)', () => {
+  assert.equal(_extractCredentialMatches('npm_' + 'a'.repeat(36)).size, 1);
+  // Negative — wrong length (35)
+  assert.equal(_extractCredentialMatches('npm_' + 'a'.repeat(35)).size, 0);
+});
+
+test('extract: DigitalOcean token (dop_v1_ + 64 hex)', () => {
+  assert.equal(_extractCredentialMatches('dop_v1_' + '0'.repeat(64)).size, 1);
+  // Negative — non-hex char
+  assert.equal(_extractCredentialMatches('dop_v1_' + 'z'.repeat(64)).size, 0);
+});
+
 // ── Integration test · NeoBrain.redactMemory ─────────────────────────
 
 const haveEnv = process.env.NEO_BRAIN_URL && process.env.NEO_BRAIN_SERVICE_ROLE_KEY && process.env.GEMINI_API_KEY;
