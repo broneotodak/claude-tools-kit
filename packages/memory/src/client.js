@@ -10,17 +10,45 @@ const NEO_SELF_ID = "00000000-0000-0000-0000-000000000001";
 //   tools/backfill-missing-embeddings.js (EVENT_CATEGORIES, separate concern)
 //   the pre-INSERT trigger on memories (Layer 4, planned)
 const _CREDENTIAL_PATTERNS = [
+  // Anthropic
   /sk-ant-api03-[A-Za-z0-9_-]{20,}/g,
   /sk-ant-admin01-[A-Za-z0-9_-]{20,}/g,
+  // OpenAI
   /sk-proj-[A-Za-z0-9_-]{30,}/g,
+  // GitHub
   /(?:ghp|gho|ghs|ghr)_[A-Za-z0-9]{30,}/g,
   /github_pat_[A-Za-z0-9_]{30,}/g,
+  // GitLab
   /glpat-[A-Za-z0-9_-]{20,}/g,
+  // Slack
   /xox[bpars]-[A-Za-z0-9-]{10,}/g,
+  // AWS
   /(?:AKIA|ASIA)[0-9A-Z]{16}/g,
+  // JWTs (Supabase, n8n, generic)
   /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
+  // NewRelic
   /NRAK-[A-Z0-9]{20,}/g,
+  // PEM blocks
   /-----BEGIN[^-]+-----/g,
+  // ── 2026-05-15 Phase S.2 step A expansion ────────────────────────
+  // Google OAuth client secret
+  /GOCSPX-[A-Za-z0-9_-]{20,}/g,
+  // Google API key
+  /AIza[A-Za-z0-9_-]{35}/g,
+  // Stripe
+  /sk_live_[A-Za-z0-9]{24,}/g,
+  /rk_live_[A-Za-z0-9]{24,}/g,
+  // Twilio
+  /AC[a-f0-9]{32}/g,
+  /SK[a-f0-9]{32}/g,
+  // SendGrid
+  /SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}/g,
+  // HuggingFace
+  /hf_[A-Za-z0-9]{34}/g,
+  // npm
+  /npm_[A-Za-z0-9]{36}/g,
+  // DigitalOcean
+  /dop_v1_[a-f0-9]{64}/g,
 ];
 
 /**
