@@ -58,6 +58,19 @@ test('ruleset: the 23 CTK custom rules are all present', () => {
   assert.ok(custom.some((r) => r.id === 'ctk-supabase-secret-key'), 'sb_secret_ rule present');
 });
 
+test('ruleset: no over-capturing curl-auth rules (blocklist regression guard)', () => {
+  // gitleaks curl-auth-header / curl-auth-user capture the WHOLE curl command
+  // (incl. $VAR placeholders) as the match — unusable for extract-and-redact,
+  // and they make redactMemory permanently refuse any memory with a curl
+  // command. They are blocklisted in regen-credential-rules.mjs; this guards
+  // against a regen ever letting them back in.
+  const curl = ruleset.rules.filter((r) => /curl/i.test(r.id));
+  assert.equal(
+    curl.length, 0,
+    `curl-auth-* rules must stay blocklisted (found: ${curl.map((r) => r.id).join(', ')})`,
+  );
+});
+
 // ── False-positive guard — the core safety property ─────────────────
 // An auto-redaction tool MUST NOT flag benign strings. These are the same
 // probes the regen script uses to drop too-loose rules; asserting them here

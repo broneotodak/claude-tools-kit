@@ -128,6 +128,18 @@ const FP_PROBES = [
   '/Users/broneotodak/Projects/claude-tools-kit/src',    // a file path
 ];
 
+// ── explicit rule blocklist ─────────────────────────────────────────
+// Rules dropped by id (not by probe). The gitleaks curl-auth-* rules are
+// real detections, but they capture the ENTIRE curl command (often 100s of
+// chars, including $VAR placeholders) as the match. That's unusable for an
+// extract-and-redact tool: it over-redacts, and any memory containing a
+// curl command would make redactMemory permanently refuse (the whole-
+// command "secret" can never be fully removed). 2026-05-15 Phase S.2.
+const RULE_BLOCKLIST = new Set([
+  'curl-auth-header',
+  'curl-auth-user',
+]);
+
 function tripsProbe(jsRegex) {
   for (const probe of FP_PROBES) {
     jsRegex.lastIndex = 0;
@@ -179,8 +191,10 @@ const kept = [];
 const droppedContextual = [];
 const droppedConvFail = [];
 const droppedFalsePositive = [];
+const droppedBlocklist = [];
 
 for (const r of parsed) {
+  if (RULE_BLOCKLIST.has(r.id)) { droppedBlocklist.push(r.id); continue; }
   if (leadingLiteralRun(r.regex) < 3) { droppedContextual.push(r.id); continue; }
   let rule;
   try {
@@ -214,6 +228,7 @@ const allRules = [...customCompiled, ...kept];
 console.log('\n━━ classification audit ━━');
 console.log(`  gitleaks parsed:          ${parsed.length}`);
 console.log(`  kept (prefix-anchored):   ${kept.length}`);
+console.log(`  dropped (blocklist):      ${droppedBlocklist.length}  [${droppedBlocklist.join(', ')}]`);
 console.log(`  dropped (contextual):     ${droppedContextual.length}`);
 console.log(`  dropped (convert fail):   ${droppedConvFail.length}`);
 console.log(`  dropped (false-positive): ${droppedFalsePositive.length}`);
