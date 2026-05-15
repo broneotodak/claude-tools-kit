@@ -9,6 +9,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { NeoBrain, _extractCredentialMatches } from '../src/index.js';
 
 // ── Pure-function tests · _extractCredentialMatches ──────────────────
@@ -32,7 +33,8 @@ test('extract: github_pat new-style is captured', () => {
 });
 
 test('extract: JWT-shaped (3 dot-separated base64 segs) is captured', () => {
-  const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+  // Synthetic — constructed by concat so no literal JWT string lives in this file
+  const jwt = ['eyJ' + 'h'.repeat(34), 'eyJ' + 'p'.repeat(40), 's'.repeat(43)].join('.');
   const s = _extractCredentialMatches(jwt);
   assert.equal(s.size, 1);
 });
@@ -65,7 +67,8 @@ test('extract: multiple distinct secrets are all captured', () => {
 // would block legitimate writes (docs strings, abbreviated examples).
 
 test('extract: Google OAuth client secret (GOCSPX-)', () => {
-  assert.equal(_extractCredentialMatches('secret=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').size, 1);
+  // Synthetic value — GOCSPX- prefix + 28 filler chars (real-secret shape, fake content)
+  assert.equal(_extractCredentialMatches('secret=GOCSPX-' + 'a'.repeat(28)).size, 1);
   // Negative — too short (needs 20+ chars after prefix)
   assert.equal(_extractCredentialMatches('GOCSPX-short').size, 0);
 });
@@ -125,6 +128,33 @@ test('extract: DigitalOcean token (dop_v1_ + 64 hex)', () => {
   assert.equal(_extractCredentialMatches('dop_v1_' + 'z'.repeat(64)).size, 0);
 });
 
+// ── Regression guard · this file must stay under the secret scanner ──
+// Root cause of the 2026-05-15 GOCSPX leak: .secretsignore whole-file-
+// exempted this test file, so the pre-commit hook never scanned it and a
+// real Google OAuth secret rode into a public commit. Fixtures here are
+// now synthetic-by-construction (string concat — no literal credential),
+// so the scanner passes them naturally. If anyone re-adds a whole-file
+// exemption, this test fails loudly.
+
+test('guard: redact-memory test file is NOT whole-file exempt in .secretsignore', () => {
+  const ignorePath = new URL('../../../.secretsignore', import.meta.url);
+  const lines = readFileSync(ignorePath, 'utf8')
+    .split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+  const exemptForms = [
+    'packages/memory/test/redact-memory.test.mjs',
+    'redact-memory.test.mjs',
+    'packages/memory/test/*.mjs',
+    'packages/memory/test/*',
+  ];
+  const offending = lines.find((l) => exemptForms.includes(l));
+  assert.equal(
+    offending,
+    undefined,
+    `.secretsignore must not whole-file-exempt this test file (found "${offending}"). ` +
+      `That blind spot caused the 2026-05-15 leak — keep this file scanned; fixtures are synthetic-by-construction.`,
+  );
+});
+
 // ── Integration test · NeoBrain.redactMemory ─────────────────────────
 
 const haveEnv = process.env.NEO_BRAIN_URL && process.env.NEO_BRAIN_SERVICE_ROLE_KEY && process.env.GEMINI_API_KEY;
@@ -133,7 +163,7 @@ test('integration: redactMemory removes secret, re-embeds, logs, refuses bad red
   const brain = new NeoBrain({ agent: 'redact-memory-test' });
 
   // 1. Insert a fixture memory containing a fake "sk-ant-api03" key
-  const FAKE_KEY = 'sk-ant-api03-TESTFIXTURE' + 'x'.repeat(40);
+  const FAKE_KEY = 'sk-ant-api03-' + 'TESTFIXTURE' + 'x'.repeat(40);
   const FIXTURE_CONTENT = `Fixture for redactMemory test. Should never reach production retrieval. Embedded fake key: ${FAKE_KEY}.`;
   const inserted = await brain.save(FIXTURE_CONTENT, {
     category: '__test_redact__',
