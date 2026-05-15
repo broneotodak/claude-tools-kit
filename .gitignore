@@ -182,3 +182,4 @@ tools/dataset-pipeline/wandb/
 
 # THR employee dump used by thr-name-resolver (sensitive: phones, full names, positions)
 .thr-employees-dump.json
+data/

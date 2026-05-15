@@ -65,7 +65,8 @@ test('extract: multiple distinct secrets are all captured', () => {
 // would block legitimate writes (docs strings, abbreviated examples).
 
 test('extract: Google OAuth client secret (GOCSPX-)', () => {
-  assert.equal(_extractCredentialMatches('secret=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').size, 1);
+  // Synthetic value — GOCSPX- prefix + 28 filler chars (real-secret shape, fake content)
+  assert.equal(_extractCredentialMatches('secret=GOCSPX-' + 'a'.repeat(28)).size, 1);
   // Negative — too short (needs 20+ chars after prefix)
   assert.equal(_extractCredentialMatches('GOCSPX-short').size, 0);
 });
