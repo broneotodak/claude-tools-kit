@@ -9,7 +9,8 @@
     "./storage": "./src/storage/index.js"
   },
   "scripts": {
-    "smoke": "node scripts/smoke.js"
+    "smoke": "node scripts/smoke.js",
+    "test": "node --test --no-warnings 'test/**/*.test.mjs'"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1"

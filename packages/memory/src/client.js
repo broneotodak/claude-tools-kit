@@ -3,6 +3,43 @@ import { embedText, toPgVectorString } from "./gemini.js";
 
 const NEO_SELF_ID = "00000000-0000-0000-0000-000000000001";
 
+// Credential-shape patterns. Used by redactMemory's safety check to extract
+// matches from old vs new content. Keep in sync with:
+//   tools/redact-memory.js
+//   tools/memory-hygiene-check.js
+//   tools/backfill-missing-embeddings.js (EVENT_CATEGORIES, separate concern)
+//   the pre-INSERT trigger on memories (Layer 4, planned)
+const _CREDENTIAL_PATTERNS = [
+  /sk-ant-api03-[A-Za-z0-9_-]{20,}/g,
+  /sk-ant-admin01-[A-Za-z0-9_-]{20,}/g,
+  /sk-proj-[A-Za-z0-9_-]{30,}/g,
+  /(?:ghp|gho|ghs|ghr)_[A-Za-z0-9]{30,}/g,
+  /github_pat_[A-Za-z0-9_]{30,}/g,
+  /glpat-[A-Za-z0-9_-]{20,}/g,
+  /xox[bpars]-[A-Za-z0-9-]{10,}/g,
+  /(?:AKIA|ASIA)[0-9A-Z]{16}/g,
+  /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
+  /NRAK-[A-Z0-9]{20,}/g,
+  /-----BEGIN[^-]+-----/g,
+];
+
+/**
+ * Extract every credential-shape substring in `text` as a Set of literals.
+ * Internal — exported (prefixed `_`) for testing only.
+ */
+export function _extractCredentialMatches(text) {
+  const out = new Set();
+  if (typeof text !== "string" || !text.length) return out;
+  for (const p of _CREDENTIAL_PATTERNS) {
+    p.lastIndex = 0;
+    let m;
+    while ((m = p.exec(text)) !== null) {
+      out.add(m[0]);
+    }
+  }
+  return out;
+}
+
 /**
  * NeoBrain — unified memory SDK client.
  *
@@ -118,6 +155,82 @@ export class NeoBrain {
     await this.sb.from("memory_writes_log").insert({
       memory_id: memoryId, action: "archive", written_by: this.agent,
     });
+  }
+
+  /**
+   * Safely replace a memory's content in place. Designed for credential
+   * redactions: the safety check refuses to write if any credential-shape
+   * string in the OLD content is still present verbatim in the NEW content.
+   *
+   * Allowed: newContent may contain credential-shape strings (vault pointer
+   * references, regex docs, examples) — they just must not be the SAME
+   * secrets we were trying to redact.
+   *
+   * Auto re-embeds the new content. Writes a memory_writes_log row with
+   * action='redact' for traceability.
+   *
+   * @param {string} memoryId
+   * @param {{newContent:string, newImportance?:number, newVisibility?:'public'|'internal'|'private', reason:string}} opts
+   * @returns updated memory row
+   */
+  async redactMemory(memoryId, { newContent, newImportance, newVisibility, reason } = {}) {
+    if (!memoryId) throw new Error("redactMemory: memoryId required");
+    if (typeof newContent !== "string" || !newContent.length) throw new Error("redactMemory: newContent required");
+    if (!reason || typeof reason !== "string") throw new Error("redactMemory: reason required");
+
+    // 1. Fetch current row
+    const { data: cur, error: fetchErr } = await this.sb
+      .from("memories")
+      .select("id, content")
+      .eq("id", memoryId)
+      .maybeSingle();
+    if (fetchErr) throw new Error(`redactMemory fetch: ${fetchErr.message}`);
+    if (!cur) throw new Error(`redactMemory: memory ${memoryId} not found`);
+
+    // 2. Safety check — extract credential-pattern matches from BOTH old and
+    //    new content. Refuse if any OLD secret is still present verbatim in
+    //    NEW content. New content is allowed to contain credential-shape
+    //    strings as long as they aren't the SAME ones we're redacting.
+    const oldSecrets = _extractCredentialMatches(cur.content || "");
+    for (const s of oldSecrets) {
+      if (newContent.includes(s)) {
+        throw new Error(
+          `redactMemory SAFETY: redaction would leave old secret in place: ` +
+          `"${s.slice(0, 16)}…" still present verbatim in newContent`
+        );
+      }
+    }
+
+    // 3. Re-embed new content
+    const embedding = await embedText(newContent, { apiKey: this.geminiApiKey });
+    if (!embedding) throw new Error("redactMemory: embedText returned null");
+    const embStr = toPgVectorString(embedding);
+
+    // 4. Build patch
+    const patch = { content: newContent, embedding: embStr };
+    if (typeof newImportance === "number") patch.importance = newImportance;
+    if (newVisibility) patch.visibility = newVisibility;
+
+    // 5. Update
+    const { data: updated, error: updErr } = await this.sb
+      .from("memories")
+      .update(patch)
+      .eq("id", memoryId)
+      .select("*")
+      .single();
+    if (updErr) throw new Error(`redactMemory update: ${updErr.message}`);
+
+    // 6. Log (capture errors — unlike save/archive which swallow them
+    //    historically, redact wants the audit trail to be loud)
+    const { error: logErr } = await this.sb.from("memory_writes_log").insert({
+      memory_id: memoryId,
+      action: "redact",
+      written_by: this.agent,
+      payload_preview: `[${reason}] ${newContent.slice(0, 160)}`,
+    });
+    if (logErr) throw new Error(`redactMemory: update succeeded but log write failed: ${logErr.message}`);
+
+    return updated;
   }
 
   /**
