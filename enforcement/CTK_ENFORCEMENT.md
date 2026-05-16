@@ -65,7 +65,7 @@ Bulk operations without preview have caused real damage (THR 2025-07-15: 27 empl
 - Default `visibility: 'private'`. Tag `'public'` only for content meant to be retrievable in shared contexts.
 - Neo's self-id: `00000000-0000-0000-0000-000000000001`
 
-**CLI (dual-writes legacy for compat):**
+**CLI (writes to neo-brain):**
 ```bash
 node ~/Projects/claude-tools-kit/tools/save-memory.js "Category" "Title" "Content" 6
 ```
@@ -256,7 +256,7 @@ Universal tools at `~/Projects/claude-tools-kit/tools/`:
 
 | Tool | Use |
 |---|---|
-| `save-memory.js` | Save to neo-brain (dual-writes legacy for compat) |
+| `save-memory.js` | Save to neo-brain |
 | `check-memory-health.js` | Memory diagnostics |
 | `run-sql-migration.js` | SQL runner with preview & rollback |
 | `safe-data-migration.js` | Safe wrapper for bulk ops |
