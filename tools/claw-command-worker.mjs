@@ -217,168 +217,10 @@ async function browserAct(payload) {
   }
 }
 
-// ── post_to_<channel>: wraps existing browser-automation post scripts ──
-// Phase 5c. Each platform has a python script in ~/.openclaw/skills/daily-quotes/
-// that takes (media_path, caption) on argv and uses Antigravity MCP via Chrome
-// CDP to log into the platform, attach media, and click Post.
-//
-// Payload: { caption, media_path, media_kind, draft_id?, idempotency_key? }
-//
-// Exit code 0 = success. Non-zero with stderr containing 'MCP tool error' or
-// 'navigating frame was detached' = TRANSIENT (browser session blip → retry).
-// Other non-zero exits = PERMANENT (script bug, login expired, content invalid).
-import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, createWriteStream, statSync, unlinkSync, renameSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-
-const POST_SCRIPTS = {
-  linkedin:   `${homedir()}/.openclaw/skills/daily-quotes/linkedin-post.py`,
-  instagram:  `${homedir()}/.openclaw/skills/daily-quotes/ig-post.py`,
-  ig:         `${homedir()}/.openclaw/skills/daily-quotes/ig-post.py`, // alias
-  threads:    `${homedir()}/.openclaw/skills/daily-quotes/threads-post.py`,
-  tiktok:     `${homedir()}/.openclaw/skills/daily-quotes/tiktok-post.py`,
-  x:          `${homedir()}/.openclaw/skills/daily-quotes/x-post.py`,
-  twitter:    `${homedir()}/.openclaw/skills/daily-quotes/x-post.py`, // alias
-};
-
-const TRANSIENT_PATTERNS = [
-  /MCP tool error/i,
-  /navigating frame was detached/i,
-  /selected page has been closed/i,
-  /timed out/i,
-  /lifecyclewatcher disposed/i,
-  /econnreset|epipe|connection reset/i,
-  /port discovery failed/i,
-];
-
-function classifyPostFailure(stderr, exitCode) {
-  const blob = (stderr || '').slice(-2000);
-  if (TRANSIENT_PATTERNS.some(rx => rx.test(blob))) return 'transient';
-  if (/no such file|cannot find|not found/i.test(blob)) return 'permanent';
-  return 'permanent'; // default — caller decided this is broken, retry won't fix
-}
-
-// ── NAS media staging ──────────────────────────────────────────────
-// content-creator writes draft media to the Ugreen NAS filesystem, marked
-// in the agent_command payload as media_store='nas'. The post scripts need a
-// real local file, so we stage it (SSH+cat) to a local tempfile first. Draft
-// media is immutable, so a staged file is reused across channels and retries.
-// media_store absent/'local' → media_path is already a local file (legacy).
-const NAS_HOST  = 'Neo@100.85.18.97';
-const NAS_KEY   = `${homedir()}/.ssh/id_naca_nas`;
-const NAS_ROOT  = '/volume1/Todak Studios/naca';
-const NAS_CACHE = `${tmpdir()}/claw-nas-media`;
-
-function stageNasMedia(relPath) {
-  // Path safety — content/ paths only, no traversal, no shell metachars.
-  if (!/^content\/[\w./-]+\.(mp4|mov|jpg|jpeg|png|webp|m4a|mp3)$/i.test(relPath) || relPath.includes('..')) {
-    throw invalidPayload(`unsafe NAS media path: ${relPath}`);
-  }
-  const cacheFile = `${NAS_CACHE}/${relPath.replace(/[^\w.-]/g, '_')}`;
-  try { if (statSync(cacheFile).size > 0) return Promise.resolve(cacheFile); } catch { /* not staged yet */ }
-  mkdirSync(NAS_CACHE, { recursive: true });
-  const tmp = `${cacheFile}.part`;
-  return new Promise((resolve, reject) => {
-    const out = createWriteStream(tmp);
-    // spawn arg-array (no shell our side); remote path single-quoted so the
-    // NAS shell keeps spaces in the path as one argument.
-    const proc = spawn('ssh', [
-      '-i', NAS_KEY, '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
-      NAS_HOST, `cat '${NAS_ROOT}/${relPath}'`,
-    ], { timeout: 180_000 });
-    let errBuf = '';
-    proc.stdout.pipe(out);
-    proc.stderr.on('data', d => { errBuf += d.toString(); });
-    proc.on('error', e => {
-      out.destroy(); try { unlinkSync(tmp); } catch {}
-      reject(transient(`nas ssh spawn failed: ${e.message}`));
-    });
-    proc.on('close', code => out.end(() => {
-      if (code !== 0) {
-        try { unlinkSync(tmp); } catch {}
-        const cls = /no such file/i.test(errBuf) ? 'permanent' : 'transient';
-        return reject(new CommandError(cls, `nas fetch failed (ssh exit ${code}): ${errBuf.slice(0, 200)}`));
-      }
-      try {
-        if (statSync(tmp).size === 0) { unlinkSync(tmp); return reject(new CommandError('permanent', `nas file empty: ${relPath}`)); }
-        renameSync(tmp, cacheFile); // atomic — a later channel sees the whole file or nothing
-        resolve(cacheFile);
-      } catch (e) { reject(new CommandError('permanent', `nas stage rename failed: ${e.message}`)); }
-    }));
-  });
-}
-
-async function runPostScript(channel, payload) {
-  const caption = (payload.caption || '').toString();
-  let mediaPath = (payload.media_path || '').toString();
-  if (!caption.trim()) throw invalidPayload('caption required (non-empty)');
-  if (!mediaPath) throw invalidPayload('media_path required');
-  if (payload.media_store === 'nas') mediaPath = await stageNasMedia(mediaPath);
-  if (!existsSync(mediaPath)) {
-    throw new CommandError('permanent', `media file not found at ${mediaPath} on claw-mac`);
-  }
-  const scriptPath = POST_SCRIPTS[channel];
-  if (!scriptPath) {
-    throw capabilityMissing(`no post script for channel '${channel}'`, {
-      available_channels: [...new Set(Object.keys(POST_SCRIPTS))],
-    });
-  }
-  if (!existsSync(scriptPath)) {
-    throw new CommandError('permanent', `post script missing on disk: ${scriptPath}. Channel handler not yet built.`);
-  }
-
-  // Spawn python3 <script> <media_path> <caption>. 6-min timeout for video uploads.
-  return new Promise((resolve, reject) => {
-    const proc = spawn('/opt/homebrew/bin/python3', [scriptPath, mediaPath, caption], {
-      timeout: 6 * 60 * 1000,
-      // /usr/sbin needed for lsof (Antigravity port discovery in post scripts).
-      // Launchd-spawned worker has a restricted PATH that doesn't include it.
-      env: { ...process.env, PATH: `/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:${process.env.PATH || ''}` },
-    });
-    let stdout = '', stderr = '';
-    proc.stdout.on('data', d => { stdout += d.toString(); });
-    proc.stderr.on('data', d => { stderr += d.toString(); });
-    proc.on('close', code => {
-      if (code === 0) {
-        // Try to extract a posted URL from stdout (scripts sometimes print one)
-        const urlMatch = stdout.match(/https?:\/\/\S+/);
-        resolve({
-          channel,
-          posted: true,
-          url: urlMatch ? urlMatch[0] : null,
-          stdout_tail: stdout.slice(-500),
-          script: scriptPath,
-        });
-      } else {
-        const klass = classifyPostFailure(stderr, code);
-        const err = new CommandError(klass,
-          `${channel} post failed (exit ${code}): ${(stderr.split('\n').filter(Boolean).pop() || 'unknown error').slice(0, 200)}`,
-          { stderr_tail: stderr.slice(-1000), stdout_tail: stdout.slice(-500), exit_code: code });
-        reject(err);
-      }
-    });
-    proc.on('error', e => reject(new CommandError('transient', `spawn error: ${e.message}`)));
-  });
-}
-
-const postLinkedIn  = (p) => runPostScript('linkedin', p);
-const postInstagram = (p) => runPostScript('instagram', p);
-const postThreads   = (p) => runPostScript('threads', p);
-const postTikTok    = (p) => runPostScript('tiktok', p);
-const postX         = (p) => runPostScript('x', p);
-
 // Dispatch table. Add commands here as they come online.
 const HANDLERS = {
   run_ollama_prompt: runOllamaPrompt,
   browser_act: browserAct,
-  // Phase 5c · content posting via existing CLAW python scripts
-  post_to_linkedin:  postLinkedIn,
-  post_to_instagram: postInstagram,
-  post_to_ig:        postInstagram, // alias used by older callers
-  post_to_threads:   postThreads,
-  post_to_tiktok:    postTikTok,
-  post_to_x:         postX,
-  post_to_twitter:   postX, // alias
 };
 
 // ── execution wrapper ──────────────────────────────────────────────
@@ -418,13 +260,6 @@ async function processOne() {
       _meta: { duration_ms: Date.now() - startedAt, worker_version: 'claw-command-worker-v2' },
     });
     console.log(`[worker] done ${cmd.id} in ${Date.now() - startedAt}ms`);
-    // Phase 5c · fire a Siti WhatsApp notification on terminal post_to_* status
-    // so Neo gets a confirmation DM right after the post lands. Best-effort.
-    if (cmd.command?.startsWith('post_to_')) {
-      await notifySitiPostResult(cmd, 'done', result, null).catch(e =>
-        console.error(`[worker] siti notify (success) failed: ${e.message}`),
-      );
-    }
   } catch (err) {
     const errorClass = err.errorClass || 'permanent';
     const body = {
@@ -436,53 +271,12 @@ async function processOne() {
     if (errorClass === 'transient') {
       const newStatus = await failTransient(cmd.id, body);
       console.error(`[worker] transient ${cmd.id} → ${newStatus}: ${err.message}`);
-      // Notify Siti only on retries-exhausted (newStatus === 'failed' or 'dead_letter')
-      if (cmd.command?.startsWith('post_to_') && newStatus !== 'pending') {
-        await notifySitiPostResult(cmd, newStatus, null, err.message).catch(() => {});
-      }
     } else {
       await complete(cmd.id, 'failed', body);
       console.error(`[worker] failed ${cmd.id} (${errorClass}): ${err.message}`);
-      if (cmd.command?.startsWith('post_to_')) {
-        await notifySitiPostResult(cmd, 'failed', null, err.message).catch(() => {});
-      }
     }
   }
   return true;
-}
-
-// Phase 5c · Siti WA notification on post_to_* terminal status.
-// Writes an agent_command to_agent='siti' command='send_whatsapp_notification'.
-// Siti's existing handler picks it up and DMs Neo (60177519610). Also updates
-// the content_drafts row's source_ref with the post URL when present, so the
-// SCHED tab DRAFTS lane reflects terminal state.
-async function notifySitiPostResult(cmd, status, result, errorMsg) {
-  const channel = (cmd.command || '').replace(/^post_to_/, '');
-  const draftId = cmd.payload?.draft_id;
-  const caption = (cmd.payload?.caption || '').slice(0, 80);
-  const url = result?.url;
-  let message;
-  if (status === 'done') {
-    message = `✅ Posted to ${channel.toUpperCase()}${url ? `\n🔗 ${url}` : ''}\n📝 ${caption}${draftId ? `\n(draft ${draftId.slice(0, 8)})` : ''}`;
-  } else {
-    message = `❌ ${channel.toUpperCase()} post FAILED${status === 'dead_letter' ? ' (dead letter, retries exhausted)' : ''}\n📝 ${caption}\n⚠️ ${(errorMsg || 'unknown').slice(0, 200)}`;
-  }
-  await fetch(`${SUPABASE_URL}/rest/v1/agent_commands`, {
-    method: 'POST',
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    },
-    body: JSON.stringify({
-      from_agent: 'claw-mac',
-      to_agent: 'siti',
-      command: 'send_whatsapp_notification',
-      payload: { to: '60177519610', message },
-      priority: 5,
-    }),
-  });
 }
 
 async function loop() {
