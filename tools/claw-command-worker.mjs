@@ -228,7 +228,8 @@ async function browserAct(payload) {
 // 'navigating frame was detached' = TRANSIENT (browser session blip → retry).
 // Other non-zero exits = PERMANENT (script bug, login expired, content invalid).
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, createWriteStream, statSync, unlinkSync, renameSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 const POST_SCRIPTS = {
   linkedin:   `${homedir()}/.openclaw/skills/daily-quotes/linkedin-post.py`,
@@ -257,11 +258,62 @@ function classifyPostFailure(stderr, exitCode) {
   return 'permanent'; // default — caller decided this is broken, retry won't fix
 }
 
+// ── NAS media staging ──────────────────────────────────────────────
+// content-creator writes draft media to the Ugreen NAS filesystem, marked
+// in the agent_command payload as media_store='nas'. The post scripts need a
+// real local file, so we stage it (SSH+cat) to a local tempfile first. Draft
+// media is immutable, so a staged file is reused across channels and retries.
+// media_store absent/'local' → media_path is already a local file (legacy).
+const NAS_HOST  = 'Neo@100.85.18.97';
+const NAS_KEY   = `${homedir()}/.ssh/id_naca_nas`;
+const NAS_ROOT  = '/volume1/Todak Studios/naca';
+const NAS_CACHE = `${tmpdir()}/claw-nas-media`;
+
+function stageNasMedia(relPath) {
+  // Path safety — content/ paths only, no traversal, no shell metachars.
+  if (!/^content\/[\w./-]+\.(mp4|mov|jpg|jpeg|png|webp|m4a|mp3)$/i.test(relPath) || relPath.includes('..')) {
+    throw invalidPayload(`unsafe NAS media path: ${relPath}`);
+  }
+  const cacheFile = `${NAS_CACHE}/${relPath.replace(/[^\w.-]/g, '_')}`;
+  try { if (statSync(cacheFile).size > 0) return Promise.resolve(cacheFile); } catch { /* not staged yet */ }
+  mkdirSync(NAS_CACHE, { recursive: true });
+  const tmp = `${cacheFile}.part`;
+  return new Promise((resolve, reject) => {
+    const out = createWriteStream(tmp);
+    // spawn arg-array (no shell our side); remote path single-quoted so the
+    // NAS shell keeps spaces in the path as one argument.
+    const proc = spawn('ssh', [
+      '-i', NAS_KEY, '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
+      NAS_HOST, `cat '${NAS_ROOT}/${relPath}'`,
+    ], { timeout: 180_000 });
+    let errBuf = '';
+    proc.stdout.pipe(out);
+    proc.stderr.on('data', d => { errBuf += d.toString(); });
+    proc.on('error', e => {
+      out.destroy(); try { unlinkSync(tmp); } catch {}
+      reject(transient(`nas ssh spawn failed: ${e.message}`));
+    });
+    proc.on('close', code => out.end(() => {
+      if (code !== 0) {
+        try { unlinkSync(tmp); } catch {}
+        const cls = /no such file/i.test(errBuf) ? 'permanent' : 'transient';
+        return reject(new CommandError(cls, `nas fetch failed (ssh exit ${code}): ${errBuf.slice(0, 200)}`));
+      }
+      try {
+        if (statSync(tmp).size === 0) { unlinkSync(tmp); return reject(new CommandError('permanent', `nas file empty: ${relPath}`)); }
+        renameSync(tmp, cacheFile); // atomic — a later channel sees the whole file or nothing
+        resolve(cacheFile);
+      } catch (e) { reject(new CommandError('permanent', `nas stage rename failed: ${e.message}`)); }
+    }));
+  });
+}
+
 async function runPostScript(channel, payload) {
   const caption = (payload.caption || '').toString();
-  const mediaPath = (payload.media_path || '').toString();
+  let mediaPath = (payload.media_path || '').toString();
   if (!caption.trim()) throw invalidPayload('caption required (non-empty)');
   if (!mediaPath) throw invalidPayload('media_path required');
+  if (payload.media_store === 'nas') mediaPath = await stageNasMedia(mediaPath);
   if (!existsSync(mediaPath)) {
     throw new CommandError('permanent', `media file not found at ${mediaPath} on claw-mac`);
   }
