@@ -37,6 +37,7 @@ const EVENT_CATEGORIES = new Set([
   'naca_monitor_snapshot',
   'kg_populator_state',
   'pr-stuck-reminder',
+  'pr-awaiting-decision',
   'pr-decision-recorded',
   'digest_queue',
   'daily_checkup_run',
