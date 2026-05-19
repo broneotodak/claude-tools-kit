@@ -11,8 +11,14 @@
 #   - allow_force_pushes = false
 #   - allow_deletions = false
 #   - enforce_admins = true               (no admin bypass for direct push)
-#   - required_status_checks = null       (we don't gate on CI yet)
+#   - required_status_checks               (PRESERVED — see below; not forced)
 #   - lock_branch = false
+#
+# required_status_checks: this script never sets a status-check gate, but it
+# also never REMOVES one. Before each PUT it reads the repo's current
+# required_status_checks and carries it through. This matters because a
+# v3-Phase-3 repo gates merges on a required `operator-approval` status check;
+# blindly PUTting required_status_checks:null would silently open that gate.
 #   - delete_branch_on_merge = true       (repo-level; cleans up merged branches)
 #
 # Workflow stays identical:
@@ -52,6 +58,7 @@ REPOS=(
   presentation
   naca
   naca-app
+  naca-mcp-bridge
   siti-v2
   verifier-agent
   planner-agent
@@ -59,14 +66,18 @@ REPOS=(
   neotodak-command
 )
 
-# The exact protection body. `required_status_checks: null` because we don't
-# have CI gates yet; `enforce_admins: true` because the whole point is to stop
-# even admin (Neo) from direct-pushing by accident.
+# Build the protection body for one repo. `enforce_admins: true` because the
+# whole point is to stop even admin (Neo) from direct-pushing by accident.
+# `required_status_checks` is filled in per-repo by apply_one (preserved from
+# the repo's current state, never forced to null).
 ## Personal-account repos don't support dismissal_restrictions or restrictions
 ## (those are org-only). Keep the body minimal — PR-required + no force-push +
 ## no deletion + admins-bound is enough to block direct push.
-PROTECTION_BODY='{
-  "required_status_checks": null,
+protection_body() {
+  local rsc="$1"   # JSON for required_status_checks: either `null` or {strict,contexts}
+  cat <<JSON
+{
+  "required_status_checks": ${rsc},
   "enforce_admins": true,
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": false,
@@ -79,23 +90,40 @@ PROTECTION_BODY='{
   "allow_deletions": false,
   "required_conversation_resolution": false,
   "lock_branch": false
-}'
+}
+JSON
+}
 
 apply_one() {
   local repo="$1"
   echo "─── broneotodak/${repo} ───"
 
+  # Read the repo's CURRENT required status checks and carry them through.
+  # If the repo already gates merges on `operator-approval` (v3 Phase 3),
+  # this preserves it; PUTting null would silently open the gate. Repos with
+  # no protection / no status checks return 404 here → rsc stays `null`.
+  local rsc
+  if rsc=$(gh api "repos/broneotodak/${repo}/branches/main/protection/required_status_checks" \
+      --jq '{strict: .strict, contexts: .contexts}' 2>/dev/null); then
+    [ -z "$rsc" ] && rsc="null"
+  else
+    # Non-2xx (typically 404 — repo has no protection, or protection without
+    # any required status checks). Nothing to preserve.
+    rsc="null"
+  fi
+
   # 1. Branch protection on main
   if [ "$APPLY" -eq 1 ]; then
     if gh api -X PUT "repos/broneotodak/${repo}/branches/main/protection" \
         -H "Accept: application/vnd.github+json" \
-        --input - <<< "$PROTECTION_BODY" >/dev/null 2>&1; then
-      echo "  ✓ branch protection applied"
+        --input - <<< "$(protection_body "$rsc")" >/dev/null 2>&1; then
+      echo "  ✓ branch protection applied (required_status_checks: ${rsc})"
     else
       echo "  ✗ branch protection failed (re-run with -d to see error)"
     fi
   else
     echo "  (dry-run) would PUT /repos/broneotodak/${repo}/branches/main/protection"
+    echo "            required_status_checks preserved as: ${rsc}"
   fi
 
   # 2. Repo-level: delete merged branches automatically (reduces email noise)
