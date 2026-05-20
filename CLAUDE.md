@@ -11,7 +11,7 @@ Generic toolbox for every Neo Claude Code session and agent. **Does NOT contain 
 - `WORKFLOW.md` — canonical 5-phase work flow (Orient → Plan → Execute → Save → Verify)
 - `enforcement/CTK_ENFORCEMENT.md` — SOP for data ops, commits, memory discipline, vault routing
 - `packages/memory/` — `@todak/memory` SDK source (neo-brain access)
-- `tools/` — generic scripts: `save-memory.js`, `check-latest-activities.js`, monitors (`supervisor-agent.js`, `cross-session-drift-monitor.js`, `stuck-command-monitor.js`, `vps-git-drift-monitor.js`, `pr-decision-dispatcher.js`, `registry-meta-backfill.js`)
+- `tools/` — generic scripts: `save-memory.js`, `check-latest-activities.js`, monitors (`supervisor-agent.js`, `cross-session-drift-monitor.js`, `stuck-command-monitor.js`, `vps-git-drift-monitor.js`, `registry-meta-backfill.js`)
 - `scripts/` — utility scripts (e.g. `lint-no-hardcoded-agents.sh`)
 - `prompts/focus/` — per-project focus briefings for fresh sessions
 - `specs/` — generic platform specs not specific to a single product
