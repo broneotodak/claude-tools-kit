@@ -1,12 +1,12 @@
 # CLAW Focus CC Session Prompt
 
-Paste below into a fresh Claude Code session as the first message when working on **CLAW** — the always-on MacBook Air at home that hosts the supervisor-agent, pr-decision-dispatcher, browser/Chromium, and the launchd-based fleet jobs.
+Paste below into a fresh Claude Code session as the first message when working on **CLAW** — the always-on MacBook Air at home that hosts the supervisor-agent, browser/Chromium, and the launchd-based fleet jobs.
 
 **Before doing anything else, read `~/Projects/claude-tools-kit/WORKFLOW.md`** (canonical 5-phase work flow). CLAW hosts multiple `tier_1` agents → NORMATIVE rules apply for any change that affects them.
 
 ---
 
-You are scoped to **CLAW** — Imelda's MacBook Air at Neo's home, kept always-on. It's the orchestration hub for jobs that need to live outside the Hetzner VPS (browser automation that Hetzner can't run, and the pr-decision-dispatcher which intentionally lives off-VPS for blast-radius isolation).
+You are scoped to **CLAW** — Imelda's MacBook Air at Neo's home, kept always-on. It's the orchestration hub for jobs that need to live outside the Hetzner VPS (browser automation that Hetzner can't run, plus the supervisor-agent and other launchd jobs).
 
 ## Live layout
 
@@ -26,11 +26,10 @@ You are scoped to **CLAW** — Imelda's MacBook Air at Neo's home, kept always-o
 
 ## What runs here
 
-12 launchd jobs registered (`launchctl list | grep ai.openclaw.`). The ones that matter most:
+11 launchd jobs registered (`launchctl list | grep ai.openclaw.`). The ones that matter most:
 
 | Service | Purpose |
 |---|---|
-| **`ai.openclaw.pr-decision-dispatcher`** | Watches Neo's WA replies + `pr-awaiting-decision` memories every 30s → dispatches `merge_pr` / `close_pr` to dev-agent |
 | **`ai.openclaw.supervisor-agent`** | Fleet SRE — drift, stuck-command, credential-leak monitoring across all VPS + CLAW agents |
 | `ai.openclaw.gateway` | Browser-automation gateway with Chrome debug port 9222 |
 | `ai.openclaw.router` | port 3901 — request routing |
@@ -80,10 +79,10 @@ ssh zieel@100.93.159.1 "tail -f ~/Library/Logs/openclaw/<service>.log"
 
 ## First-90-seconds debug entry points
 
-- **"PR approval not dispatching"**: pr-decision-dispatcher lives here, not VPS. Check `launchctl list | grep pr-decision-dispatcher`. Logs at `~/Library/Logs/openclaw/pr-decision-dispatcher.log`. Verify it can reach neo-brain: `node ~/Projects/claude-tools-kit/tools/save-memory.js test test test 1`.
+- **"PR approval not dispatching"**: as of v3 Phase 4 (2026-05-20) `pr-decision-dispatcher` is RETIRED — siti-v2's `mergePrViaGithub` posts the `operator-approval` commit status and merges directly. If WA-approve isn't merging, the problem is in siti-router on the Hetzner VPS, not on CLAW. Old plist still on disk at `~/Library/LaunchAgents/ai.openclaw.pr-decision-dispatcher.plist` (unloaded) for reversibility.
 - **"Supervisor agent silent"**: `launchctl list | grep supervisor-agent`. Check the launchd respawn count — `launchctl list -15 ai.openclaw.supervisor-agent`. Exit codes can be misleading (old crashes; service may have respawned). Best signal is `agent_heartbeats` row freshness.
 - **"Browser-agent gateway dead"**: `gateway` launchd job runs Chrome with debug port 9222. Verify `lsof -i:9222` finds Chrome. The gateway and a Chromium subprocess are the pair.
-- **"Heartbeat from CLAW stopped"**: each agent publishes its own heartbeat. If heartbeats from `supervisor` / `pr-decision-dispatcher` go stale, that's the agent failing. If ALL CLAW heartbeats stop, it's a Tailscale or network issue.
+- **"Heartbeat from CLAW stopped"**: each agent publishes its own heartbeat. If `supervisor`'s heartbeat goes stale that's the agent failing. If ALL CLAW heartbeats stop, it's a Tailscale or network issue.
 - **"Plaud voice notes not landing in memory"**: `plaud-ingest` on port 3904. Logs + n8n upstream both worth checking. Plaud-ingest is the only CLAW service that writes legacy `claude_desktop_memory` directly (per Apr 21 audit) — narrow exception, leave it.
 
 ## Memory discipline (when shipping a CLAW-side fix)
