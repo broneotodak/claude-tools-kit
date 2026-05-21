@@ -42,8 +42,10 @@ const EVENT_CATEGORIES = new Set([
   'digest_queue',
   'daily_checkup_run',
   'supervisor-observation',
+  'supervisor',         // added 2026-05-21 — supervisor cycle records
   'vps_git_drift',
   'fleet-node-discovered',
+  'deploy-verified',    // added 2026-05-21 — verifier-agent post-deploy log
   'wa-primary-media',
   'agent_heartbeat',
   'cycle_state',
