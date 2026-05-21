@@ -30,14 +30,16 @@ const EVENT_CATEGORIES = new Set([
   'naca_monitor_snapshot',
   'kg_populator_state',
   'pr-stuck-reminder',
+  'pr-awaiting-decision', // added 2026-05-21 — mirror DB trigger
   'pr-decision-recorded',
   'digest_queue',
   'daily_checkup_run',
   'supervisor-observation',
-  'supervisor',         // added 2026-05-21 — supervisor cycle records
+  'supervisor',           // added 2026-05-21 — supervisor cycle records
   'vps_git_drift',
   'fleet-node-discovered',
-  'deploy-verified',    // added 2026-05-21 — verifier-agent post-deploy log
+  'deploy_log',           // added 2026-05-21 — mirror DB trigger
+  'deploy-verified',      // added 2026-05-21 — verifier-agent post-deploy log
 ]);
 
 // Debug/test sources that should NOT have lingering rows post-cleanup.
