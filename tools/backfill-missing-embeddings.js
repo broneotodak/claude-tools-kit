@@ -45,6 +45,7 @@ const EVENT_CATEGORIES = new Set([
   'supervisor',         // added 2026-05-21 — supervisor cycle records
   'vps_git_drift',
   'fleet-node-discovered',
+  'deploy_log',         // added 2026-05-21 — mirror DB trigger
   'deploy-verified',    // added 2026-05-21 — verifier-agent post-deploy log
   'wa-primary-media',
   'agent_heartbeat',
