@@ -63,6 +63,7 @@ REPOS=(
   verifier-agent
   planner-agent
   daily-checkup-agent
+  forex-coach-agent
   neotodak-command
 )
 
