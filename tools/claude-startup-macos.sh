@@ -77,7 +77,19 @@ if [ -n "$NB_TOTAL" ]; then
 else
     echo -e "${GREEN}💾 neo-brain:${NC} use \`@todak/memory\` SDK / \`neo_brain_client.py\`"
 fi
-echo -e "${GREEN}🔧 MCP Servers:${NC} supabase-main, desktop-commander, filesystem"
+# Read MCP servers Claude Code actually loads (from ~/.claude.json project-scope).
+# Falls back to ~ if no entry for CURRENT_DIR. Hardcoded list was lying to us for months.
+MCP_LIST=$(jq -r --arg dir "$CURRENT_DIR" --arg home "$HOME" '
+  (if (.projects[$dir].mcpServers // {} | length) > 0
+   then .projects[$dir].mcpServers
+   else (.projects[$home].mcpServers // {}) end)
+  | keys | join(", ")
+' "$HOME/.claude.json" 2>/dev/null)
+if [ -n "$MCP_LIST" ]; then
+    echo -e "${GREEN}🔧 MCP Servers:${NC} $MCP_LIST"
+else
+    echo -e "${GREEN}🔧 MCP Servers:${NC} (none registered in ~/.claude.json)"
+fi
 echo -e "${GREEN}⚡ Context:${NC} Ready with $PROJECT_NAME project intelligence"
 echo
 echo -e "${PURPLE}═══════════════════════════════════════════════════════${NC}"
