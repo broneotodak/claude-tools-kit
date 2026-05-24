@@ -43,6 +43,7 @@ const EVENT_CATEGORIES = new Set([
   'daily_checkup_run',
   'supervisor-observation',
   'supervisor',         // added 2026-05-21 — supervisor cycle records
+  'planner_decomposition', // added 2026-05-24 — mirror DB trigger (planner-agent telemetry)
   'vps_git_drift',
   'fleet-node-discovered',
   'deploy_log',         // added 2026-05-21 — mirror DB trigger
