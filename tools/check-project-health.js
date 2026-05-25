@@ -183,6 +183,7 @@ async function checkOrphanPRs() {
   const { data: aw } = await sb.from('memories')
     .select('id,metadata,created_at')
     .eq('category', 'pr-awaiting-decision')
+    .eq('archived', false)
     .gte('created_at', horizon)
     .lt('created_at', cutoff);
   const orphans = [];
