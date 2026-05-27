@@ -127,10 +127,63 @@ manual fallback (super_admin button in the panel).
 2. Install Claude Code CLI on the Mac if it isn't already
    (`npm i -g @anthropic-ai/claude-code` under Homebrew node).
 
+## TDCC (added 2026-05-27)
+
+TDCC is the second consumer. Unlike TASP it isn't on Tailscale and
+slave-mbp isn't its source — instead the **operator's MBP** pushes directly:
+
+- `tdcc-creds-receiver.sh` on TDCC (`/usr/local/bin/tdcc-creds-receiver`) —
+  same shape/monotonic validation as the TASP receiver, but writes only to
+  `/home/lanccc/.claude/.credentials.json`. The existing `/etc/cron.d/claude-sync`
+  on TDCC mirrors that hourly to `/home/kamiera` + `/home/neo`. For instant
+  fan-out the TDCC web UI's "Renew auth" button (`POST /api/auth/refresh`,
+  in `BroLanTodak/tdcc#neo/renew-auth-button`) runs the same mirror on demand.
+- `push-to-tdcc.sh` on the operator MBP (`~/bin/`) — pipes
+  `/tmp/tasp-creds-share.json` (same Neo-keychain dump that powers TASP) to
+  TDCC root over SSH every 60s via `com.todak.push-creds-to-tdcc.plist`.
+- `tdcc-creds-receiver.logrotate` — same weekly rotate as TASP.
+
+**Identity context:** TDCC was previously running on Lan's Anthropic account
+(`azlan.ariffin83@gmail.com`) — his keychain seeded the credentials and was
+copied hourly to all three TDCC users. With Lan's offline agreement, TDCC
+consolidated onto Neo's `software@todak.com` account effective the first
+successful push (2026-05-27 ~13:59 UTC).
+
+### Install — TDCC
+
+```bash
+# As root on 5.223.80.244:
+install -m 755 tdcc-creds-receiver.sh /usr/local/bin/tdcc-creds-receiver
+install -m 644 tdcc-creds-receiver.logrotate /etc/logrotate.d/tdcc-creds-receiver
+# append the operator-MBP pubkey to /root/.ssh/authorized_keys:
+#   command="/usr/local/bin/tdcc-creds-receiver",no-pty,no-port-forwarding,no-X11-forwarding,no-agent-forwarding ssh-ed25519 AAAA... macbook-pro-2-tdcc-creds-push
+```
+
+### Install — operator MBP (for TDCC push)
+
+```bash
+# As broneotodak on the operator Mac:
+mkdir -p ~/bin
+install -m 755 push-to-tdcc.sh ~/bin/
+
+ssh-keygen -t ed25519 -N "" -C "macbook-pro-2 tdcc-creds-push" -f ~/.ssh/id_ed25519_tdcc_push
+ssh-keyscan -H 5.223.80.244 >> ~/.ssh/known_hosts
+
+cp com.todak.push-creds-to-tdcc.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.todak.push-creds-to-tdcc.plist
+```
+
+The operator MBP's existing `com.todak.tasp-creds-share.plist` keeps
+`/tmp/tasp-creds-share.json` fresh — `push-to-tdcc.sh` reads from that same
+file, so adding TDCC as a consumer required no changes to the share plist.
+
 ## Future
 
-- claw-mba (`zieel@100.93.159.1`) — second source, same shape, push to TASP
-  with its own keypair. VPS picks newer `expiresAt`.
-- TDCC (`5.223.80.244`) — same receiver pattern in `/usr/local/bin/tdcc-creds-receiver`,
-  writes to `/home/lanccc/.claude/.credentials.json` so the existing hourly
-  `claude-sync` cron continues to fan out to neo + kamiera.
+- claw-mba (`zieel@100.93.159.1`) — second source for TASP, same shape,
+  separate keypair. VPS picks newer `expiresAt`. Pending Neo's call.
+- slave-mbp → TDCC (passive auto-refresh from home) — if wanted alongside
+  the operator MBP push, deploy `push-to-tdcc.sh` + parallel plist on
+  slave-mbp.
+- Install Tailscale on TDCC so a UI button could pull live from the operator
+  MBP (instead of relying on the passive push). Deferred — current passive
+  push covers the UX without adding a new tailnet node.
