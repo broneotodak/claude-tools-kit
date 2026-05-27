@@ -21,14 +21,22 @@ if ! /usr/bin/security find-generic-password -s "$SERVICE" -w > "$TMP" 2>/dev/nu
   exit 1
 fi
 
-# Validate it parses and has the expected shape.
-if ! /usr/bin/plutil -convert json -o /dev/null - < "$TMP" 2>/dev/null; then
-  # plutil may not handle bare JSON; fall back to a python parse.
-  if ! /usr/bin/python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['claudeAiOauth']['expiresAt']" "$TMP" 2>/dev/null; then
-    rm -f "$TMP"
-    echo "share-from-keychain: keychain payload failed JSON shape check" >&2
-    exit 2
-  fi
+# Validate JSON parses and has the expected shape. Run the shape assertion
+# unconditionally — an earlier draft short-circuited on a `plutil -convert json`
+# success, which passes ANY syntactically-valid JSON (e.g. `{}`) and would
+# let a corrupt keychain blob through. The downstream receiver also validates,
+# but failing locally is cheaper than burning an SSH round-trip.
+if ! /usr/bin/python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+o = d['claudeAiOauth']
+assert isinstance(o.get('expiresAt'), int)
+assert o.get('accessToken') and o.get('refreshToken')
+assert isinstance(o.get('scopes'), list) and o['scopes']
+" "$TMP" 2>/dev/null; then
+  rm -f "$TMP"
+  echo "share-from-keychain: keychain payload failed JSON shape check" >&2
+  exit 2
 fi
 
 mv "$TMP" "$OUT"

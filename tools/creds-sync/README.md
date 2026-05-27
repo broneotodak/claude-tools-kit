@@ -68,8 +68,15 @@ Helpers live under `~/bin/` (no sudo needed) and plists in `~/Library/LaunchAgen
 
 ```bash
 # As slave on slave-mbp:
-mkdir -p ~/bin
+mkdir -p ~/bin ~/.ssh
 install -m 755 share-from-keychain.sh push-to-tasp.sh ~/bin/
+
+# Generate the push-only SSH key (separate from any admin key already on this Mac):
+ssh-keygen -t ed25519 -N "" -C "slave-mbp tasp-creds-push" -f ~/.ssh/id_ed25519_tasp_creds_push
+
+# Pin the TASP host key into known_hosts so StrictHostKeyChecking=yes can succeed
+# on the first automated push. Without this the first run fails with a host-key prompt.
+ssh-keyscan -H 5.223.43.54 >> ~/.ssh/known_hosts
 
 cp com.todak.claude-keep-warm.plist ~/Library/LaunchAgents/
 cp com.todak.slave-creds-share.plist ~/Library/LaunchAgents/
@@ -80,15 +87,23 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.todak.slave-creds-sh
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.todak.slave-creds-push-tasp.plist
 ```
 
+The pubkey at `~/.ssh/id_ed25519_tasp_creds_push.pub` then needs to be appended
+to TASP's `/root/.ssh/authorized_keys` per the TASP install section below.
+
 ## Install — TASP VPS
 
 ```bash
 # As root on 5.223.43.54:
 install -m 755 tasp-creds-receiver.sh /usr/local/bin/tasp-creds-receiver
+install -m 644 tasp-creds-receiver.logrotate /etc/logrotate.d/tasp-creds-receiver
 # append the slave-mbp pubkey line to /root/.ssh/authorized_keys
 # format:
 #   command="/usr/local/bin/tasp-creds-receiver",no-pty,no-port-forwarding,no-X11-forwarding,no-agent-forwarding ssh-ed25519 AAAA... slave-creds-push
 ```
+
+The logrotate entry weekly-rotates `/var/log/tasp-creds-receiver.log` and keeps
+4 compressed generations. Without it the log grows ~1 KiB per real rotation
+(every ~8h) plus REJECT noise.
 
 ## Rollback
 

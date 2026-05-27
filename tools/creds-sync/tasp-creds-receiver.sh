@@ -9,7 +9,11 @@
 #
 # Authorized via /root/.ssh/authorized_keys entry:
 #   command="/usr/local/bin/tasp-creds-receiver",no-pty,no-port-forwarding,
-#   no-X11-forwarding,no-agent-forwarding,from="100.93.211.9" ssh-ed25519 ...
+#   no-X11-forwarding,no-agent-forwarding ssh-ed25519 ...
+#
+# (No from= IP pin — slave-mbp's source IP varies based on Tailscale routing,
+# and the public-IP push path can't use the tailnet 100.93.211.9 address.
+# The forced-command + monotonic-receiver are the security boundary.)
 #
 # The existing /api/auth/refresh Mac-pull endpoint in /srv/tasp/app/server.mjs
 # remains as a manual fallback for super_admin to trigger from the panel UI.
