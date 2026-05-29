@@ -1,0 +1,19 @@
+{
+  "name": "@todak/detectors",
+  "version": "0.1.0",
+  "description": "Shared fleet-health detectors (orphan PRs, GitHub state reconcile, etc.) used by naca-monitor + daily-checkup-agent",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./orphan-prs": "./src/orphan-prs.js",
+    "./github-state": "./src/github-state.js"
+  },
+  "scripts": {
+    "smoke": "node scripts/smoke.js",
+    "test": "node --test --no-warnings test/**/*.test.mjs"
+  },
+  "dependencies": {},
+  "author": "Neo Todak",
+  "license": "MIT"
+}
