@@ -32,26 +32,10 @@ const LIMIT = args.find((a, i) => args[i - 1] === '--limit') ? parseInt(args[arg
 const CATEGORY = args.find((a, i) => args[i - 1] === '--category');
 
 // Categories whose rows are operational/event logs — NOT meant for semantic search.
-// These should keep NULL embeddings; backfilling them would waste Gemini quota.
-const EVENT_CATEGORIES = new Set([
-  'naca_monitor_snapshot',
-  'kg_populator_state',
-  'pr-stuck-reminder',
-  'pr-awaiting-decision',
-  'pr-decision-recorded',
-  'digest_queue',
-  'daily_checkup_run',
-  'supervisor-observation',
-  'supervisor',         // added 2026-05-21 — supervisor cycle records
-  'planner_decomposition', // added 2026-05-24 — mirror DB trigger (planner-agent telemetry)
-  'vps_git_drift',
-  'fleet-node-discovered',
-  'deploy_log',         // added 2026-05-21 — mirror DB trigger
-  'deploy-verified',    // added 2026-05-21 — verifier-agent post-deploy log
-  'wa-primary-media',
-  'agent_heartbeat',
-  'cycle_state',
-]);
+// Canonical list now lives in tools/lib/neo-brain.js so this tool and check-memory-health.js
+// can never disagree about what counts as a real embedding gap (ESM → CommonJS via createRequire).
+import { createRequire } from 'module';
+const { EVENT_CATEGORIES } = createRequire(import.meta.url)('./lib/neo-brain.js');
 
 // env
 const envPath = `${process.env.HOME}/Projects/claude-tools-kit/.env`;

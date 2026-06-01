@@ -8,12 +8,15 @@
  * reflects what the fleet is actually writing right now.
  */
 
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+const { getNeoBrainClient } = require('./lib/neo-brain');
 
-const supabaseUrl = process.env.NEO_BRAIN_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.NEO_BRAIN_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+let supabase;
+try {
+  supabase = getNeoBrainClient();
+} catch (e) {
+  console.error('❌', e.message);
+  process.exit(1);
+}
 
 const LIMIT = parseInt(process.argv[2], 10) || 10;
 
