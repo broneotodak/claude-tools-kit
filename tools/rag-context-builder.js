@@ -5,22 +5,17 @@
  * Automatically builds relevant context for Claude based on current situation
  */
 
-const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 require('dotenv').config();
 
-// Initialize Supabase
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+// PORTED 2026-06-01: was reading the FROZEN legacy `claude_desktop_memory` table
+// via process.env.SUPABASE_URL (silent stale data). Now reads the live neo-brain
+// `memories` table through getNeoBrainClient().
+const { getNeoBrainClient, MEMORY_TABLE } = require('./lib/neo-brain');
 
-if (!supabaseUrl || !supabaseKey) {
-    console.error('❌ Missing Supabase credentials');
-    process.exit(1);
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = getNeoBrainClient();
 
 // Get current context
 function getCurrentContext() {
@@ -77,10 +72,12 @@ async function buildContext() {
     if (currentContext.gitProject) {
         console.log(`📚 Retrieving memories for project: ${currentContext.gitProject.name}`);
         
+        const projName = currentContext.gitProject.name;
         const { data: projectMemories, error } = await supabase
-            .from('claude_desktop_memory')
+            .from(MEMORY_TABLE)
             .select('*')
-            .or(`metadata->project.eq.${currentContext.gitProject.name},metadata->project.ilike.%${currentContext.gitProject.name}%`)
+            .eq('archived', false)
+            .or(`metadata->>project.eq.${projName},category.ilike.%${projName}%`)
             .order('importance', { ascending: false })
             .order('created_at', { ascending: false })
             .limit(5);
@@ -103,8 +100,9 @@ async function buildContext() {
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
     const { data: recentMemories, error: recentError } = await supabase
-        .from('claude_desktop_memory')
+        .from(MEMORY_TABLE)
         .select('*')
+        .eq('archived', false)
         .gte('importance', 7)
         .gte('created_at', threeDaysAgo.toISOString())
         .order('created_at', { ascending: false })
@@ -124,8 +122,9 @@ async function buildContext() {
     console.log('💡 Retrieving recent solutions...');
     
     const { data: solutions, error: solutionsError } = await supabase
-        .from('claude_desktop_memory')
+        .from(MEMORY_TABLE)
         .select('*')
+        .eq('archived', false)
         .or('memory_type.eq.technical_solution,memory_type.eq.decision,category.eq.Solution')
         .order('created_at', { ascending: false })
         .limit(3);

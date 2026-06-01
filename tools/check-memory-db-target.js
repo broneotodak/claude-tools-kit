@@ -37,6 +37,24 @@ const ALLOWLIST = new Set([
   'promote-interacted-contacts.js',
   'check-memory-db-target.js',
   'lib/neo-brain.js',
+
+  // non-memory / generic — uses SUPABASE_URL legitimately (2026-06-01 burn-down, case C)
+  'query-supabase-project.js',     // non-memory / generic — uses SUPABASE_URL legitimately
+  'run-sql-migration.js',          // non-memory / generic — uses SUPABASE_URL legitimately
+  'ctk-pre-prompt-validator.js',   // non-memory / generic — uses SUPABASE_URL legitimately
+
+  // deprecated, gated behind --force-legacy (2026-06-01 burn-down, case B). Legacy
+  // client is built lazily and the main() guard exits before it is reached.
+  'analyze-tech-stack.js',         // deprecated, gated behind --force-legacy
+  'claude-code-auto-save.js',      // deprecated, gated behind --force-legacy
+  'claude-startup-context.js',     // deprecated, gated behind --force-legacy
+  'memory-enrichment.js',          // deprecated, gated behind --force-legacy
+  'rag-embed-memories.js',         // deprecated, gated behind --force-legacy
+  'unified-memory-strategy.js',    // deprecated, gated behind --force-legacy
+  'sub-agent-memory-system.js',    // deprecated, gated behind --force-legacy
+  'sub-agent-monitor.js',          // deprecated, gated behind --force-legacy
+  'sub-agent-orchestrator.js',     // deprecated, gated behind --force-legacy
+  'sub-agents-enhanced.js',        // deprecated, gated behind --force-legacy
 ]);
 
 const isToolJs = (f) => f.startsWith('tools/') && f.endsWith('.js') && !f.includes('tools/archive/');

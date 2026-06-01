@@ -9,23 +9,30 @@ const { createClient } = require('@supabase/supabase-js');
 const https = require('https');
 require('dotenv').config();
 
-// Initialize Supabase
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// DEPRECATED 2026-06-01: embedded the FROZEN legacy `claude_desktop_memory` archive
+// (via process.env.SUPABASE_URL) using OpenAI ada-002. Superseded by
+// tools/backfill-missing-embeddings.js (live neo-brain, Gemini embeddings).
+// Client built lazily so the legacy URL is only touched behind --force-legacy.
 const openaiKey = process.env.OPENAI_API_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-    console.error('❌ Missing Supabase credentials');
-    process.exit(1);
+let _supabase = null;
+function supabase() {
+    if (!_supabase) {
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!supabaseUrl || !supabaseKey) {
+            console.error('❌ Missing Supabase credentials');
+            process.exit(1);
+        }
+        if (!openaiKey) {
+            console.error('❌ Missing OpenAI API key for embeddings');
+            console.error('   Add OPENAI_API_KEY to your .env file');
+            process.exit(1);
+        }
+        _supabase = createClient(supabaseUrl, supabaseKey);
+    }
+    return _supabase;
 }
-
-if (!openaiKey) {
-    console.error('❌ Missing OpenAI API key for embeddings');
-    console.error('   Add OPENAI_API_KEY to your .env file');
-    process.exit(1);
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Create embedding using OpenAI
 async function createEmbedding(text) {
@@ -80,7 +87,7 @@ async function embedMemories() {
 
     try {
         // Check for memories without embeddings
-        const { data: unembedded, error: checkError, count } = await supabase
+        const { data: unembedded, error: checkError, count } = await supabase()
             .from('claude_desktop_memory')
             .select('id, content, metadata', { count: 'exact' })
             .is('embedding', null)
@@ -112,7 +119,7 @@ async function embedMemories() {
                 const embedding = await createEmbedding(embeddingText);
 
                 // Update memory with embedding
-                const { error: updateError } = await supabase
+                const { error: updateError } = await supabase()
                     .from('claude_desktop_memory')
                     .update({ embedding: embedding })
                     .eq('id', memory.id);
@@ -173,6 +180,11 @@ How it works:
 Note: Processes 100 memories at a time to avoid rate limits.
 `);
     process.exit(0);
+}
+
+if (!process.argv.includes('--force-legacy')) {
+    console.error('DEPRECATED: rag-embed-memories.js targeted the frozen legacy memory archive (claude_desktop_memory) with OpenAI ada-002 embeddings; use tools/backfill-missing-embeddings.js (live neo-brain, Gemini) instead. Re-run with --force-legacy to override.');
+    process.exit(1);
 }
 
 // Run embedder

@@ -16,11 +16,22 @@ const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-// Initialize Supabase
-const supabase = createClient(
-    process.env.SUPABASE_URL || 'https://uzamamymfzhelvkwpvgt.supabase.co',
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// DEPRECATED 2026-06-01: this auto-save daemon targeted the FROZEN legacy memory
+// archive (claude_desktop_memory via process.env.SUPABASE_URL) and was only ever
+// wired through the unused tools/claude-code-prompt-hook.sh. It is superseded by
+// the @todak/memory SDK + the live hooks (hooks/save-to-memory.js,
+// hooks/auto-save-memory.js). The legacy client below is built lazily so it is
+// only reached behind --force-legacy.
+let _supabase = null;
+function supabaseClient() {
+    if (!_supabase) {
+        _supabase = createClient(
+            process.env.SUPABASE_URL || 'https://uzamamymfzhelvkwpvgt.supabase.co',
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+        );
+    }
+    return _supabase;
+}
 
 // Memory configuration
 const MEMORY_CONFIG = {
@@ -150,7 +161,7 @@ class ClaudeCodeAutoSave {
                 source: 'claude_code'
             };
 
-            const { error } = await supabase
+            const { error } = await supabaseClient()
                 .from('claude_desktop_memory')
                 .insert([memory]);
 
@@ -226,7 +237,7 @@ class ClaudeCodeAutoSave {
                 source: 'claude_code'
             };
 
-            const { error } = await supabase
+            const { error } = await supabaseClient()
                 .from('claude_desktop_memory')
                 .insert([memory]);
 
@@ -242,7 +253,7 @@ class ClaudeCodeAutoSave {
     async recoverFromCorruption(project, timestamp) {
         try {
             // Find nearest snapshot before corruption
-            const { data, error } = await supabase
+            const { data, error } = await supabaseClient()
                 .from('claude_desktop_memory')
                 .select('*')
                 .eq('memory_type', 'project_snapshot')
@@ -309,6 +320,12 @@ class ClaudeCodeAutoSave {
 // CLI Interface
 if (require.main === module) {
     const command = process.argv[2];
+
+    if (!process.argv.includes('--force-legacy')) {
+        console.error('DEPRECATED: claude-code-auto-save.js targeted the frozen legacy memory archive (claude_desktop_memory). Use the @todak/memory SDK (packages/memory) or the live save hooks (hooks/save-to-memory.js, hooks/auto-save-memory.js). Re-run with --force-legacy to override.');
+        process.exit(1);
+    }
+
     const autoSave = new ClaudeCodeAutoSave();
 
     switch (command) {

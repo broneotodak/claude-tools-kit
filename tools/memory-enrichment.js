@@ -9,7 +9,17 @@ const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 const { MEMORY_TYPES, MEMORY_CATEGORIES } = require('../config/memory-constants');
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+// DEPRECATED 2026-06-01: enriched the FROZEN legacy `claude_desktop_memory` archive
+// via process.env.SUPABASE_URL (the live cron runs the archived
+// enrich-memories-for-flowstate.js, not this). Superseded by the @todak/memory SDK.
+// Client built lazily so the legacy URL is only touched behind --force-legacy.
+let _supabase = null;
+function supabase() {
+    if (!_supabase) {
+        _supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    }
+    return _supabase;
+}
 
 async function enrichMemory(memory) {
     const updates = {
@@ -43,7 +53,7 @@ async function enrichMemory(memory) {
 
     // Update only if there are changes
     if (Object.keys(updates).length > 1 || Object.keys(updates.metadata).length > 1) {
-        const { error } = await supabase
+        const { error } = await supabase()
             .from('claude_desktop_memory')
             .update(updates)
             .eq('id', memory.id);
@@ -62,7 +72,7 @@ async function runEnrichment() {
 
     try {
         // Get memories that haven't been enriched recently
-        const { data: memories, error } = await supabase
+        const { data: memories, error } = await supabase()
             .from('claude_desktop_memory')
             .select('*')
             .or('metadata->last_enriched.is.null')
@@ -91,6 +101,11 @@ async function runEnrichment() {
 
 // Run enrichment every 5 minutes
 if (require.main === module) {
+    if (!process.argv.includes('--force-legacy')) {
+        console.error('DEPRECATED: memory-enrichment.js targeted the frozen legacy memory archive (claude_desktop_memory); use the @todak/memory SDK (packages/memory). Re-run with --force-legacy to override.');
+        process.exit(1);
+    }
+
     console.log('🔄 Memory Enrichment Service\n');
     console.log('Enriching memories every 5 minutes...\n');
 

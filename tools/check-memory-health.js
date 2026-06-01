@@ -133,6 +133,24 @@ async function checkMemoryHealth() {
         console.log(`   Fix: ${it.fix}\n`);
       });
     }
+
+    // --alert: for scheduled/cron runs. On issues, persist an alert memory (so the fleet digest /
+    // Siti can surface it) and set a non-zero exit code so a monitor catches the regression.
+    // Manual runs (no --alert) always exit 0 so they don't look like failures.
+    if (process.argv.includes('--alert') && issues.length) {
+      try {
+        const { NeoBrain } = await import('../packages/memory/src/index.js');
+        const brain = new NeoBrain({ agent: 'memory-health-check' });
+        const summary = issues.map((it) => `[${it.severity}] ${it.message}`).join(' | ');
+        await brain.save(`memory-health alert (${NEO_BRAIN_REF}): ${issues.length} issue(s) — ${summary}`, {
+          category: 'memory_health_alert', type: 'event', importance: 7, visibility: 'private',
+        });
+        console.log('\n🔔 Alert memory written (category=memory_health_alert).');
+      } catch (e) {
+        console.error('alert save failed:', e.message);
+      }
+      process.exitCode = 1;
+    }
   } catch (error) {
     console.error('❌ Error during health check:', error.message || error);
     process.exit(1);

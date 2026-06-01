@@ -9,17 +9,26 @@ const { createClient } = require('@supabase/supabase-js');
 const https = require('https');
 require('dotenv').config();
 
-// Initialize Supabase
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// DEPRECATED 2026-06-01: this loader read the FROZEN legacy `claude_desktop_memory`
+// archive via process.env.SUPABASE_URL and used OpenAI embeddings against it.
+// Superseded by the @todak/memory SDK (NeoBrain.search / listMemories) — see
+// tools/rag-retrieve.js and check-latest-activities.js. Client built lazily so the
+// legacy URL is only touched behind --force-legacy.
 const openaiKey = process.env.OPENAI_API_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('❌ Missing Supabase credentials');
-  process.exit(1);
+let _supabase = null;
+function supabaseClient() {
+  if (!_supabase) {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('❌ Missing Supabase credentials');
+      process.exit(1);
+    }
+    _supabase = createClient(supabaseUrl, supabaseKey);
+  }
+  return _supabase;
 }
-
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Create embedding for query
 async function createEmbedding(text) {
@@ -108,7 +117,7 @@ async function loadRelevantMemories(contextQuery, limit = 10) {
     // wa-chat-importer, siti_group_summarizer, nclaw_whatsapp_conversation)
     // at the RPC level — startup context should NEVER include personal-phone
     // chat captures as "relevant memory." Spec: naca/docs/spec/memory-table-separation-v1.md
-    const { data, error } = await supabase.rpc('match_memories_curated', {
+    const { data, error } = await supabaseClient().rpc('match_memories_curated', {
       query_embedding: embedding,
       min_similarity: 0.7,
       match_count: limit,
@@ -127,7 +136,7 @@ async function loadRelevantMemories(contextQuery, limit = 10) {
  * Fallback: Load recent memories
  */
 async function loadRecentMemories(limit = 10) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient()
     .from('claude_desktop_memory')
     .select('*')
     .order('created_at', { ascending: false })
@@ -168,7 +177,13 @@ function formatContext(memories) {
  */
 async function main() {
   const args = process.argv.slice(2);
-  const customQuery = args.join(' ');
+
+  if (!args.includes('--force-legacy')) {
+    console.error('DEPRECATED: claude-startup-context.js targeted the frozen legacy memory archive (claude_desktop_memory + OpenAI embeddings); use the @todak/memory SDK (packages/memory) — see tools/rag-retrieve.js / tools/check-latest-activities.js. Re-run with --force-legacy to override.');
+    process.exit(1);
+  }
+
+  const customQuery = args.filter((a) => a !== '--force-legacy').join(' ');
 
   console.log('\n🧠 Real-time RAG Context Loader\n');
 
