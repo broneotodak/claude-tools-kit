@@ -54,6 +54,12 @@ const CTK_CUSTOM_RULES = [
   // ── new 2026-05-15 (Phase S.2 registry-expansion event #2) ──
   { id: 'ctk-supabase-access-token',    regex: 'sbp_[a-f0-9]{40}',                           description: 'Supabase personal/management access token' },
   { id: 'ctk-supabase-secret-key',      regex: 'sb_secret_[A-Za-z0-9_-]{20,}',               description: 'Supabase secret API key (new format)' },
+  // ── new 2026-06-02: NACA backend auth token. Custom low-entropy format
+  //    (ccc_sk_…) that no upstream gitleaks rule recognizes — it leaked into
+  //    naca-app / content-creator / poster-agent precisely because no scanner
+  //    knew the shape. Now a first-class credential shape: redacted from
+  //    memories by the SDK + matched by the CTK secret scanners.
+  { id: 'ctk-naca-backend-token',       regex: 'ccc_sk_[A-Za-z0-9_]{4,}',                    description: 'NACA backend auth token (ccc_sk_)' },
 ];
 
 // ── minimal gitleaks.toml parser ────────────────────────────────────
