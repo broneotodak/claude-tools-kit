@@ -14,11 +14,19 @@ const path = require('path');
 const fs = require('fs').promises;
 require('dotenv').config();
 
-// Initialize Supabase
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-);
+// DEPRECATED 2026-06-01: saved/read the FROZEN legacy `claude_desktop_memory` archive
+// via process.env.SUPABASE_URL. Superseded by the @todak/memory SDK (packages/memory).
+// Client built lazily so the legacy URL is only touched behind --force-legacy.
+let _supabase = null;
+function supabase() {
+    if (!_supabase) {
+        _supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+        );
+    }
+    return _supabase;
+}
 
 /**
  * Unified Memory Manager
@@ -142,7 +150,7 @@ class UnifiedMemoryManager {
      */
     async saveToPgVector(memory) {
         try {
-            const { data, error } = await supabase
+            const { data, error } = await supabase()
                 .from('claude_desktop_memory')
                 .insert({
                     content: typeof memory.content === 'string' ? memory.content : JSON.stringify(memory.content),
@@ -337,8 +345,14 @@ class SubAgentMemory extends UnifiedMemoryManager {
 // CLI Interface
 async function main() {
     const args = process.argv.slice(2);
+
+    if (!args.includes('--force-legacy')) {
+        console.error('DEPRECATED: unified-memory-strategy.js targeted the frozen legacy memory archive (claude_desktop_memory); use the @todak/memory SDK (packages/memory). Re-run with --force-legacy to override.');
+        process.exit(1);
+    }
+
     const command = args[0];
-    
+
     const manager = new UnifiedMemoryManager();
     const agentMemory = new SubAgentMemory();
 

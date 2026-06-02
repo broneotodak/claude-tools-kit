@@ -7,14 +7,23 @@
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// DEPRECATED 2026-06-01: scanned the FROZEN legacy `claude_desktop_memory` archive
+// via process.env.SUPABASE_URL. Superseded by the @todak/memory SDK (packages/memory).
+// Client built lazily so the legacy URL is only touched behind --force-legacy.
+let _supabase = null;
+function supabase() {
+  if (!_supabase) {
+    _supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  }
+  return _supabase;
+}
 
 async function getTechStack() {
   // Search for tech stack mentions in memories
-  const { data: memories } = await supabase
+  const { data: memories } = await supabase()
     .from('claude_desktop_memory')
     .select('content, category')
     .limit(500);
@@ -92,6 +101,11 @@ async function getTechStack() {
   console.log('⚙️  Backend:', backendTechs.map(([t]) => t).join(', ') || 'N/A');
   console.log('🤖 AI/ML:', aiTechs.map(([t]) => t).join(', ') || 'N/A');
   console.log('☁️  Deployment:', sorted.filter(([t]) => ['Netlify', 'Vercel', 'Docker'].includes(t)).map(([t]) => t).join(', ') || 'N/A');
+}
+
+if (!process.argv.includes('--force-legacy')) {
+  console.error('DEPRECATED: analyze-tech-stack.js targeted the frozen legacy memory archive (claude_desktop_memory); use the @todak/memory SDK (packages/memory). Re-run with --force-legacy to override.');
+  process.exit(1);
 }
 
 getTechStack().catch(console.error);

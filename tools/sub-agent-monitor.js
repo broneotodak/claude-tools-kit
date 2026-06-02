@@ -20,10 +20,19 @@ const Table = require('cli-table3');
 
 require('dotenv').config();
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY
-);
+// DEPRECATED 2026-06-01: read/wrote the FROZEN legacy `claude_desktop_memory` archive
+// via process.env.SUPABASE_URL. Superseded by the @todak/memory SDK (packages/memory).
+// Client built lazily so the legacy URL is only touched behind --force-legacy.
+let _supabase = null;
+function supabase() {
+    if (!_supabase) {
+        _supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_KEY
+        );
+    }
+    return _supabase;
+}
 
 // Monitoring Metrics
 const METRICS = {
@@ -640,7 +649,7 @@ class SubAgentMonitor {
     setupDefaultHealthChecks() {
         // Database connectivity
         this.healthChecker.registerCheck('database', async () => {
-            const { error } = await supabase
+            const { error } = await supabase()
                 .from('claude_desktop_memory')
                 .select('count')
                 .limit(1);
@@ -727,7 +736,7 @@ class SubAgentMonitor {
         };
 
         try {
-            const { error } = await supabase
+            const { error } = await supabase()
                 .from('claude_desktop_memory')
                 .insert({
                     source: 'agent-monitoring',
@@ -778,6 +787,12 @@ class SubAgentMonitor {
 // CLI Interface
 async function main() {
     const args = process.argv.slice(2);
+
+    if (!args.includes('--force-legacy')) {
+        console.error('DEPRECATED: sub-agent-monitor.js targeted the frozen legacy memory archive (claude_desktop_memory); use the @todak/memory SDK (packages/memory). Re-run with --force-legacy to override.');
+        process.exit(1);
+    }
+
     const command = args[0];
 
     // Install chalk if not available

@@ -1,173 +1,160 @@
 #!/usr/bin/env node
+'use strict';
 
 /**
- * Memory Health Check Tool for Claude Code
- * Checks for common issues in claude_desktop_memory table
+ * Memory Health Check — reads the LIVE neo-brain `memories` table via the shared client
+ * (tools/lib/neo-brain.js). Previously targeted SUPABASE_URL = the frozen legacy archive,
+ * so it always reported "0 recent" and misleading totals.
+ *
+ * NULL embeddings are EXPECTED for operational/event categories (agent state, PR-workflow,
+ * fleet events) — they are queried by metadata, never vector-searched. The canonical list of
+ * those categories lives in lib/neo-brain.js (EVENT_CATEGORIES, the SAME list backfill uses),
+ * so this tool and the backfill tool can never disagree about what counts as a real gap.
+ * A genuine problem is a NULL embedding in a category that is NOT operational.
  */
 
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+const { getNeoBrainClient, EVENT_CATEGORIES, MEMORY_TABLE, NEO_BRAIN_REF } = require('./lib/neo-brain');
 
-// Get credentials from environment
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-    console.error('❌ Missing required environment variables');
-    process.exit(1);
+let supabase;
+try {
+  supabase = getNeoBrainClient();
+} catch (e) {
+  console.error('❌', e.message);
+  process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+async function countWhere(apply) {
+  let q = supabase.from(MEMORY_TABLE).select('*', { count: 'exact', head: true });
+  if (apply) q = apply(q);
+  const { count, error } = await q;
+  if (error) throw error;
+  return count || 0;
+}
 
 async function checkMemoryHealth() {
-    console.log('🔍 Claude Memory Health Check\n');
-    console.log('Analyzing claude_desktop_memory table for common issues...\n');
+  console.log('🔍 neo-brain Memory Health Check\n');
+  console.log(`Analyzing live \`${MEMORY_TABLE}\` table (${NEO_BRAIN_REF})...\n`);
 
-    const issues = [];
-    let totalMemories = 0;
+  const issues = [];
 
-    try {
-        // 1. Get total count
-        const { count: total } = await supabase
-            .from('claude_desktop_memory')
-            .select('*', { count: 'exact', head: true });
-        
-        totalMemories = total || 0;
-        console.log(`📊 Total memories: ${totalMemories}`);
+  try {
+    const dayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
 
-        // 2. Check for NULL owners
-        const { count: nullOwners } = await supabase
-            .from('claude_desktop_memory')
-            .select('*', { count: 'exact', head: true })
-            .is('user_id', null);
+    const total = await countWhere();
+    const recent24 = await countWhere((q) => q.gte('created_at', dayAgo));
+    const recent7 = await countWhere((q) => q.gte('created_at', weekAgo));
+    const nullEmb = await countWhere((q) => q.is('embedding', null));
 
-        if (nullOwners > 0) {
-            issues.push({
-                type: 'NULL_OWNERS',
-                count: nullOwners,
-                severity: 'HIGH',
-                message: `${nullOwners} memories have NULL user_id`,
-                fix: 'Run fix-memory-null-owners.js tool'
-            });
-        }
+    console.log(`📊 Total memories:        ${total}`);
+    console.log(`📈 Last 24 hours:         ${recent24}`);
+    console.log(`📈 Last 7 days:           ${recent7}`);
+    console.log(`🧬 NULL embeddings:       ${nullEmb}  (operational/event rows skip embeddings by design)`);
 
-        // 3. Check for missing metadata
-        const { data: noMetadata } = await supabase
-            .from('claude_desktop_memory')
-            .select('id')
-            .is('metadata', null)
-            .limit(1000);
-
-        if (noMetadata && noMetadata.length > 0) {
-            issues.push({
-                type: 'NO_METADATA',
-                count: noMetadata.length,
-                severity: 'MEDIUM',
-                message: `${noMetadata.length} memories have no metadata`,
-                fix: 'Update memories with proper metadata structure'
-            });
-        }
-
-        // 4. Check for invalid sources
-        const validSources = [
-            'claude_desktop', 'claude_code', 'browser_extension', 
-            'manual', 'api', 'automation', 'sync'
-        ];
-
-        const { data: allSources } = await supabase
-            .from('claude_desktop_memory')
-            .select('source')
-            .limit(10000);
-
-        const invalidSources = new Set();
-        allSources?.forEach(row => {
-            if (row.source && !validSources.includes(row.source)) {
-                invalidSources.add(row.source);
-            }
-        });
-
-        if (invalidSources.size > 0) {
-            issues.push({
-                type: 'INVALID_SOURCES',
-                count: invalidSources.size,
-                severity: 'LOW',
-                message: `Found invalid sources: ${Array.from(invalidSources).join(', ')}`,
-                fix: 'Standardize source values'
-            });
-        }
-
-        // 5. Check recent activity
-        const oneDayAgo = new Date();
-        oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-
-        const { count: recentCount } = await supabase
-            .from('claude_desktop_memory')
-            .select('*', { count: 'exact', head: true })
-            .gte('created_at', oneDayAgo.toISOString());
-
-        console.log(`📈 Memories in last 24 hours: ${recentCount || 0}`);
-
-        // 6. Check for duplicate content
-        const { data: recentMemories } = await supabase
-            .from('claude_desktop_memory')
-            .select('content')
-            .order('created_at', { ascending: false })
-            .limit(100);
-
-        const contentMap = new Map();
-        let duplicates = 0;
-        
-        recentMemories?.forEach(row => {
-            const content = row.content?.toLowerCase().trim();
-            if (content) {
-                if (contentMap.has(content)) {
-                    duplicates++;
-                } else {
-                    contentMap.set(content, true);
-                }
-            }
-        });
-
-        if (duplicates > 0) {
-            issues.push({
-                type: 'DUPLICATE_CONTENT',
-                count: duplicates,
-                severity: 'LOW',
-                message: `Found ${duplicates} potential duplicates in recent memories`,
-                fix: 'Review and deduplicate similar memories'
-            });
-        }
-
-        // Display results
-        console.log('\n📋 Health Check Results:\n');
-
-        if (issues.length === 0) {
-            console.log('✅ All checks passed! Memory system is healthy.');
-        } else {
-            console.log(`⚠️  Found ${issues.length} issue(s):\n`);
-            
-            // Sort by severity
-            const severityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-            issues.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
-
-            issues.forEach((issue, index) => {
-                console.log(`${index + 1}. [${issue.severity}] ${issue.message}`);
-                console.log(`   Fix: ${issue.fix}\n`);
-            });
-        }
-
-        // Recommendations
-        console.log('💡 Recommendations:');
-        console.log('1. Run health checks regularly (weekly)');
-        console.log('2. Always save memories with proper owner and metadata');
-        console.log('3. Use save-memory-enhanced.js for consistent memory format');
-        console.log('4. Consider setting up automated cleanup for old memories');
-
-    } catch (error) {
-        console.error('❌ Error during health check:', error);
-        process.exit(1);
+    if (recent24 === 0) {
+      issues.push({
+        severity: 'MEDIUM',
+        message: 'No memories written in the last 24h — fleet may be idle or writes are failing',
+        fix: 'Confirm agents are running and the @todak/memory SDK is reachable',
+      });
     }
+
+    // Tally NULL-embedding rows by category (paginated), then classify against the canonical list.
+    const nullByCat = {};
+    const page = 1000;
+    for (let from = 0; ; from += page) {
+      const { data, error } = await supabase
+        .from(MEMORY_TABLE)
+        .select('category')
+        .is('embedding', null)
+        .range(from, from + page - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      for (const r of data) {
+        const c = r.category || '(null)';
+        nullByCat[c] = (nullByCat[c] || 0) + 1;
+      }
+      if (data.length < page) break;
+    }
+
+    const operational = [];
+    const knowledgeGaps = [];
+    for (const [cat, n] of Object.entries(nullByCat)) {
+      if (EVENT_CATEGORIES.has(cat)) operational.push({ cat, n });
+      else knowledgeGaps.push({ cat, n });
+    }
+
+    if (operational.length) {
+      console.log('\n🗂️  Operational categories (unembedded by design, not searched):');
+      operational.sort((a, b) => b.n - a.n).forEach((o) => console.log(`   ${String(o.n).padStart(5)}  ${o.cat}`));
+    }
+
+    for (const g of knowledgeGaps) {
+      issues.push({
+        severity: 'MEDIUM',
+        message: `Non-operational category "${g.cat}" has ${g.n} unembedded row(s) — invisible to semantic search`,
+        fix: `node tools/backfill-missing-embeddings.js --apply --category "${g.cat}" (or add "${g.cat}" to EVENT_CATEGORIES in tools/lib/neo-brain.js if it is genuinely operational)`,
+      });
+    }
+
+    // Duplicate content among recent KNOWLEDGE rows only (operational heartbeats legitimately repeat).
+    const { data: recent } = await supabase
+      .from(MEMORY_TABLE)
+      .select('content')
+      .not('embedding', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    const seen = new Set();
+    let duplicates = 0;
+    recent?.forEach((r) => {
+      const c = r.content?.toLowerCase().trim();
+      if (!c) return;
+      if (seen.has(c)) duplicates++; else seen.add(c);
+    });
+    if (duplicates > 0) {
+      issues.push({
+        severity: 'LOW',
+        message: `${duplicates} potential duplicate(s) among the 100 most recent knowledge memories`,
+        fix: 'Review and deduplicate similar memories',
+      });
+    }
+
+    console.log('\n📋 Health Check Results:\n');
+    if (issues.length === 0) {
+      console.log('✅ All checks passed! neo-brain is healthy.');
+      console.log('   • Every non-operational category is fully embedded (semantic search intact)');
+      console.log('   • Active writes flowing');
+    } else {
+      console.log(`⚠️  Found ${issues.length} issue(s):\n`);
+      const order = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+      issues.sort((a, b) => order[a.severity] - order[b.severity]);
+      issues.forEach((it, i) => {
+        console.log(`${i + 1}. [${it.severity}] ${it.message}`);
+        console.log(`   Fix: ${it.fix}\n`);
+      });
+    }
+
+    // --alert: for scheduled/cron runs. On issues, persist an alert memory (so the fleet digest /
+    // Siti can surface it) and set a non-zero exit code so a monitor catches the regression.
+    // Manual runs (no --alert) always exit 0 so they don't look like failures.
+    if (process.argv.includes('--alert') && issues.length) {
+      try {
+        const { NeoBrain } = await import('../packages/memory/src/index.js');
+        const brain = new NeoBrain({ agent: 'memory-health-check' });
+        const summary = issues.map((it) => `[${it.severity}] ${it.message}`).join(' | ');
+        await brain.save(`memory-health alert (${NEO_BRAIN_REF}): ${issues.length} issue(s) — ${summary}`, {
+          category: 'memory_health_alert', type: 'event', importance: 7, visibility: 'private',
+        });
+        console.log('\n🔔 Alert memory written (category=memory_health_alert).');
+      } catch (e) {
+        console.error('alert save failed:', e.message);
+      }
+      process.exitCode = 1;
+    }
+  } catch (error) {
+    console.error('❌ Error during health check:', error.message || error);
+    process.exit(1);
+  }
 }
 
-// Run health check
 checkMemoryHealth();

@@ -161,5 +161,15 @@ if [ $fail -ne 0 ]; then
   exit 1
 fi
 
+# ===== memory DB target ratchet =====
+# Block any NEW staged tool code that reads/writes the frozen legacy memory archive
+# (SUPABASE_URL / claude_desktop_memory). Existing offenders are not blocked — see
+# `node tools/check-memory-db-target.js --all` for the burn-down list.
+if [ -f tools/check-memory-db-target.js ]; then
+  if ! node tools/check-memory-db-target.js; then
+    exit 1
+  fi
+fi
+
 echo -e "${GRN}[pre-commit] Passed.${NC}"
 exit 0
