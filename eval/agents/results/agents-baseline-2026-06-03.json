@@ -1,0 +1,127 @@
+{
+  "generated": "2026-06-03T06:46:10.785Z",
+  "phase": "phase-0-retrospective",
+  "planner": {
+    "window": {
+      "first": "2026-04-22",
+      "last": "2026-06-03"
+    },
+    "total": 439,
+    "by_status": {
+      "done": 226,
+      "cancelled": 10,
+      "failed": 203
+    },
+    "decomposition_success_rate_pct": 52.7,
+    "failure_breakdown": {
+      "invalid_target_or_payload": 159,
+      "other": 29,
+      "no_command_produced": 1,
+      "network": 1
+    },
+    "avg_commands_per_success": 1.07,
+    "sample_errors": [
+      "[{\"rejected\":{\"to_agent\":\"siti\",\"command\":\"send_whatsapp_notification\",\"payload\":{\"message\":\"🔴 *Fleet Alert — browser-agent stale (slave-mbp)*\\n\\nSupervisor fl",
+      "[{\"rejected\":{\"to_agent\":\"siti\",\"command\":\"send_whatsapp_notification\",\"payload\":{\"message\":\"🔴 *Fleet Alert — publisher-agent stale* (via Supervisor)\\n\\n*Agent",
+      "[{\"rejected\":{\"to_agent\":\"siti\",\"command\":\"send_whatsapp_notification\",\"payload\":{\"message\":\"🔴 *Supervisor Alert — explainer-agent STALE*\\n\\n📍 Host: slave-mbp",
+      "[{\"rejected\":{\"to_agent\":\"siti\",\"command\":\"send_whatsapp_notification\",\"payload\":{\"message\":\"✅ PR #89 merged on claude-tools-kit — secret scanner now recognises",
+      "[{\"rejected\":{\"to_agent\":\"siti\",\"command\":\"send_whatsapp_notification\",\"payload\":{\"message\":\"✅ *naca-app* PR #76 merged — CI security scan for `ccc_sk_` secrets"
+    ]
+  },
+  "dev_agent": {
+    "window": {
+      "first": "2026-04-22",
+      "last": "2026-05-21"
+    },
+    "total": 314,
+    "by_command": {
+      "investigate_bug": 23,
+      "restart": 1,
+      "feature_request": 28,
+      "on_main_push": 107,
+      "merge_pr": 110,
+      "on_pr_merged": 40,
+      "close_pr": 5
+    },
+    "authoring": {
+      "label": "authoring (investigate_bug + feature_request)",
+      "total": 51,
+      "by_status": {
+        "cancelled": 14,
+        "done": 32,
+        "failed": 5
+      },
+      "completion_rate_pct": 86.5,
+      "pr_produced": 14,
+      "error_classes": {
+        "Command failed: git commit -m \"feat(claude-tools-kit): PR #9": 1,
+        "Command failed: git fetch origin && git checkout feat/phase6": 1,
+        "Command failed: git clone git@github.com:broneotodak/claude-": 2,
+        "Command failed: git clone git@github.com:broneotodak/publish": 1
+      }
+    },
+    "plumbing": {
+      "label": "plumbing (merge_pr/on_main_push/on_pr_merged/close_pr)",
+      "total": 263,
+      "by_status": {
+        "cancelled": 1,
+        "failed": 154,
+        "done": 108
+      },
+      "completion_rate_pct": 41.2,
+      "pr_produced": 115,
+      "error_classes": {
+        "unknown command \"on_main_push\" — known: investigate_bug, fea": 107,
+        "unknown command \"on_pr_merged\" — known: investigate_bug, fea": 40,
+        "Command failed: gh pr merge --squash \"https://github.com/bro": 5,
+        "Command failed: gh pr close \"https://github.com/broneotodak/": 2
+      }
+    }
+  },
+  "reviewer": {
+    "window": {
+      "first": "2026-04-25",
+      "last": "2026-05-29"
+    },
+    "total": 373,
+    "by_status": {
+      "cancelled": 1,
+      "failed": 40,
+      "done": 332
+    },
+    "verdicts": {
+      "request-changes": 30,
+      "comment": 15,
+      "approve": 135
+    },
+    "verdict_total": 180,
+    "approve_share_pct": 75,
+    "request_changes_share_pct": 16.7,
+    "skipped_already_merged": 160,
+    "skipped_rate_pct": 42.9
+  },
+  "github": {
+    "enabled": true,
+    "dev_authoring_prs": {
+      "checked": 14,
+      "dist": {
+        "closed_unmerged": 6,
+        "merged": 3,
+        "gh_error": 5
+      }
+    },
+    "dev_landed_rate_pct": 33.3,
+    "dev_resolved": 9,
+    "reviewer_approved_prs": {
+      "checked": 124,
+      "dist": {
+        "merged": 112,
+        "gh_error": 10,
+        "closed_unmerged": 2
+      }
+    },
+    "approve_then_merged_rate_pct": 98.2,
+    "approve_resolved": 114,
+    "note": "some PRs unresolved (gh_error) — rate is over resolvable PRs"
+  }
+}
