@@ -77,6 +77,7 @@ SECRET_PATTERNS=(
   '(api[_-]?key|access[_-]?token|secret[_-]?key)\s*[:=]\s*["'\''`][A-Za-z0-9_\-\.]{24,}["'\''`]'
   'postgresql://[^:]+:[^@]+@[^/]+/[^"'\''[:space:]]+'
   'postgres://[^:]+:[^@]+@[^/]+/[^"'\''[:space:]]+'
+  'ccc_sk_[A-Za-z0-9_]{4,}'
 )
 
 fail=0
