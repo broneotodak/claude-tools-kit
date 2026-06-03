@@ -16,32 +16,21 @@
 //   1 = warning (1+ knowledge NULLs found OR test/debug rows present)
 //   2 = fatal (env missing / fetch failed)
 //
-// Mirrored allowlist with tools/backfill-missing-embeddings.js and the
-// neo-brain trigger enforce_memory_embedding_for_knowledge. Keep all three
-// in sync when adding new operational categories.
+// The operational-category allowlist is imported from lib/neo-brain.js — the
+// SINGLE source of truth shared with tools/backfill-missing-embeddings.js and
+// tools/prune-operational-memories.js, so they can never disagree about what
+// counts as a real embedding gap. (The neo-brain trigger
+// enforce_memory_embedding_for_knowledge is the 4th mirror; it's SQL and can't
+// import JS — keep it in sync by hand when adding categories.)
 
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 
 const args = process.argv.slice(2);
 const JSON_OUT = args.includes('--json');
 const SINCE = args.find((a, i) => args[i - 1] === '--since') || null;  // e.g. "24h", "7d"
 
-const EVENT_CATEGORIES = new Set([
-  'naca_monitor_snapshot',
-  'kg_populator_state',
-  'pr-stuck-reminder',
-  'pr-awaiting-decision', // added 2026-05-21 — mirror DB trigger
-  'pr-decision-recorded',
-  'digest_queue',
-  'daily_checkup_run',
-  'supervisor-observation',
-  'supervisor',           // added 2026-05-21 — supervisor cycle records
-  'planner_decomposition',// added 2026-05-24 — mirror DB trigger (planner-agent telemetry)
-  'vps_git_drift',
-  'fleet-node-discovered',
-  'deploy_log',           // added 2026-05-21 — mirror DB trigger
-  'deploy-verified',      // added 2026-05-21 — verifier-agent post-deploy log
-]);
+const { EVENT_CATEGORIES } = createRequire(import.meta.url)('./lib/neo-brain.js');
 
 // Debug/test sources that should NOT have lingering rows post-cleanup.
 const DEBUG_SOURCES = new Set([
