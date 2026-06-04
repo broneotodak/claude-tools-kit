@@ -1,0 +1,23 @@
+{
+  "generated": "2026-06-04T04:48:40.263Z",
+  "eval": "reviewer-retrospective-v1",
+  "distinct_prs": 162,
+  "approve": {
+    "total": 125,
+    "merged": 120,
+    "held": 119,
+    "reverted": 1,
+    "closed_unmerged": 5,
+    "gh_error": 0
+  },
+  "approval_correctness_pct": 99.2,
+  "false_approves": [
+    "broneotodak/siti#3"
+  ],
+  "request_changes": {
+    "total": 22,
+    "overridden_merged": 20,
+    "respected_closed": 2
+  },
+  "comment_verdicts": 15
+}
