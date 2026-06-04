@@ -34,6 +34,7 @@ const EVENT_CATEGORIES = new Set([
   'supervisor-observation',
   'supervisor',
   'planner_decomposition',
+  'planner_deferred_dispatch',  // 2026-06-04: planner audit record (AUTONOMOUS_DISPATCH_ENABLED=false). Trigger rejection had jammed the planner. Keep this list == the DB trigger's event_categories.
   'vps_git_drift',
   'fleet-node-discovered',
   'deploy_log',
