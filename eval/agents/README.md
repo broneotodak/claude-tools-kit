@@ -33,9 +33,21 @@ Needs `NEO_BRAIN_URL` + `NEO_BRAIN_SERVICE_ROLE_KEY` (read-only). `--github` nee
 - `approve → merged` is near-tautological in an auto-merge fleet (approval leads to merge); it is **not** a measure of approval *correctness*. That needs revert detection (Phase 1).
 - dev-agent/reviewer dispatch wound down ~2026-05-29 (autonomous-dispatch paused); this is the historical active window. Planner intents continue to today.
 
+## Phase 1 — revert scan (`run-revert-scan.js`, built 2026-06-04)
+
+The correctness signal Phase 0 lacked: of everything the fleet *shipped* (merged), what fraction later got **reverted** vs **stuck**. Mines `agent_commands` for dev-agent authored PRs (`investigate_bug`/`feature_request` → `result.pr_url`) — the precise set the fleet shipped — and cross-refs each against revert signals in its repo (revert-titled PRs + git-revert commits over the last 200 default-branch commits), matched by merge-commit SHA, PR number, or quoted title.
+
+```
+node --env-file=.env --no-warnings eval/agents/run-revert-scan.js
+```
+
+READ-ONLY (neo-brain GET + `gh` GET). Output: `results/revert-scan-<date>.{json,md}`. **Headline = STUCK rate** (merged & not reverted). This is the historical baseline for the dev-agent fix pipeline; re-run after re-activating Siti→dev-agent (Agent SDK engine) to A/B whether shipped fixes stick more often. Caveat: a high stuck-rate is necessary-but-not-sufficient (an unnoticed bad change still counts as "stuck") — pair with the dev-agent sandbox eval.
+
+First run (2026-06-04): 14 authoring PRs → 5 merged → 1 reverted → **80% stuck / 20% revert**. The one revert (siti #61, undone by #62) broke the siti↔siti-router identity boundary — the kind of context-dependent mistake the Agent SDK engine + grounding should reduce.
+
 ## Roadmap
 
-- **Phase 1** — deterministic replay evals (no judge): planner decomposition (20 frozen intents → expected agent/command/payload; routing accuracy + command-validity + hallucination rate) and Siti router classification (from `siti-v2/test/fixtures/messages.json`). Add a revert scan.
-- **Phase 2** — quality evals: seeded-defect reviewer eval (planted bugs = ground truth) and dev-agent sandbox replay (frozen bug → fix → run repo tests).
+- **Phase 1** — deterministic replay evals (no judge): ✅ planner decomposition (`planner-agent/eval/`), ✅ revert scan (above). Siti router classification (from `siti-v2/test/fixtures/messages.json`) built but unbanked.
+- **Phase 2** — quality evals: ✅ dev-agent sandbox replay (`dev-agent/eval/run-sandbox-fix.js` — seeded bug → fix → run repo tests). Seeded-defect reviewer eval is moot — reviewer-agent retired (replaced by claude-code-action).
 
 Fold the existing `eval/neo-brain/` RAG eval into the same monthly cadence rather than duplicating it here.
