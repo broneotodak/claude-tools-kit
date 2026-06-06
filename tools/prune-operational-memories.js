@@ -32,7 +32,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 
-const { EVENT_CATEGORIES } = createRequire(import.meta.url)('./lib/neo-brain.js');
+const { getEventCategories } = createRequire(import.meta.url)('./lib/neo-brain.js');
 
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
@@ -76,7 +76,8 @@ async function del(filter) {
 async function main() {
   const cutoff = new Date(Date.now() - RETENTION_DAYS * 86400 * 1000).toISOString();
   console.log(`prune-operational-memories (${APPLY ? 'APPLY' : 'DRY-RUN'}) · retention=${RETENTION_DAYS}d · cutoff=${cutoff.slice(0, 10)}`);
-  console.log(`allowlist: ${[...EVENT_CATEGORIES].length} operational categories (from lib/neo-brain.js)\n`);
+  const EVENT_CATEGORIES = await getEventCategories();  // from DB table (single source of truth)
+  console.log(`allowlist: ${[...EVENT_CATEGORIES].length} operational categories (from DB memory_event_categories)\n`);
 
   let grandPrunable = 0, grandDeleted = 0;
   const cats = [...EVENT_CATEGORIES].sort();

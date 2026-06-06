@@ -13,7 +13,7 @@
  * A genuine problem is a NULL embedding in a category that is NOT operational.
  */
 
-const { getNeoBrainClient, EVENT_CATEGORIES, MEMORY_TABLE, NEO_BRAIN_REF } = require('./lib/neo-brain');
+const { getNeoBrainClient, getEventCategories, MEMORY_TABLE, NEO_BRAIN_REF } = require('./lib/neo-brain');
 
 let supabase;
 try {
@@ -79,6 +79,7 @@ async function checkMemoryHealth() {
 
     const operational = [];
     const knowledgeGaps = [];
+    const EVENT_CATEGORIES = await getEventCategories();  // from DB table (single source of truth)
     for (const [cat, n] of Object.entries(nullByCat)) {
       if (EVENT_CATEGORIES.has(cat)) operational.push({ cat, n });
       else knowledgeGaps.push({ cat, n });
