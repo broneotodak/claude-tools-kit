@@ -32,10 +32,11 @@ const LIMIT = args.find((a, i) => args[i - 1] === '--limit') ? parseInt(args[arg
 const CATEGORY = args.find((a, i) => args[i - 1] === '--category');
 
 // Categories whose rows are operational/event logs — NOT meant for semantic search.
-// Canonical list now lives in tools/lib/neo-brain.js so this tool and check-memory-health.js
-// can never disagree about what counts as a real embedding gap (ESM → CommonJS via createRequire).
+// The allowlist source of truth is the DB table memory_event_categories; getEventCategories()
+// fetches it (the trigger reads the same table) so this tool can never disagree about what counts
+// as a real embedding gap (ESM → CommonJS via createRequire).
 import { createRequire } from 'module';
-const { EVENT_CATEGORIES } = createRequire(import.meta.url)('./lib/neo-brain.js');
+const { getEventCategories } = createRequire(import.meta.url)('./lib/neo-brain.js');
 
 // env
 const envPath = `${process.env.HOME}/Projects/claude-tools-kit/.env`;
@@ -70,6 +71,7 @@ async function fetchKnowledgeNullRows() {
     offset += PAGE;
   }
   // Filter out event categories — they should stay NULL by design
+  const EVENT_CATEGORIES = await getEventCategories();  // from DB table (single source of truth)
   return all.filter(r => !EVENT_CATEGORIES.has(r.category));
 }
 
