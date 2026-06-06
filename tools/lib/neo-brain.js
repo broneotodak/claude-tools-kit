@@ -19,16 +19,17 @@ const NEO_BRAIN_REF = 'xsunmervpyrplzarebva';     // live PRIMARY
 const LEGACY_ARCHIVE_REF = 'uzamamymfzhelvkwpvgt'; // frozen read-only archive
 const MEMORY_TABLE = 'memories';
 
-// Canonical operational/event categories that intentionally skip embeddings (queried by
-// metadata, not vector search). SINGLE SOURCE OF TRUTH for CTK tools — mirrors the DB trigger
-// allowlist. check-memory-health.js, backfill-missing-embeddings.js and any future tool must
-// import this, never redeclare it, so the "is this row a real embedding gap?" answer can never drift.
-// CROSS-REPO MIRRORS that CANNOT import this (sync BY HAND when adding a category):
-//   - DB trigger `enforce_memory_embedding_for_knowledge` (SQL — the enforcement authority)
-//   - daily-checkup-agent/index.js MEMORY_EVENT_CATEGORIES (separate repo on NAS) — drifted on
-//     2026-06-06 (missing planner_deferred_dispatch + 3 others) → false "knowledge NULL" alert.
-//     See feedback_allowlist_drift_multi_layer; the lasting fix is to derive these from the DB.
-const EVENT_CATEGORIES = new Set([
+// Operational/event categories that intentionally skip embeddings (queried by metadata, not
+// vector search). SOURCE OF TRUTH is now the DB table `public.memory_event_categories` — the
+// trigger `enforce_memory_embedding_for_knowledge` reads it, and getEventCategories() below
+// fetches it. Adding a category = one INSERT into that table, no code edit / deploy. This kills
+// the hand-synced-copy drift that broke things twice (2026-05-24, 2026-06-06); see
+// feedback_allowlist_drift_multi_layer.
+//
+// The Set below is a STATIC FALLBACK only — used if the DB is unreachable so a maintenance tool
+// degrades gracefully instead of crashing. It can lag the table; never treat it as authoritative.
+// Prefer `await getEventCategories()`. (Kept in sync best-effort; the table is what enforces.)
+const EVENT_CATEGORIES_FALLBACK = new Set([
   'naca_monitor_snapshot',
   'kg_populator_state',
   'pr-stuck-reminder',
@@ -70,9 +71,36 @@ function getNeoBrainClient() {
   return createClient(url, key);
 }
 
+// Fetch the embedding-skip allowlist from the DB table (the source of truth the
+// trigger also reads). Cached for the process. Falls back to the static set above
+// only if the DB is unreachable (logs a warning) so tools degrade, never crash.
+let _eventCategoriesCache = null;
+async function getEventCategories() {
+  if (_eventCategoriesCache) return _eventCategoriesCache;
+  try {
+    const { data, error } = await getNeoBrainClient()
+      .from('memory_event_categories')
+      .select('category');
+    if (error) throw error;
+    if (!data || data.length === 0) throw new Error('memory_event_categories returned no rows');
+    _eventCategoriesCache = new Set(data.map((r) => r.category));
+    return _eventCategoriesCache;
+  } catch (e) {
+    process.stderr.write(
+      `[neo-brain] getEventCategories: DB fetch failed (${e.message}); ` +
+      `using static fallback (${EVENT_CATEGORIES_FALLBACK.size} cats, may be stale)\n`,
+    );
+    return EVENT_CATEGORIES_FALLBACK;
+  }
+}
+
 module.exports = {
   getNeoBrainClient,
-  EVENT_CATEGORIES,
+  getEventCategories,
+  EVENT_CATEGORIES_FALLBACK,
+  // Back-compat alias for any importer still reading the static set synchronously.
+  // Prefer getEventCategories() (derives from the DB). This will lag the table.
+  EVENT_CATEGORIES: EVENT_CATEGORIES_FALLBACK,
   MEMORY_TABLE,
   NEO_BRAIN_REF,
   LEGACY_ARCHIVE_REF,

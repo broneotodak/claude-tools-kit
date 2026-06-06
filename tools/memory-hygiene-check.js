@@ -30,7 +30,7 @@ const args = process.argv.slice(2);
 const JSON_OUT = args.includes('--json');
 const SINCE = args.find((a, i) => args[i - 1] === '--since') || null;  // e.g. "24h", "7d"
 
-const { EVENT_CATEGORIES } = createRequire(import.meta.url)('./lib/neo-brain.js');
+const { getEventCategories } = createRequire(import.meta.url)('./lib/neo-brain.js');
 
 // Debug/test sources that should NOT have lingering rows post-cleanup.
 const DEBUG_SOURCES = new Set([
@@ -90,6 +90,7 @@ async function sampleWhere(filter, limit = 5) {
 
   // 2. NULL embedding in knowledge categories (the real bug class).
   //    Build a filter: embedding IS NULL AND category NOT IN (event_categories)
+  const EVENT_CATEGORIES = await getEventCategories();  // from DB table (single source of truth)
   const eventsList = [...EVENT_CATEGORIES].map((c) => `"${c}"`).join(',');
   let knowledgeNullFilter = `embedding=is.null&category=not.in.(${encodeURIComponent(eventsList)})`;
   if (sinceFilter) knowledgeNullFilter += `&${sinceFilter}`;
