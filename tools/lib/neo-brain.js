@@ -20,9 +20,14 @@ const LEGACY_ARCHIVE_REF = 'uzamamymfzhelvkwpvgt'; // frozen read-only archive
 const MEMORY_TABLE = 'memories';
 
 // Canonical operational/event categories that intentionally skip embeddings (queried by
-// metadata, not vector search). SINGLE SOURCE OF TRUTH — mirrors the DB trigger allowlist.
-// check-memory-health.js, backfill-missing-embeddings.js and any future tool must import this,
-// never redeclare it, so the "is this row a real embedding gap?" answer can never drift.
+// metadata, not vector search). SINGLE SOURCE OF TRUTH for CTK tools — mirrors the DB trigger
+// allowlist. check-memory-health.js, backfill-missing-embeddings.js and any future tool must
+// import this, never redeclare it, so the "is this row a real embedding gap?" answer can never drift.
+// CROSS-REPO MIRRORS that CANNOT import this (sync BY HAND when adding a category):
+//   - DB trigger `enforce_memory_embedding_for_knowledge` (SQL — the enforcement authority)
+//   - daily-checkup-agent/index.js MEMORY_EVENT_CATEGORIES (separate repo on NAS) — drifted on
+//     2026-06-06 (missing planner_deferred_dispatch + 3 others) → false "knowledge NULL" alert.
+//     See feedback_allowlist_drift_multi_layer; the lasting fix is to derive these from the DB.
 const EVENT_CATEGORIES = new Set([
   'naca_monitor_snapshot',
   'kg_populator_state',
