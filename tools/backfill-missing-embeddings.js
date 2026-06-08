@@ -31,12 +31,10 @@ const APPLY = args.includes('--apply');
 const LIMIT = args.find((a, i) => args[i - 1] === '--limit') ? parseInt(args[args.indexOf('--limit') + 1]) : null;
 const CATEGORY = args.find((a, i) => args[i - 1] === '--category');
 
-// Categories whose rows are operational/event logs — NOT meant for semantic search.
-// The allowlist source of truth is the DB table memory_event_categories; getEventCategories()
-// fetches it (the trigger reads the same table) so this tool can never disagree about what counts
-// as a real embedding gap (ESM → CommonJS via createRequire).
-import { createRequire } from 'module';
-const { getEventCategories } = createRequire(import.meta.url)('./lib/neo-brain.js');
+// Operational/event categories (NOT meant for semantic search) are the allowlist in
+// public.memory_event_categories — DERIVED at runtime in fetchKnowledgeNullRows(), never
+// hardcoded. A hardcoded mirror drifted (2026-05-24, 2026-06-08) and would re-embed
+// telemetry the pollution cleanup just stripped. The DB table is the single source of truth.
 
 // env
 const envPath = `${process.env.HOME}/Projects/claude-tools-kit/.env`;
@@ -70,9 +68,14 @@ async function fetchKnowledgeNullRows() {
     if (rows.length < PAGE) break;
     offset += PAGE;
   }
-  // Filter out event categories — they should stay NULL by design
-  const EVENT_CATEGORIES = await getEventCategories();  // from DB table (single source of truth)
-  return all.filter(r => !EVENT_CATEGORIES.has(r.category));
+  // Filter out event categories — DERIVED from the DB allowlist (memory_event_categories),
+  // the same table the embedding trigger reads, so backfill can never re-embed operational
+  // telemetry. Fail-CLOSED: if the allowlist is unreadable, refuse rather than re-pollute.
+  const er = await fetch(`${URL}/rest/v1/memory_event_categories?select=category`, { headers: H });
+  if (!er.ok) throw new Error(`event-category allowlist fetch failed: ${er.status} — refusing to backfill (would risk re-embedding telemetry)`);
+  const eventCats = new Set((await er.json()).map(x => x.category));
+  if (!eventCats.size) throw new Error('memory_event_categories empty — refusing to backfill');
+  return all.filter(r => !eventCats.has(r.category));
 }
 
 async function patchEmbedding(id, embStr) {
