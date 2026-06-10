@@ -68,6 +68,16 @@ const VERSION = 'v2';
 // Per-agent criticality comes from meta.is_critical (default false).
 // Target host comes from meta.host. Schema: naca/docs/spec/agent-registry-schema-v1.md.
 const DEFAULT_THRESHOLD_SEC = 360;
+// Human-facing tiers (2/3) for process_stale require the agent to have been
+// stale at least this long. Heartbeat lag on laptop / self-healing agents is
+// usually a transient event-loop hang or a sleeping MacBook that resumes on
+// its own — the 2026-06-09 browser-agent false 🔴 paged Neo for a 10-min hang
+// that had already recovered. Tier-1 (silent restart intent) still fires at
+// the base threshold; only the PAGE waits for sustained downtime. Critical
+// agents bypass this (page as soon as the base threshold trips). Per-agent
+// override: meta.monitor_page_after_sec.
+const PAGE_MIN_STALE_SEC = Number(process.env.SUPERVISOR_PAGE_MIN_STALE_SEC || env.SUPERVISOR_PAGE_MIN_STALE_SEC || 900);
+const PAGING_TIERS = new Set([2, 3]);
 const MONITORABLE_RUNTIMES = new Set(['pm2', 'launchd', 'docker', 'systemd']);
 
 function buildWatchList(regRows) {
@@ -84,6 +94,7 @@ function buildWatchList(regRows) {
       critical: m.is_critical === true,
       target_host: m.host || 'unknown',
       kuma_monitor_id: m.kuma_monitor_id ?? null,
+      page_after_sec: typeof m.monitor_page_after_sec === 'number' ? m.monitor_page_after_sec : null,
     };
   }
   return out;
@@ -127,6 +138,45 @@ function detectProcessStale(hb, cfg, nowMs) {
   const ageSec = Math.round((nowMs - new Date(hb.reported_at).getTime()) / 1000);
   if (ageSec > cfg.max_age_sec) return { key: 'process_stale', detail: `heartbeat ${ageSec}s stale (threshold ${cfg.max_age_sec}s)` };
   return null;
+}
+
+// Pure decision for the process_stale confirmation gate (exported for tests).
+// Given the agent's CURRENT (re-fetched) heartbeat age and the tier about to
+// fire, decide whether to proceed. Two suppression cases:
+//   - recovered   : age within threshold again → nothing to do, drop all tiers
+//   - auto-healing: still stale but a human-paging tier (2/3) wants to fire
+//                   before the agent has been down `pageAfterSec` — defer the
+//                   page so transient hangs that self-heal never reach Neo.
+// pageAfterSec resolution: explicit per-agent override → else critical agents
+// page at the base threshold (no extra wait) → else PAGE_MIN_STALE_SEC.
+export function processStaleGateDecision({ ageSec, maxAgeSec, critical, pageAfterSec, tier }) {
+  if (ageSec <= maxAgeSec) {
+    return { proceed: false, reason: `recovered (now ${ageSec}s ≤ ${maxAgeSec}s threshold)` };
+  }
+  const pageAfter = typeof pageAfterSec === 'number'
+    ? pageAfterSec
+    : (critical ? maxAgeSec : PAGE_MIN_STALE_SEC);
+  if (PAGING_TIERS.has(tier) && ageSec < pageAfter) {
+    return { proceed: false, reason: `stale ${ageSec}s < page-after ${pageAfter}s — deferring page (auto-heal window)` };
+  }
+  return { proceed: true };
+}
+
+// Re-fetch the agent's live heartbeat (the run-start snapshot can be seconds-
+// to-minutes old by dispatch time) and run the pure gate. Fails OPEN — if the
+// re-fetch errors or the agent has never reported, we don't hide a possible
+// real outage.
+async function confirmProcessStale(agent, cfg, tier) {
+  let hb;
+  try {
+    const rows = await rest(`agent_heartbeats?select=reported_at&agent_name=eq.${encodeURIComponent(agent)}&limit=1`);
+    hb = rows?.[0];
+  } catch {
+    return { proceed: true };
+  }
+  if (!hb) return { proceed: true };
+  const ageSec = Math.round((Date.now() - new Date(hb.reported_at).getTime()) / 1000);
+  return processStaleGateDecision({ ageSec, maxAgeSec: cfg.max_age_sec, critical: cfg.critical, pageAfterSec: cfg.page_after_sec, tier });
 }
 
 function detectKumaMonitorDown(kumaData, monitorId, agentName) {
@@ -445,6 +495,17 @@ async function main() {
       let chosenTier = null;
       for (const t of route.ladder) { if (!prior[t]) { chosenTier = t; break; } }
       if (!chosenTier) { console.log(`[supervisor] ${agent}/${symptom.key} — all ladder tiers in cooldown, skipping`); continue; }
+
+      // Confirmation gate: heartbeat lag flaps on laptop/self-healing agents.
+      // Re-fetch the live heartbeat and suppress if recovered, or defer the
+      // page if it hasn't been down long enough (kills transient false 🔴).
+      if (symptom.key === 'process_stale') {
+        const gate = await confirmProcessStale(agent, cfg, chosenTier);
+        if (!gate.proceed) {
+          console.log(`[supervisor] ${agent}/process_stale — ${gate.reason}; skipping tier ${chosenTier}`);
+          continue;
+        }
+      }
 
       const result = await dispatch[chosenTier](agent, cfg, symptom, runId, prior);
       console.log(`[supervisor] ${agent}/${symptom.key} → tier ${chosenTier} ${result.action}${result.stubbed ? ' (stub)' : ''}`);
