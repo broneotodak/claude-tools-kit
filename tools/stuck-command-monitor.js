@@ -25,9 +25,8 @@ const RUNNING_THRESHOLD_MIN  = 15;   // running > 15 min = handler hung
 const ALERT_COOLDOWN_HR      = 1;    // don't re-alert same cmd for 1 hour
 const NEO_PHONE              = "60177519610";
 const NEO_OWNER_ID           = "00000000-0000-0000-0000-000000000001";
-const SITI_HOST              = process.env.SITI_HOST || "100.79.179.67";
-const SITI_PORT              = process.env.SITI_PORT || "3800";
-const SITI_PIN               = process.env.SITI_PIN  || "404282";
+// Siti is reached via the agent_commands queue (see notifyNeo), not a direct
+// HTTP endpoint — the old :3800/api/send is offline (connection-refused).
 
 const brain = createClient(
   process.env.NEO_BRAIN_URL,
@@ -61,15 +60,28 @@ async function recordAlert(cmdId, summary) {
 }
 
 async function notifyNeo(text) {
+  // Enqueue a WhatsApp alert on the agent_commands queue that Siti drains
+  // (command='send_whatsapp_notification'). Replaces the old direct POST to
+  // Siti :3800/api/send, which is connection-refused — that endpoint is offline.
+  // Same path backup-sync / supervisor / timekeeper use (verified: reaches done).
+  // Logs loudly on failure instead of silently swallowing (this is the §9 safety net).
   try {
-    const r = await fetch(`http://${SITI_HOST}:${SITI_PORT}/api/send`, {
-      method: "POST",
-      headers: { "Cookie": `pin=${SITI_PIN}`, "content-type": "application/json" },
-      body: JSON.stringify({ to: NEO_PHONE, text }),
-      signal: AbortSignal.timeout(8000),
+    const { error } = await brain.from("agent_commands").insert({
+      from_agent: "stuck-command-monitor",
+      to_agent: "siti",
+      command: "send_whatsapp_notification",
+      payload: { to: NEO_PHONE, message: text },
+      priority: 2,
     });
-    return r.ok;
-  } catch (e) { return false; }
+    if (error) {
+      console.error(`[stuck-command-monitor] siti notify enqueue FAILED: ${error.message}`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error(`[stuck-command-monitor] siti notify error: ${e.message}`);
+    return false;
+  }
 }
 
 async function main() {
