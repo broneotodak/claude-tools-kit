@@ -14,22 +14,27 @@
 //   BACKUP_SSH_TARGET   — ssh alias or user@host for NAS (default: nas-remote)
 //   BACKUP_REMOTE_ROOT  — remote path root (default: /volume1/docker/backups/neo-brain)
 
-import { readFileSync } from "node:fs";
+import { readFileSync, createWriteStream, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { spawn } from "node:child_process";
 import { createGzip } from "node:zlib";
 
-const envPath = process.env.NEO_BRAIN_ENV_PATH || `${homedir()}/.openclaw/secrets/neo-brain.env`;
-const env = Object.fromEntries(
-  readFileSync(envPath, "utf8")
-    .split("\n")
-    .filter(l => l && !l.trimStart().startsWith("#"))
-    .map(l => {
-      const i = l.indexOf("=");
-      return i < 0 ? null : [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^['"]|['"]$/g, "")];
-    })
-    .filter(Boolean),
-);
+// Env resolution: process env wins (container --env-file style); falls back to
+// the classic secrets file so the CLAW/launchd invocation keeps working.
+let env = process.env;
+if (!env.NEO_BRAIN_URL || !env.NEO_BRAIN_SERVICE_ROLE_KEY) {
+  const envPath = process.env.NEO_BRAIN_ENV_PATH || `${homedir()}/.openclaw/secrets/neo-brain.env`;
+  env = Object.fromEntries(
+    readFileSync(envPath, "utf8")
+      .split("\n")
+      .filter(l => l && !l.trimStart().startsWith("#"))
+      .map(l => {
+        const i = l.indexOf("=");
+        return i < 0 ? null : [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^['"]|['"]$/g, "")];
+      })
+      .filter(Boolean),
+  );
+}
 
 const URL = env.NEO_BRAIN_URL;
 const KEY = env.NEO_BRAIN_SERVICE_ROLE_KEY;
@@ -37,6 +42,9 @@ if (!URL || !KEY) { console.error("backup-neo-brain: env missing"); process.exit
 
 const SSH_TARGET = process.env.BACKUP_SSH_TARGET || "nas-remote";
 const REMOTE_ROOT = process.env.BACKUP_REMOTE_ROOT || "/volume1/docker/backups/neo-brain";
+// BACKUP_LOCAL_DIR set → write snapshots to a local directory instead of ssh.
+// Used when the script runs ON the backup target (NAS container since 2026-07).
+const LOCAL_DIR = process.env.BACKUP_LOCAL_DIR || null;
 const DATE = process.argv[2] || new Date().toISOString().slice(0, 10);
 const REMOTE_DIR = `${REMOTE_ROOT}/${DATE}`;
 
@@ -87,6 +95,23 @@ async function *fetchRows(table) {
   }
 }
 
+// Local mode: rows → gzip → file on this machine. Same interface as the ssh dump.
+function dumpTableToLocal(table) {
+  const dir = `${LOCAL_DIR}/${DATE}`;
+  mkdirSync(dir, { recursive: true });
+  const out = createWriteStream(`${dir}/${table}.ndjson.gz`);
+  const gz = createGzip({ level: 6 });
+  gz.pipe(out);
+  return {
+    sshDone: new Promise((resolve, reject) => { out.on("close", resolve); out.on("error", reject); }),
+    async write(obj) {
+      const line = JSON.stringify(obj) + "\n";
+      if (!gz.write(line)) await new Promise(r => gz.once("drain", r));
+    },
+    end() { return new Promise((r) => gz.end(() => r())); },
+  };
+}
+
 // Pipe rows → gzip → ssh "cat > remote-file". All streams, flat memory.
 function dumpTableToRemote(table) {
   const remoteFile = `${REMOTE_DIR}/${table}.ndjson.gz`;
@@ -114,7 +139,7 @@ const summary = [];
 for (const table of tables) {
   const tS = Date.now();
   const total = await countRows(table).catch(() => null);
-  const dump = dumpTableToRemote(table);
+  const dump = LOCAL_DIR ? dumpTableToLocal(table) : dumpTableToRemote(table);
   let n = 0;
   try {
     for await (const row of fetchRows(table)) {
@@ -146,9 +171,13 @@ const manifest = {
   errors: summary.filter(s => s.error).length,
 };
 
-const mSsh = spawn("ssh", [SSH_TARGET, `cat > '${REMOTE_DIR}/manifest.json'`], { stdio: ["pipe", "inherit", "inherit"] });
-mSsh.stdin.end(JSON.stringify(manifest, null, 2));
-await new Promise((r) => mSsh.on("exit", r));
+if (LOCAL_DIR) {
+  writeFileSync(`${LOCAL_DIR}/${DATE}/manifest.json`, JSON.stringify(manifest, null, 2));
+} else {
+  const mSsh = spawn("ssh", [SSH_TARGET, `cat > '${REMOTE_DIR}/manifest.json'`], { stdio: ["pipe", "inherit", "inherit"] });
+  mSsh.stdin.end(JSON.stringify(manifest, null, 2));
+  await new Promise((r) => mSsh.on("exit", r));
+}
 
 console.log(`[backup-neo-brain] done — ${manifest.total_rows} rows, ${manifest.errors} errors, ${manifest.duration_ms}ms`);
 if (manifest.errors > 0) process.exit(2);
