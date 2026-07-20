@@ -70,18 +70,35 @@ async function countRows(table) {
   return m && m[1] !== "*" ? parseInt(m[1], 10) : null;
 }
 
+const AUTH_HEADERS = { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: "application/json" };
+
 async function *fetchRows(table) {
+  // Prefer keyset pagination when the table has a numeric `id`: deep OFFSET
+  // pages on big tables (agent_metrics, 1.6M rows) get progressively slower
+  // until Postgres kills them with a statement timeout (57014 — bit the
+  // 2026-07-20 nightly at row 1.27M). Keyset stays constant-speed at any depth.
+  const probe = await fetch(`${URL}/rest/v1/${encodeURIComponent(table)}?select=*&order=id.asc&limit=1`, { headers: AUTH_HEADERS });
+  if (probe.ok) {
+    const first = await probe.json();
+    if (Array.isArray(first) && first.length && typeof first[0].id === "number") {
+      let rows = first;
+      while (rows.length) {
+        for (const row of rows) yield row;
+        const lastId = rows[rows.length - 1].id;
+        const r = await fetch(`${URL}/rest/v1/${encodeURIComponent(table)}?select=*&order=id.asc&id=gt.${lastId}&limit=${PAGE}`, { headers: AUTH_HEADERS });
+        if (!r.ok) throw new Error(`fetch ${table} ${r.status}: ${(await r.text()).slice(0, 200)}`);
+        rows = await r.json();
+        if (!Array.isArray(rows)) throw new Error(`${table}: non-array response`);
+      }
+      return;
+    }
+  }
+  // Fallback: offset pagination for tables without a numeric id (uuid pks etc.)
   let offset = 0;
   while (true) {
     const to = offset + PAGE - 1;
     const r = await fetch(`${URL}/rest/v1/${encodeURIComponent(table)}?select=*`, {
-      headers: {
-        apikey: KEY,
-        Authorization: `Bearer ${KEY}`,
-        Range: `${offset}-${to}`,
-        "Range-Unit": "items",
-        Accept: "application/json",
-      },
+      headers: { ...AUTH_HEADERS, Range: `${offset}-${to}`, "Range-Unit": "items" },
     });
     if (!r.ok) {
       const body = await r.text();
