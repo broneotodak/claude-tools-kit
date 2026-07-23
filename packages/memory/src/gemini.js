@@ -12,28 +12,47 @@ export async function embedText(text, {
   if (!text?.trim()) return null;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${apiKey}`;
-  const body = {
-    content: { parts: [{ text: text.slice(0, MAX_CHARS) }] },
-    outputDimensionality: dims,
-  };
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-    if (!r.ok) {
-      const errText = await r.text();
-      throw new Error(`gemini embed ${r.status}: ${errText.slice(0, 200)}`);
+  const embedChunk = async (chunk) => {
+    const body = {
+      content: { parts: [{ text: chunk }] },
+      outputDimensionality: dims,
+    };
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+      if (!r.ok) {
+        const errText = await r.text();
+        throw new Error(`gemini embed ${r.status}: ${errText.slice(0, 200)}`);
+      }
+      const data = await r.json();
+      return data?.embedding?.values || null;
+    } finally {
+      clearTimeout(t);
     }
-    const data = await r.json();
-    return data?.embedding?.values || null;
-  } finally {
-    clearTimeout(t);
+  };
+
+  if (text.length <= MAX_CHARS) {
+    return embedChunk(text);
   }
+
+  const embeddings = [];
+  for (let i = 0; i < text.length; i += MAX_CHARS) {
+    const embedding = await embedChunk(text.slice(i, i + MAX_CHARS));
+    if (!embedding) return null;
+    embeddings.push(embedding);
+  }
+
+  const pooled = embeddings[0].map((_, i) =>
+    embeddings.reduce((sum, embedding) => sum + embedding[i], 0) / embeddings.length
+  );
+  const norm = Math.sqrt(pooled.reduce((sum, value) => sum + value * value, 0));
+  return norm ? pooled.map((value) => value / norm) : pooled;
 }
 
 export function toPgVectorString(values) {
