@@ -109,7 +109,7 @@ Cons: thin wrapper around the SDK; some duplication of save-shape between `@naca
 | pr-decision-dispatcher | CLAW (launchd) | git pull in CTK — same as supervisor |
 | dev-agent | tr-home (pm2) | same shape as planner-agent |
 | reviewer-agent | tr-home (pm2) | same shape |
-| naca-monitor | Siti VPS (pm2) | `ssh root@178.156.241.204 "su - openclaw -c 'cd ~/naca-monitor && git pull && pm2 restart naca-monitor'"` |
+| naca-monitor | neo-twin (pm2) | `ssh neotwin@100.120.79.126 "cd ~/naca-monitor && git pull && pm2 restart naca-monitor"` |
 | daily-checkup-agent | NAS Docker | scp + docker compose up -d --build |
 
 ## Verification per agent

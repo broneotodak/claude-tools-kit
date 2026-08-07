@@ -142,12 +142,20 @@ gh pr merge <N> --repo broneotodak/<repo> --squash --admin
 
 # 3h. Deploy. The deploy method depends on project_registry.deploy_method:
 #       netlify_git_push  → CI auto-deploys on merge to main
-#       pm2_vps           → ssh + git pull --rebase + pm2 restart <name>
-#       pm2_slave_mbp     → ssh slave + git pull + pm2 restart
-#       launchd_claw      → ssh CLAW + git pull (launchd auto-respawns)
+#       auto_pipeline     → nothing to do by hand: merging to main fires the
+#                           GitHub webhook, which looks the repo up in
+#                           agent_registry.meta.deploy_projects and dispatches
+#                           a deploy_project command to the hands agent that
+#                           claims it (edge-cc today). The recipe syncs, restarts
+#                           the consumers, VERIFIES they came back, and reports
+#                           to WhatsApp. Registered today: broneotodak/siti-v2,
+#                           broneotodak/naca, broneotodak/naca-app.
+#       pm2_host          → ssh the box that actually runs it and restart:
+#                           look the host up in agent_registry (never assume).
+#       launchd_claw      → RETIRED — claw-mac was decommissioned 2026-08-06.
 #       manual            → check the project's CLAUDE.md
-#     Example for pm2_vps:
-ssh root@178.156.241.204 "su - openclaw -c 'cd <project> && git pull --rebase && pm2 restart <name>'"
+#     Example for pm2_host (EdgeXpert is where most of the fleet now runs):
+ssh edge "export NVM_DIR=\$HOME/.nvm; . \$NVM_DIR/nvm.sh; cd <project> && git pull --rebase && pm2 restart <name>"
 
 # 3i. Verify. Sanity-check the deploy actually worked (see phase 5).
 ```
@@ -231,7 +239,7 @@ curl -fsS "<deploy_url>/<health-path>" | head -5
 # 5c. The expected behaviour is observable. For app changes, open the live URL
 #     and click through the changed flow. For agent changes, send a test trigger
 #     and watch logs:
-ssh root@178.156.241.204 "su - openclaw -c 'pm2 logs <name> --lines 30 --nostream'"
+ssh edge "export NVM_DIR=\$HOME/.nvm; . \$NVM_DIR/nvm.sh; pm2 logs <name> --lines 30 --nostream"   # host per agent_registry
 
 # 5d. No new stuck commands or orphan PRs (run periodically across the fleet,
 #     not per-PR).

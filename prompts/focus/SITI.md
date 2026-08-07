@@ -28,7 +28,7 @@ The bot identity is "Siti" (renamed from NClaw on Apr 20). The phone is +6012671
 
 | Component | Location | Notes |
 |---|---|---|
-| Hetzner CPX31 VPS | `root@178.156.241.204` | All agents except dispatcher live here |
+| EdgeXpert (Kenwingston office) | `ssh edge` (neo@100.90.58.53) | Siti herself + most of the fleet live here since 2026-07-25. The old Hetzner VPS was deleted 2026-07-28. |
 | Siti server | `/home/openclaw/siti/server.js` (~7163 lines) | The live deploy. Edits land via PR → `git pull` as openclaw → `pm2 restart siti` |
 | Reviewer-agent | `/home/openclaw/reviewer-agent/index.js` | Polls `agent_commands(to_agent=reviewer, command=review_pr)` |
 | Planner-agent | `/home/openclaw/planner-agent/index.js` | Polls `agent_intents`, decomposes via Claude into `agent_commands` |
@@ -149,10 +149,12 @@ gh pr create --title "..." --body "..."   # let reviewer-agent run
 # After reviewer feedback + your decision
 gh pr merge <N> --squash --admin
 
-# Deploy
-ssh root@178.156.241.204 "su - openclaw -c 'cd siti && git pull --rebase && pm2 restart siti'"
+# Deploy — usually nothing to do: merging siti-v2 to main fires the webhook,
+# which runs edge-cc's `siti-router` recipe (sync, restart, verify, WA report).
+# To deploy by hand on EdgeXpert:
+ssh edge "export NVM_DIR=\$HOME/.nvm; . \$NVM_DIR/nvm.sh; cd /home/neo/naca/siti-router && pm2 restart siti-router --update-env"
 # Watch the restart
-ssh root@178.156.241.204 "su - openclaw -c 'pm2 logs siti --lines 50 --nostream'"
+ssh edge "export NVM_DIR=\$HOME/.nvm; . \$NVM_DIR/nvm.sh; pm2 logs siti-router --lines 50 --nostream"
 ```
 
 ## Tone
