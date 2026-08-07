@@ -47,7 +47,7 @@ The app is forked from `BroLanTodak/ccc`. Bundle ID was `com.lantodak.lanCcc` un
 **Deploy methods (3, all valid)**:
 
 1. **GitHub Actions** (preferred for web) — push to `main` → `.github/workflows/deploy.yml` → Flutter build → SCP to VPS. Triggers on changes under `lib/`, `web/`, `pubspec.*`. Deploys to `https://naca.neotodak.com`.
-2. **VPS deploy script** — `ssh openclaw@178.156.241.204 "cd naca-app && ./deploy.sh"` runs git pull + pub get + flutter build web. nginx serves from `~/naca-app/build/web/`.
+2. **Backend deploy is automatic** — merging to main fires the webhook -> edge-cc `naca-backend` recipe (sync, pm2 restart, authenticated /api/health check, WhatsApp report). The web build is a compile check only: web hosting died with the nclaw VPS on 2026-07-28 and `naca.neotodak.com` now fronts the backend API.
 3. **iOS / native** — Xcode build directly to N17 (or other device). Web auto-deploys; native requires manual build.
 
 ## What runs on which platform
@@ -64,7 +64,7 @@ The app is forked from `BroLanTodak/ccc`. Bundle ID was `com.lantodak.lanCcc` un
 
 ## Hard rules — DO NOT violate
 
-1. **iOS App Transport Security** blocks plain `http://`. Always route through `${AppConfig.apiBaseUrl}/api/siti/*` (the HTTPS proxy adds the PIN header automatically). Never re-introduce raw `http://178.156.241.204:3800` on the mobile branch.
+1. **iOS App Transport Security** blocks plain `http://`. Always route through `${AppConfig.apiBaseUrl}/api/siti/*` (the HTTPS proxy adds the PIN header automatically). Never re-introduce a raw `http://<ip>:<port>` origin on the mobile branch.
 2. **Don't break Lan's terminal functionality** in `home_screen.dart` — that's the original CCC. NACA additions go as new tabs, not by modifying the terminal screen.
 3. **Don't commit `assets/sounds/`** without `pubspec.yaml` declaring them — Flutter silently won't bundle. The audioplayers stub references `AssetSource('sounds/<name>.<ext>')` so the asset path matters.
 4. **Bundle ID changes break code signing** — when changing, also clear `DEVELOPMENT_TEAM` so Xcode auto-resigns. Or set it to YG4N678CT6 directly.
@@ -75,7 +75,7 @@ The app is forked from `BroLanTodak/ccc`. Bundle ID was `com.lantodak.lanCcc` un
 
 - **"App icon shows wrong name"**: check `ios/Runner/Info.plist` `CFBundleDisplayName` + `CFBundleName`. Should be `NACA`.
 - **"Sound doesn't play on iPhone"**: verify `pubspec.yaml` has `audioplayers: ^6.1.0` AND `assets: - assets/sounds/`. Run `flutter clean && flutter pub get`. Check `lib/services/sound_service_stub.dart` is the audioplayers version (~57 lines), not the no-op stub.
-- **"SITI tab says not connected"**: `_sitiBase` in `lib/screens/siti_screen.dart` should always use `${AppConfig.apiBaseUrl}/api/siti` — never raw IP. Same in `dashboard_screen.dart` `_checkServices` and `settings_screen.dart` connection test. Check naca-backend pm2 process is running: `ssh root@178.156.241.204 "su - openclaw -c 'pm2 list'"`.
+- **"SITI tab says not connected"**: `_sitiBase` in `lib/screens/siti_screen.dart` should always use `${AppConfig.apiBaseUrl}/api/siti` — never raw IP. Same in `dashboard_screen.dart` `_checkServices` and `settings_screen.dart` connection test. Check naca-backend is running: `ssh edge "export NVM_DIR=\$HOME/.nvm; . \$NVM_DIR/nvm.sh; pm2 list"`.
 - **"Web build deployed but old bundle showing"**: check `https://naca.neotodak.com/index.html` raw fetch for the build hash. CI builds from `main` branch only. May need to clear browser cache.
 - **"Backend webhook firing weird intents"**: `backend/server.js:1486` is `handleGithubWebhook`. Push events to main are intentionally NO-OP after #4. Merged-PR events still create intents but with a tightened prompt.
 - **"Authorization 401 from backend"**: app needs `Bearer ${AppConfig.authToken}` for `/api/*` endpoints. Token in `lib/config.dart`.

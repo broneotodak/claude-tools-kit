@@ -28,7 +28,7 @@ This pipeline spans **5 hosts** and **multiple CLIs**. Knowing where each piece 
 | BGM | **CLAW** | ElevenLabs music API | `notify-siti.sh` helpers |
 | Media archive | **NAS Ugreen** (`100.85.18.97`) | MinIO at `/volume1/Todak Studios/naca/content/YYYY/MM/DD/STAMP.mp4` | NAS-side, scp/SSH-key fleet |
 | Draft row creation | **neo-brain** (Supabase `xsunmervpyrplzarebva`) | `create_content_draft` bash fn → PostgREST | `~/.openclaw/skills/lib/notify-siti.sh` on CLAW |
-| WhatsApp ping ("Draft ready") | **Siti VPS** (`178.156.241.204`) | `naca-backend` → Siti `/api/send_video` → wacli | `naca-app/backend/server.js` + `siti-ingest` on Siti VPS |
+| WhatsApp ping ("Draft ready") | **EdgeXpert** (`ssh edge`) | `naca-backend` → Siti send endpoint → wacli | `naca-app/backend/server.js` + `siti-ingest`, both on EdgeXpert |
 | Neo's approval UI | **naca-app** (Flutter) | SCHED → DRAFTS tab | `~/Projects/naca-app/lib/screens/schedule_screen.dart` |
 | Approval → scheduled_action | **Siti VPS** | `naca-backend` POST `/api/content-drafts/:id/approve` | `naca-app/backend/server.js` |
 | Action firing | **NAS Docker** | timekeeper polls `scheduled_actions` every 30s | `~/Projects/timekeeper-agent/` (Docker on NAS) |
@@ -119,7 +119,7 @@ Fix should be a single replacement: location-neutral or parameterised (e.g. rand
 | Host | Method |
 |---|---|
 | CLAW (Mac) | SSH `zieel@100.93.159.1`; edit `~/.openclaw/skills/daily-quotes/*` directly OR commit to a mirror in CTK and rsync. No pm2 — these are scripts. |
-| Siti VPS | `ssh root@178.156.241.204 "su - openclaw -c 'cd ~/naca-backend && git pull && pm2 restart naca-backend'"` (for backend changes). Higgsfield CLI on Siti VPS: check `/home/openclaw/higgsfield-cli/` for its deploy convention. |
+| EdgeXpert | Backend deploys are automatic on merge (webhook → edge-cc `naca-backend` recipe → sync, restart, `/api/health` check, WhatsApp report). Higgsfield now runs through the official `@higgsfield/cli` (OAuth, team workspace) — see `packages/tools/python/README.md` in the naca repo. |
 | Slave-MBP | `scp -O index.js slave@100.93.211.9:~/Projects/browser-agent/` + `ssh slave@ 'pm2 restart browser-agent'` |
 | NAS Ugreen | `scp -O index.js Neo@100.85.18.97:/volume1/homes/Neo/agents/timekeeper-agent/` + `ssh Neo@ "cd <path> && docker compose up -d --build"` |
 | naca-backend | git push → on Siti VPS: `cd ~/naca-app/backend && git pull && pm2 restart naca-backend` |
