@@ -6,8 +6,17 @@
 // watchtower, naca-vps messengers) — double sends, double backups, two
 // supervisors. This monitor pages Neo the moment CLAW signs of life appear:
 //
-//   (a) machine heartbeat `claw-mac` reports after the migration date
-//   (b) a `backup-sync` heartbeat with the CLAW-era meta.version=backup-sync-v1
+//   (a) machine heartbeat `claw-mac` reports FRESHLY (within the last 30 min)
+//   (b) a FRESH `backup-sync` heartbeat with CLAW-era meta.version=backup-sync-v1
+//
+// FRESHNESS, not history (fixed 2026-08-22): heartbeat rows are upserts, so a
+// single post-retirement beat used to satisfy `>= MIGRATION_DATE` FOREVER —
+// after the 2026-08-21 lid-open incident this paged Neo every 6h on a stale
+// row, hours after the box was already re-neutralized. Trip = alive NOW.
+//
+// 2026-08-22: CLAW's legacy jobs are now DISABLED on-box (plists moved to
+// ~/Library/LaunchAgents.disabled-20260822, crons cleared) — this tripwire
+// stays armed as defense-in-depth in case anything re-enables them.
 //
 // One page per 6h per signal (memory-marker dedupe). Runs on the tasp
 // watchtower via fleetops cron every 10 min. First-boot checklist lives in
@@ -15,19 +24,20 @@
 import { createClient } from "@supabase/supabase-js";
 import "dotenv/config";
 
-const MIGRATION_DATE = "2026-07-19T00:00:00Z";
 const NEO_PHONE = "60177519610";
 const COOLDOWN_HR = 6;
+const FRESH_MIN = 30; // a beat older than this = history, not a live machine
 
 const brain = createClient(process.env.NEO_BRAIN_URL, process.env.NEO_BRAIN_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
 const signals = [];
+const freshCutoff = new Date(Date.now() - FRESH_MIN * 60e3).toISOString();
 
 {
   const { data } = await brain.from("agent_heartbeats")
     .select("agent_name,reported_at,status")
     .eq("agent_name", "claw-mac")
-    .gte("reported_at", MIGRATION_DATE)
+    .gte("reported_at", freshCutoff)
     .limit(1);
   if (data?.length) signals.push(`machine heartbeat claw-mac at ${data[0].reported_at}`);
 }
@@ -35,7 +45,7 @@ const signals = [];
   const { data } = await brain.from("agent_heartbeats")
     .select("agent_name,reported_at,meta")
     .eq("agent_name", "backup-sync")
-    .gte("reported_at", MIGRATION_DATE)
+    .gte("reported_at", freshCutoff)
     .limit(1);
   if (data?.length && data[0].meta?.version === "backup-sync-v1")
     signals.push(`CLAW-era backup-sync (v1) heartbeat at ${data[0].reported_at}`);
