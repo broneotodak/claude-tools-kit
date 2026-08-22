@@ -149,9 +149,10 @@ async function isDuped(key) {
   return rows.length > 0;
 }
 
+let GEMINI_KEY = null;
 async function embed(text) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("no GEMINI_API_KEY for embedding");
+  const key = GEMINI_KEY || process.env.GEMINI_API_KEY || (GEMINI_KEY = await getVaultCred("google_gemini", "api_key"));
+  if (!key) throw new Error("no GEMINI_API_KEY (env or vault google_gemini/api_key) for embedding");
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${key}`,
     {
