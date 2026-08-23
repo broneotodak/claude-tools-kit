@@ -282,6 +282,19 @@ If you find this file out of sync with reality, fix it here (single source) — 
 
 ---
 
+## 8b. Knowledge Base — truth vs events (added 2026-08-23)
+
+**neo-kb (`~/Projects/neo-kb`, repo `broneotodak/neo-kb`) is the maintained-truth layer.** It holds durable facts — machines, fleet, systems, companies, people, standing rules — corrected *in place*, with git history as the audit trail. The `memories` table is the *diary*: what happened, appended, never edited.
+
+**The duty split — apply it every time you learn or change something:**
+
+- **A durable fact changed** (an agent moved host, a rule was decided, an account/credential mapping changed, a person's role, a project's live state) → **edit the relevant neo-kb page** and commit. The post-commit hook re-syncs it into neo-brain `source=kb`. Do NOT just append a memory — that's how the diary drifts out of sync with reality.
+- **An event happened** (a deploy, an incident, a milestone, an alert) → save a `memories` row as usual. Events are history, not truth.
+- **Need to know what's true** (before acting on infra/agents/accounts/people) → read the neo-kb page, or `node tools/kb-recall.mjs "<question>"` (KB-first recall), BEFORE trusting a diary memory. Recalled diary rows reflect what was true *when written*; the KB reflects now.
+- **`feedback_*` auto-memory files stay local** — they are the CC operating manual (how to work with Neo), not fleet truth. Don't migrate them to neo-kb.
+
+**Anti-drift:** `tools/kb-reconcile.mjs` (EdgeXpert weekly) flags stale pages (old `verified_at`), active agents missing from the KB, and archived agents the KB still shows as live → reports to neo-brain `kb_reconcile` + WhatsApp. When it pings, fix the KB page (don't silence it). Every page carries `verified_at` — bump it when you re-verify, even with no change.
+
 ## 9. Multi-Session Coordination (added 2026-05-01)
 
 When MULTIPLE Claude Code sessions are working in parallel on the NACA fleet, they can ship code that races in production. Today's bug pattern: Session A built poster-agent, Session B built timekeeper-agent — neither tested alongside the other, and on first production run they raced for the same `scheduled_actions` rows. 3 daily-content posts stuck pending for 1+ hour; Siti hallucinated success when asked "is it posted yet?".
