@@ -22,6 +22,14 @@ import "dotenv/config";
 
 const PENDING_THRESHOLD_MIN  = 10;   // pending > 10 min = stuck
 const RUNNING_THRESHOLD_MIN  = 15;   // running > 15 min = handler hung
+// Long-budget commands (2026-08-24): dev jobs get a 60-min Claude budget plus
+// a close-loop review phase, and they legitimately QUEUE behind one another on
+// a single-inflight hands box — judging them on the 10/15-min clock produced
+// false STUCK pages. Judge them on their own clock instead.
+const LONG_BUDGET_MIN = {
+  run_dev_task:  { pending: 240, running: 90 },
+  deploy_project: { pending: 30, running: 25 },
+};
 const ALERT_COOLDOWN_HR      = 1;    // don't re-alert same cmd for 1 hour
 const NEO_PHONE              = "60177519610";
 const NEO_OWNER_ID           = "00000000-0000-0000-0000-000000000001";
@@ -103,7 +111,13 @@ async function main() {
     .lt("created_at", runningCutoff)
     .limit(20);
 
-  const stuck = [...(pending || []), ...(running || [])];
+  const withinOwnBudget = (c) => {
+    const budget = LONG_BUDGET_MIN[c.command];
+    if (!budget) return false;
+    const ageMin = (now - new Date(c.created_at).getTime()) / 60_000;
+    return ageMin < (c.status === "running" ? budget.running : budget.pending);
+  };
+  const stuck = [...(pending || []), ...(running || [])].filter((c) => !withinOwnBudget(c));
   if (!stuck.length) { console.log("[stuck-monitor] all clear"); return; }
 
   const fresh = [];
