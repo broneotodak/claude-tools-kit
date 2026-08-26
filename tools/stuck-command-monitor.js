@@ -99,14 +99,14 @@ async function main() {
 
   const { data: pending } = await brain
     .from("agent_commands")
-    .select("id,from_agent,to_agent,command,status,created_at,payload")
+    .select("id,from_agent,to_agent,command,status,created_at,claimed_at,payload")
     .eq("status", "pending")
     .lt("created_at", pendingCutoff)
     .limit(20);
 
   const { data: running } = await brain
     .from("agent_commands")
-    .select("id,from_agent,to_agent,command,status,created_at,payload")
+    .select("id,from_agent,to_agent,command,status,created_at,claimed_at,payload")
     .eq("status", "running")
     .lt("created_at", runningCutoff)
     .limit(20);
@@ -119,11 +119,16 @@ async function main() {
     const nb = c.payload?.not_before ? new Date(c.payload.not_before).getTime() : 0;
     return Math.max(new Date(c.created_at).getTime(), nb);
   };
+  // Running age counts from when the agent actually CLAIMED the job — a job
+  // that sat parked for hours then started is 1 minute old, not 240
+  // (false page 2026-08-26 12:40, one minute after b0adb3f4 began).
+  const runningSince = (c) =>
+    new Date(c.claimed_at || c.created_at).getTime();
+  const startOf = (c) => (c.status === "running" ? runningSince(c) : pendingSince(c));
   const withinOwnBudget = (c) => {
     const budget = LONG_BUDGET_MIN[c.command];
     if (!budget) return false;
-    const startMs = c.status === "running" ? new Date(c.created_at).getTime() : pendingSince(c);
-    const ageMin = (now - startMs) / 60_000;
+    const ageMin = (now - startOf(c)) / 60_000;
     return ageMin < (c.status === "running" ? budget.running : budget.pending);
   };
   const isParkedWaiting = (c) =>
@@ -142,7 +147,7 @@ async function main() {
   // Build a single combined alert
   const lines = ["⚠️ STUCK COMMANDS detected:"];
   for (const c of fresh) {
-    const ageMin = Math.round((now - (c.status === "pending" ? pendingSince(c) : new Date(c.created_at).getTime())) / 60_000);
+    const ageMin = Math.round((now - startOf(c)) / 60_000);
     const channel = c.payload?.channel ? ` [${c.payload.channel}]` : "";
     lines.push(`• ${c.from_agent}→${c.to_agent} \`${c.command}\`${channel} — ${c.status} ${ageMin}min (id ${c.id.slice(0, 8)})`);
   }
