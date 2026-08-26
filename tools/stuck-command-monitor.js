@@ -111,13 +111,26 @@ async function main() {
     .lt("created_at", runningCutoff)
     .limit(20);
 
+  // A PARKED job is not a stuck job: the pollers requeue transient failures
+  // (session limits etc.) with payload.not_before gating the next attempt.
+  // Waiting for its window is the system working — the pending clock starts
+  // at not_before, not created_at (false pages on 2026-08-24/25/26).
+  const pendingSince = (c) => {
+    const nb = c.payload?.not_before ? new Date(c.payload.not_before).getTime() : 0;
+    return Math.max(new Date(c.created_at).getTime(), nb);
+  };
   const withinOwnBudget = (c) => {
     const budget = LONG_BUDGET_MIN[c.command];
     if (!budget) return false;
-    const ageMin = (now - new Date(c.created_at).getTime()) / 60_000;
+    const startMs = c.status === "running" ? new Date(c.created_at).getTime() : pendingSince(c);
+    const ageMin = (now - startMs) / 60_000;
     return ageMin < (c.status === "running" ? budget.running : budget.pending);
   };
-  const stuck = [...(pending || []), ...(running || [])].filter((c) => !withinOwnBudget(c));
+  const isParkedWaiting = (c) =>
+    c.status === "pending" && c.payload?.not_before && new Date(c.payload.not_before).getTime() > now;
+  const stuck = [...(pending || []), ...(running || [])]
+    .filter((c) => !isParkedWaiting(c))
+    .filter((c) => !withinOwnBudget(c));
   if (!stuck.length) { console.log("[stuck-monitor] all clear"); return; }
 
   const fresh = [];
@@ -129,7 +142,7 @@ async function main() {
   // Build a single combined alert
   const lines = ["⚠️ STUCK COMMANDS detected:"];
   for (const c of fresh) {
-    const ageMin = Math.round((now - new Date(c.created_at).getTime()) / 60_000);
+    const ageMin = Math.round((now - (c.status === "pending" ? pendingSince(c) : new Date(c.created_at).getTime())) / 60_000);
     const channel = c.payload?.channel ? ` [${c.payload.channel}]` : "";
     lines.push(`• ${c.from_agent}→${c.to_agent} \`${c.command}\`${channel} — ${c.status} ${ageMin}min (id ${c.id.slice(0, 8)})`);
   }
