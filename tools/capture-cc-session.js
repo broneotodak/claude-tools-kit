@@ -21,10 +21,9 @@ const path = require('path');
 const os = require('os');
 
 const CTK_ROOT = path.resolve(__dirname, '..');
-require('dotenv').config({ path: path.join(CTK_ROOT, '.env') });
-const { createClient } = require('@supabase/supabase-js');
+try { require('dotenv').config({ path: path.join(CTK_ROOT, '.env') }); } catch { /* dotenv optional — env may already be set */ }
 
-const NEO_BRAIN_URL = process.env.NEO_BRAIN_URL;
+const NEO_BRAIN_URL = (process.env.NEO_BRAIN_URL || '').replace(/\/$/, '');
 const NEO_BRAIN_KEY = process.env.NEO_BRAIN_SERVICE_ROLE_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const NEO_SELF_ID = '00000000-0000-0000-0000-000000000001';
@@ -35,7 +34,28 @@ if (!NEO_BRAIN_URL || !NEO_BRAIN_KEY) {
   console.error('capture-cc-session: NEO_BRAIN_URL / NEO_BRAIN_SERVICE_ROLE_KEY required');
   process.exit(0); // exit 0 so a hook never blocks session end
 }
-const brain = createClient(NEO_BRAIN_URL, NEO_BRAIN_KEY);
+// Dependency-light REST access to neo-brain (PostgREST) — no supabase-js, so the
+// tool runs on any machine/node without the realtime WebSocket requirement.
+const REST_HEADERS = {
+  apikey: NEO_BRAIN_KEY,
+  Authorization: `Bearer ${NEO_BRAIN_KEY}`,
+  'content-type': 'application/json',
+};
+async function brainSelect(pathAndQuery) {
+  const r = await fetch(`${NEO_BRAIN_URL}/rest/v1/${pathAndQuery}`, { headers: REST_HEADERS });
+  if (!r.ok) throw new Error(`select ${r.status}: ${(await r.text()).slice(0, 160)}`);
+  return r.json();
+}
+async function brainInsert(table, row) {
+  const r = await fetch(`${NEO_BRAIN_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { ...REST_HEADERS, Prefer: 'return=representation' },
+    body: JSON.stringify([row]),
+  });
+  if (!r.ok) throw new Error(`insert ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const d = await r.json();
+  return Array.isArray(d) ? d[0] : d;
+}
 
 async function embedText(text) {
   if (!GEMINI_API_KEY || !text) return null;
@@ -126,9 +146,8 @@ function buildConvText(p) {
 
 async function alreadyCaptured(sessionId) {
   try {
-    const { data } = await brain.from('memories').select('id')
-      .eq('source', 'claude_code').eq('memory_type', 'session')
-      .contains('source_ref', { session_id: sessionId }).limit(1);
+    const q = `memories?select=id&source=eq.claude_code&memory_type=eq.session&source_ref->>session_id=eq.${encodeURIComponent(sessionId)}&limit=1`;
+    const data = await brainSelect(q);
     return Array.isArray(data) && data.length > 0;
   } catch { return false; }
 }
@@ -171,9 +190,10 @@ async function main() {
       started_at: p.firstTs, ended_at: p.lastTs, title, areas,
     },
   };
-  const { data, error } = await brain.from('memories').insert(row).select('id').single();
-  if (error) { console.error('capture-cc-session: save failed:', error.message); return; }
-  console.log(`capture-cc-session: ✓ ${sessionId} → memory ${data.id} ("${title}")`);
+  let saved;
+  try { saved = await brainInsert('memories', row); }
+  catch (e) { console.error('capture-cc-session: save failed:', e.message); return; }
+  console.log(`capture-cc-session: ✓ ${sessionId} → memory ${saved?.id || '(ok)'} ("${title}")`);
 }
 
 main().catch((e) => { console.error('capture-cc-session error:', e.message); process.exit(0); });
