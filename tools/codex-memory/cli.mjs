@@ -123,6 +123,8 @@ async function sync(force = false, budgetMs = 40000) {
 
 async function currentInput() {
   const sid = sessionKey(process.env.CODEX_THREAD_ID || process.env.CODEX_SESSION_ID);
+  const pointer = readJson(path.join(root, 'requests', sid + '.json'), null);
+  if (pointer?.session_id === sid && pointer.transcript_path) return pointer;
   // Node 22.13+; read-only connection, no direct changes to Codex's session DB.
   const { DatabaseSync } = await import('node:sqlite');
   const db = new DatabaseSync(path.join(codexHome, 'state_5.sqlite'), { readOnly: true });

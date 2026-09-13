@@ -25,7 +25,10 @@ dependencies, and a private runtime env with `NEO_BRAIN_URL`,
 `NEO_BRAIN_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`. Keys are read at runtime, never
 copied into hook definitions or source. From a tested, committed checkout:
 
-    node tools/codex-memory/install.mjs --ctk-root /path/to/claude-tools-kit --env-file /path/to/runtime.env --kb-root /path/to/neo-kb --codex-bin /absolute/path/to/codex --agent codex-machine-label
+    node tools/codex-memory/install.mjs --ctk-root /path/to/claude-tools-kit --env-file /path/to/runtime.env --kb-root /path/to/neo-kb --codex-bin /absolute/path/to/codex --node-bin /stable/path/to/node --agent codex-machine-label
+
+Use the stable Node entry point (for example, Homebrew's bin symlink), so package
+cleanup does not remove a versioned Cellar path referenced by the hooks.
 
 Installation copies a versioned runtime under `~/.codex/ctk/releases/<commit>`, reuses
 the CTK dependency directory, backs up affected files with private permissions,
