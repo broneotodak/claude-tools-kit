@@ -129,3 +129,19 @@ test('shutdown enqueues a pointer only, without needing credentials or loading a
   assert.equal(jobs(s.root).length, 0);
   assert.equal(readJson(path.join(s.root, 'requests', 'test-session.json')).transcript_path, s.file);
 });
+
+test('historical model provenance comes from its turn, never the current capture hook', async t => {
+  const s = setup(t);
+  s.records.push(message('user', 'unknown model'),
+    { type: 'turn_context', payload: { model: 'model-before-switch', cwd: '/workspace/original' } },
+    message('assistant', 'first model'));
+  s.write();
+  await capture(s.root, { ...s.input, model: 'current-model' }, s.options);
+  const first = jobs(s.root).map(x => x.job).find(j => j.content.includes('unknown model'));
+  assert.equal(first.opts.metadata.model, null);
+  s.records.push(message('user', 'same old turn context')); s.write();
+  await capture(s.root, { ...s.input, model: 'current-model' }, s.options);
+  const latest = jobs(s.root).map(x => x.job).find(j => j.content.includes('same old turn context'));
+  assert.equal(latest.opts.metadata.model, 'model-before-switch');
+  assert.equal(latest.opts.metadata.session_directory, 'original');
+});

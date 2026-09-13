@@ -87,7 +87,7 @@ export async function capture(root, input, { codexHome, clean, agent }) {
   const file = transcriptPath(input.transcript_path, codexHome);
   const checkpoint = path.join(root, 'sessions', sid + '.json');
   const state = readJson(checkpoint, { nextLine: 0, messages: 0 });
-  let lineNumber = 0, queued = 0, seenMeta = false;
+  let lineNumber = 0, queued = 0, seenMeta = false, turnContext = {};
   const stat = fs.statSync(file);
   if (state.file === file && state.bytes === stat.size) return { ...state, queued };
   // Process only complete lines; a concurrent transcript append can be partial.
@@ -110,6 +110,7 @@ export async function capture(root, input, { codexHome, clean, agent }) {
         if (id !== sid) throw new Error('transcript session mismatch');
         seenMeta = true;
       }
+      if (record.type === 'turn_context') turnContext = record.payload || {};
       if (index < state.nextLine) continue;
       if (!seenMeta) throw new Error('unsupported transcript: missing session metadata');
       const message = visibleMessage(record);
@@ -128,7 +129,9 @@ export async function capture(root, input, { codexHome, clean, agent }) {
             opts: { category: 'reference_codex_transcript', importance: 2,
               sourceRef: { session_id: sid, ordinal: record.ordinal ?? index, part, occurred_at: message.timestamp },
               metadata: { tool: 'codex-memory', kind: 'conversation', role: message.role,
-                phase: message.phase, parts: parts.length, repo: path.basename(input.cwd || ''), model: input.model || null } },
+                phase: message.phase, parts: parts.length,
+                session_directory: path.basename(turnContext.cwd || input.cwd || ''),
+                model: turnContext.model || null } },
           });
           queued++;
         }
