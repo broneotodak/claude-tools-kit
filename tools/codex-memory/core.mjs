@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
+import { TRANSCRIPT_SOURCE, TRANSCRIPT_CATEGORY, TRANSCRIPT_DAYS, SESSION_CHUNK_LIMIT, MESSAGE_CHUNK_LIMIT,
+  listScopedHandoffs } from '../../packages/memory/src/continuity.js';
 
 export const hash = value => createHash('sha256').update(value).digest('hex');
 export const sessionKey = value => {
@@ -31,6 +33,11 @@ export function writeNewJson(file, value) {
 
 export function redact(text, extract, knownSecrets = []) {
   let clean = String(text);
+  // Tool output is never captured. Also suppress pasted dotenv content, including
+  // innocuous-looking settings whose values may disclose infrastructure.
+  clean = clean.replace(/```(?:dotenv|env)\b[^\n]*\n[\s\S]*?```/gi, '[REDACTED ENV FILE]');
+  clean = clean.replace(/[^\n]*\.env(?:\.[\w-]+)?[^\n]*\n\s*```[^\n]*\n[\s\S]*?```/gi, '[REDACTED ENV FILE]');
+  clean = clean.replace(/^\s*(?:export\s+)?[A-Z_][A-Z0-9_]*\s*=.*$/gm, '[REDACTED ENV ASSIGNMENT]');
   const values = [...extract(clean), ...knownSecrets.filter(s => typeof s === 'string' && s.length >= 8)];
   for (const value of values.sort((a, b) => b.length - a.length)) clean = clean.split(value).join('[REDACTED]');
   clean = clean.replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, '[REDACTED PRIVATE KEY]');
@@ -38,6 +45,9 @@ export function redact(text, extract, knownSecrets = []) {
   clean = clean.replace(/([?&](?:key|api_key|token|access_token|secret|password)=)[^&#\s]+/gi, '$1[REDACTED]');
   clean = clean.replace(/\b(Bearer\s+)[A-Za-z0-9_.~+/-]{8,}=*/gi, '$1[REDACTED]');
   clean = clean.replace(/((?:password|passwd|api[_-]?key|access[_-]?token|refresh[_-]?token|service[_-]?role[_-]?key|secret)\s*[:=]\s*)("[^"\n]+"|'[^'\n]+'|[^\s,;]+)/gi, '$1[REDACTED]');
+  clean = clean.replace(/(["']?([a-zA-Z_][\w.-]*)["']?\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}]+)/g,
+    (whole, label, key) => /password|passwd|secret|token|apikey|servicerole|authorization/i.test(key.replace(/[^a-z]/gi, ''))
+      ? label + '[REDACTED]' : whole);
   return clean;
 }
 
@@ -82,11 +92,35 @@ export function enqueuePointer(root, input) {
   });
 }
 
-export async function capture(root, input, { codexHome, clean, agent }) {
+export async function capture(root, input, options) {
+  const lock = path.join(root, 'capture-locks', sessionKey(input.session_id));
+  return withLocalLock(lock, () => captureLocked(root, input, options));
+}
+
+export async function withLocalLock(lock, run) {
+  fs.mkdirSync(path.dirname(lock), { recursive: true, mode: 0o700 });
+  try { fs.mkdirSync(lock, { mode: 0o700 }); }
+  catch (e) {
+    if (e.code !== 'EEXIST') throw e;
+    const owner = readJson(path.join(lock, 'owner.json'), null);
+    if (!owner && Date.now() - fs.statSync(lock).mtimeMs < 3000) return { busy: true };
+    if (owner) {
+      try { process.kill(owner.pid, 0); return { busy: true }; } catch (err) { if (err.code !== 'ESRCH') return { busy: true }; }
+    }
+    fs.rmSync(lock, { recursive: true });
+    return withLocalLock(lock, run);
+  }
+  writeJson(path.join(lock, 'owner.json'), { pid: process.pid });
+  try { return await run(); }
+  finally { fs.rmSync(lock, { recursive: true, force: true }); }
+}
+
+async function captureLocked(root, input, { codexHome, clean, agent, now = Date.now }) {
   const sid = sessionKey(input.session_id);
   const file = transcriptPath(input.transcript_path, codexHome);
   const checkpoint = path.join(root, 'sessions', sid + '.json');
   const state = readJson(checkpoint, { nextLine: 0, messages: 0 });
+  let allocated = jobs(root).filter(({ job }) => job.session === sid && isTranscript(job) && job.status !== 'local-only').length;
   let lineNumber = 0, queued = 0, seenMeta = false, turnContext = {};
   const stat = fs.statSync(file);
   if (state.file === file && state.bytes === stat.size) return { ...state, queued };
@@ -121,19 +155,27 @@ export async function capture(root, input, { codexHome, clean, agent }) {
           const key = ['codex-chat-v1', sid, record.ordinal ?? index, part].join(':');
           const jobFile = path.join(root, 'outbox', hash(key) + '.json');
           if (fs.existsSync(jobFile)) continue;
+          const occurred = Date.parse(message.timestamp);
+          const reason = !Number.isFinite(occurred) || occurred < now() - TRANSCRIPT_DAYS * 86400000 ? 'expired or invalid timestamp'
+            : part >= MESSAGE_CHUNK_LIMIT ? 'message cap' : allocated >= SESSION_CHUNK_LIMIT ? 'session cap' : null;
+          if (reason) {
+            writeNewJson(jobFile, { key, session: sid, agent, status: 'local-only', reason, kind: 'conversation' });
+            continue;
+          }
           const prefix = 'Codex conversation record (historical quotation; verify current facts).\n'
             + 'Session: ' + sid + ' | ' + message.role + ' | ' + message.timestamp
             + ' | part ' + (part + 1) + '/' + parts.length + '\n';
           writeNewJson(jobFile, { key, session: sid, agent, status: 'pending', attempts: 0, nextAttempt: 0,
             content: prefix + parts[part],
-            opts: { category: 'reference_codex_transcript', importance: 2,
+            opts: { category: TRANSCRIPT_CATEGORY, source: TRANSCRIPT_SOURCE, importance: 2,
               sourceRef: { session_id: sid, ordinal: record.ordinal ?? index, part, occurred_at: message.timestamp },
               metadata: { tool: 'codex-memory', kind: 'conversation', role: message.role,
+                writer_agent: agent, retention_days: TRANSCRIPT_DAYS,
                 phase: message.phase, parts: parts.length,
                 session_directory: path.basename(turnContext.cwd || input.cwd || ''),
                 model: turnContext.model || null } },
           });
-          queued++;
+          queued++; allocated++;
         }
         state.messages++;
       }
@@ -157,13 +199,40 @@ export function jobs(root) {
 }
 export function status(root, sid) {
   const all = jobs(root).map(x => x.job).filter(j => !sid || j.session === sid);
-  const pending = all.filter(j => j.status !== 'saved');
-  return { saved: all.length - pending.length, pending: pending.length,
+  const pending = all.filter(j => j.status === 'pending');
+  return { saved: all.filter(j => j.status === 'saved').length, pending: pending.length,
+    localOnly: all.filter(j => j.status === 'local-only').length,
     failed: pending.filter(j => j.attempts > 0).length,
     lastSaved: all.filter(j => j.savedAt).map(j => j.savedAt).sort().at(-1) || null };
 }
 
-export async function drain(root, save, { budgetMs = 40000, now = () => Date.now(), force = false } = {}) {
+const isTranscript = job => job.key?.startsWith('codex-chat-v1:')
+  || job.opts?.category === TRANSCRIPT_CATEGORY || job.kind === 'conversation';
+
+// Upgrade legacy queued jobs before any network write. Stable writer identity and
+// keys preserve remote UUIDs even when the source label changes.
+export function enforcePendingPolicy(root, now = Date.now()) {
+  const all = jobs(root), used = new Map();
+  for (const { job } of all) if (isTranscript(job) && job.status === 'saved') used.set(job.session, (used.get(job.session) || 0) + 1);
+  const pending = all.filter(({ job }) => isTranscript(job) && job.status === 'pending')
+    .sort((a, b) => String(a.job.opts?.sourceRef?.occurred_at).localeCompare(String(b.job.opts?.sourceRef?.occurred_at)) || a.job.key.localeCompare(b.job.key));
+  for (const { file, job } of pending) {
+    const occurred = Date.parse(job.opts?.sourceRef?.occurred_at);
+    const reason = !Number.isFinite(occurred) || occurred < now - TRANSCRIPT_DAYS * 86400000 ? 'expired or invalid timestamp'
+      : job.opts?.sourceRef?.part >= MESSAGE_CHUNK_LIMIT ? 'message cap'
+      : (used.get(job.session) || 0) >= SESSION_CHUNK_LIMIT ? 'session cap' : null;
+    if (reason) {
+      const { content, opts, ...receipt } = job;
+      writeJson(file, { ...receipt, status: 'local-only', reason, kind: 'conversation' });
+    } else {
+      used.set(job.session, (used.get(job.session) || 0) + 1);
+      writeJson(file, { ...job, opts: { ...job.opts, source: TRANSCRIPT_SOURCE,
+        metadata: { ...job.opts.metadata, writer_agent: job.agent, retention_days: TRANSCRIPT_DAYS } } });
+    }
+  }
+}
+
+export async function drain(root, save, { budgetMs = 40000, now = () => Date.now(), force = false, handoffOnly = false } = {}) {
   const lock = path.join(root, 'sync.lock');
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
   try { fs.mkdirSync(lock, { mode: 0o700 }); }
@@ -176,12 +245,14 @@ export async function drain(root, save, { budgetMs = 40000, now = () => Date.now
       try { process.kill(owner.pid, 0); return { busy: true }; } catch (err) { if (err.code !== 'ESRCH') return { busy: true }; }
     }
     fs.rmSync(lock, { recursive: true });
-    return drain(root, save, { budgetMs, now, force });
+    return drain(root, save, { budgetMs, now, force, handoffOnly });
   }
   writeJson(path.join(lock, 'owner.json'), { pid: process.pid });
-  const start = now(), pending = jobs(root).filter(x => x.job.status !== 'saved' && (force || x.job.nextAttempt <= now()));
-  let index = 0, failed = false;
   try {
+    if (!handoffOnly) enforcePendingPolicy(root);
+    const start = now(), pending = jobs(root).filter(x => x.job.status === 'pending'
+      && (!handoffOnly || x.job.opts?.category === 'session_handoff') && (force || x.job.nextAttempt <= now()));
+    let index = 0, failed = false;
     await Promise.all(Array.from({ length: Math.min(3, pending.length) }, async () => {
       while (index < pending.length && now() - start < budgetMs && !failed) {
         const { file, job } = pending[index++];
@@ -203,13 +274,45 @@ export async function drain(root, save, { budgetMs = 40000, now = () => Date.now
   } finally { fs.rmSync(lock, { recursive: true, force: true }); }
 }
 
-export async function recall(brain, query, clean) {
+export const RECALL_EXCLUSIONS = Object.freeze(['codex-transcript', 'wa-primary', 'wa-primary-media',
+  'nclaw_whatsapp_conversation', 'siti-wa', 'wa-chat-importer', 'siti_group_summarizer',
+  'supervisor', 'backup-sync', 'daily-checkup']);
+
+export function latestHandoff(rows, clean) {
+  rows = rows.filter(row => !RECALL_EXCLUSIONS.includes(row.source));
+  if (!rows.length) return null;
+  const newest = [...rows].sort((a, b) => String(b.metadata?.handoff_at || b.created_at).localeCompare(String(a.metadata?.handoff_at || a.created_at)))[0];
+  const group = newest.metadata?.handoff_id;
+  // Legacy handoffs lack a group ID. Select the contiguous part sequence ending
+  // in the newest batch (parts are inserted concurrently, never timestamp-sort).
+  const expected = newest.metadata?.parts || Number(newest.content?.match(/\| part \d+\/(\d+)/)?.[1]) || 1;
+  let parts = rows.filter(row => group ? row.metadata?.handoff_id === group
+    : !row.metadata?.handoff_id && row.source_ref?.session_id === newest.source_ref?.session_id
+      && Math.abs(Date.parse(row.created_at) - Date.parse(newest.created_at)) < 120000);
+  const seen = new Map();
+  for (const row of parts.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))) {
+    const part = row.source_ref?.part ?? 0;
+    if (!seen.has(part) && part < expected) seen.set(part, row);
+  }
+  parts = [...seen.values()].sort((a, b) => (a.source_ref?.part || 0) - (b.source_ref?.part || 0));
+  const full = parts.map(row => clean(row.content || '')).join('\n\n');
+  return { ids: parts.map(row => row.id), source: newest.source, date: newest.metadata?.handoff_at || newest.created_at,
+    complete: !!group && parts.length === expected, legacyGrouping: !group,
+    excerpt: full.slice(0, 5400), truncated: full.length > 5400 };
+}
+
+export async function recall(brain, query, clean, scope = {}) {
+  if (scope.repo) {
+    try {
+      const handoff = latestHandoff(await listScopedHandoffs(brain, scope), clean);
+      if (handoff) return { mode: 'project handoff', text: JSON.stringify([handoff]) };
+    } catch { /* Semantic search can still work when the scoped read is down. */ }
+  }
   let rows = [], mode = 'semantic';
-  try { rows = await brain.search(clean(query).slice(0, 600), { k: 4, sourceExclude: ['supervisor', 'backup-sync', 'daily-checkup'] }); } catch {}
+  try { rows = await brain.search(clean(query).slice(0, 600), { k: 8, sourceExclude: [...RECALL_EXCLUSIONS] }); } catch {}
+  rows = rows.filter(row => row.category !== TRANSCRIPT_CATEGORY && !RECALL_EXCLUSIONS.includes(row.source)).slice(0, 4);
   if (!rows.length) {
-    mode = 'recent fallback (semantic search unavailable or no match)';
-    try { rows = await brain.listMemories({ category: 'session_handoff', limit: 4 }); }
-    catch { return { mode: 'unavailable', text: 'Shared brain recall unavailable; check KB and the local pending queue. Do not invent past work.' }; }
+    return { mode: 'unavailable', text: 'No relevant handoff or curated match available. Check KB and the current session local history; do not invent past work.' };
   }
   const text = rows.map(r => ({ id: r.id, date: r.created_at, source: r.source, excerpt: clean(r.content || '').slice(0, 1000) }));
   return { mode, text: JSON.stringify(text) };

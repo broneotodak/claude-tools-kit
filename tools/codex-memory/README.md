@@ -7,10 +7,11 @@ past message into the model's context at once.
 
 ## What goes where
 
-- **neo-brain:** private, credential-redacted conversation chunks (`reference_codex_transcript`, importance 2) and deliberate milestone/handoff notes (`session_handoff`, importance 6). Historical chat quotations are not truth.
-- **neo-kb:** verified durable decisions, architecture and instructions, updated by the agent in the normal KB worktree/PR flow. Never full chat dumps.
+- **neo-brain transcripts:** `source=codex-transcript`, `category=reference_codex_transcript`, private, importance 2. Maximum **32 uploaded chunks per session lifetime**, **4 per message**, 1,450 Unicode characters per chunk. Expired or excess chunks stay in native local history; status reports their count as `localOnly`. Capture receipts preserve the lifetime cap across restarts, retries and remote archival. Clearing local CTK state removes that local guarantee; do not reset checkpoints to reimport history.
+- **neo-brain curated notes:** handoffs (`session_handoff`, importance 6) and change notes (`shared_infra_change`) retain the machine source, e.g. `codex-neo-mbp`. Transcript caps/retention never target them. The writing agent, audit provenance and deterministic UUID stay tied to the machine even when a transcript's source changes.
+- **neo-kb:** verified durable decisions, architecture and instructions. Codex proposes patches for Claude Code/Neo maintainers; it does not publish canonical KB changes. Never full chat dumps.
 - **Local:** existing Codex history, plus a private outbox and receipts in `$CODEX_HOME/ctk`. Saved receipts retain IDs instead of a second plaintext chat copy.
-- **Vault:** secrets. Credential patterns, configured secret values, password/token assignments, bearer headers and credential URLs are redacted before the outbox or embeddings. Pattern detection cannot identify every unlabeled password; do not paste credentials into chat.
+- **Vault:** secrets. Credential patterns, configured secret values, service-role/bearer/OAuth token labels (including camelCase and JSON keys), credential URLs, dotenv blocks and uppercase environment assignments are redacted before the outbox or embeddings. Tool results, including `.env` reads, never enter capture. Pattern detection cannot identify every unlabeled secret; do not paste credentials into chat. Native Codex local history is outside this adapter's redaction scope.
 
 Capture includes user text, assistant commentary and final answers. It excludes
 reasoning, tool calls/results, system/developer messages, environment injections,
@@ -45,8 +46,8 @@ is installed or re-enabled. Other machines need their own installation and trust
 
 | Trigger | Work |
 | --- | --- |
-| SessionStart / UserPromptSubmit | Local capture, bounded shared recall, local pending excerpts. Semantic no-match/null/error falls back to recent SDK handoffs. |
-| Stop / PreCompact | Background capture and bounded drain; completion notice reports saved/verified or pending. |
+| SessionStart / UserPromptSubmit | Bounded capture; latest worktree/project handoff first, then curated semantic search. Pending excerpts belong only to the current session. |
+| Stop / PreCompact | Background capture, bounded drain and transcript retention; completion notice distinguishes saved, local-only and pending work. |
 | SessionEnd / Interrupt | Local transcript pointer only (three-second native limit); next active session retries. |
 
 There is no idle timer: pending writes retry on a future turn or explicit `sync`.
@@ -60,6 +61,46 @@ a valid 768-dimensional embedding, reads back exact content/private visibility/v
 source, and verifies an audit row. A lost response retries the same primary key.
 Missing audits are repaired without duplicate memories. Legacy `save()` is unchanged.
 No schema changes.
+
+## Transcript separation and retention
+
+On each existing `sync`/Stop/PreCompact invocation, archive separated transcripts
+older than **14 days** (original message time, falling back to creation time), and
+archive existing excess rows beyond **32 active chunks per session**, keeping the
+newest. Archiving is reversible: it sets `archived=true`; it is **not permanent
+deletion**. Nothing expires while this machine is inactive. A bounded run can leave
+maintenance pending; later turns or explicit sync continue it. No new daemon.
+
+The SDK previously had `archive()` but no source-relabel API. This PR proposes
+`relabelTranscript()` and verified `archiveTranscript()` helpers. They only accept
+private Codex transcript rows with the expected source/category/session/provenance;
+they reject handoffs and other writers. Source relabelling preserves IDs, content,
+embeddings, dates and visibility. Audit entries contain operation labels, not chat.
+An on-disk operation journal repairs interrupted updates/audits before continuing.
+
+Migration commands (metadata-only inventory; **dry run by default**):
+
+    node --no-warnings tools/codex-memory/cli.mjs transcripts
+    node --no-warnings tools/codex-memory/cli.mjs transcripts --apply --seconds 300
+
+`--apply` uses only the proposed SDK helpers. Review the SDK proposal before
+running it. At the 2026-09-15 read-only checkpoint: **312** rows to relabel,
+**258** to archive for the cap, **54** active afterward across two sessions;
+**0 rows mutated**. Re-run the plan because the old installed writer may add rows.
+Stop using the old release when activating the reviewed replacement, review the
+changed native hooks, and run migration until the plan shows `relabel:0` and
+`archive:0`. Keep Claude's temporary `codex-neo-mbp` reader exclusion until BOTH the
+new writer is active and the legacy count is zero. `codex-transcript` stays excluded
+permanently. Reader changes are owned by Claude's parallel PRs.
+
+Recall asks for the latest handoff from the exact project/worktree, then the same
+project/session, then the project. New notes carry a handoff group ID and part count
+so parts reassemble in order. Legacy parts have uncertain grouping and are labelled
+incomplete; long results explicitly flag truncation. Prefer handoffs under 4,500
+characters. A missing relevant handoff falls back to semantic search excluding
+`codex-transcript`, the six Siti WhatsApp capture sources, and operational noise.
+Legacy `reference_codex_transcript` results are also dropped by category. There is
+no unscoped "latest four handoffs from anyone" fallback.
 
 Codex rollout JSONL is not a stable interface. Supported: `response_item/message`
 with user/assistant text, tested against CLI 0.153.4. Missing/mismatched session
@@ -85,9 +126,15 @@ while the native footer keeps its session context. A tool's workdir does not cha
 Codex's native cwd. No private SQLite edits, extra session or daemon startup are
 used to fake a live footer. This is not Claude's arbitrary statusline command.
 
+While an older installed runtime awaits replacement, use `handoff --notes-only`
+from the reviewed worktree to save curated notes without uploading or rewriting
+the legacy transcript queue. Do not run the new full `capture`/`sync` against that
+queue until old hooks are stopped/replaced: old versions cannot interpret the new
+`local-only` receipt status. Native hook trust must still be reviewed normally.
+
 ## Validation and removal
 
-    node --test --no-warnings tools/codex-memory/core.test.mjs packages/memory/test/verified.test.mjs
+    node --test --no-warnings tools/codex-memory/*.test.mjs packages/memory/test/verified.test.mjs packages/memory/test/continuity.test.mjs
     node --test --no-warnings packages/memory/test/*.test.mjs
 
 Baseline issue at `6dbcddc`: the credential-rule test expects 23 custom rules, while

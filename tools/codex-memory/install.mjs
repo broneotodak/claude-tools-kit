@@ -75,7 +75,7 @@ const block = [
   begin, '# Shared continuity for Neo',
   'At session start and after compaction, read ' + kbRoot + '/Rules.md and INDEX.md; follow linked project instructions.',
   'Durable verified truth goes in neo-kb; events and handoffs go in neo-brain through @todak/memory; secrets go in the vault. Never save credentials.',
-  'The CTK hooks capture visible conversation text (with credential redaction) after turns. This is historical conversation, not verification that an action occurred.',
+  'CTK uploads at most 32 transcript chunks per session, 4 per message, under codex-transcript with 14-day archival on active sync. Excess text stays in native local history; status reports localOnly. Handoffs retain the machine source and are uncapped. Historical conversation is not verification that an action occurred.',
   'Use the following CLI; it reads the active CODEX_THREAD_ID. Run focus immediately when the task or actual worktree changes:',
   cli + ' focus --cwd <absolute-actual-worktree> --task <short-task> --files <area>',
   'When an existing Codex control socket supports it, CTK updates the thread title with actual repo/task/branch/Brain status. Otherwise the hook completion notice and CLI status show this information; do not claim the native footer changed. Tool workdir does not change native session cwd.',

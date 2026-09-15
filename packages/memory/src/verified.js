@@ -18,8 +18,9 @@ function validVector(value) {
 
 // Public SDK helper. Errors deliberately contain no content, URLs or credentials.
 export async function saveVerifiedMemory(brain, content, opts = {}) {
-  const { key, category, type = 'event', importance = 4, sourceRef = {}, metadata = {} } = opts;
+  const { key, category, type = 'event', importance = 4, sourceRef = {}, metadata = {}, source = brain.agent } = opts;
   if (!content?.trim() || !category) throw new Error('invalid verified memory');
+  if (typeof source !== 'string' || !source.trim()) throw new Error('invalid memory source');
   const id = verifiedMemoryId(brain.agent, key);
   const read = async () => {
     const { data, error } = await brain.sb.from('memories')
@@ -34,12 +35,12 @@ export async function saveVerifiedMemory(brain, content, opts = {}) {
     const { error } = await brain.sb.from('memories').insert({
       id, content, embedding: toPgVectorString(vector), category, memory_type: type,
       importance, visibility: 'private', subject_id: '00000000-0000-0000-0000-000000000001',
-      source: brain.agent, source_ref: sourceRef, metadata,
+      source, source_ref: sourceRef, metadata,
     });
     if (error && error.code !== '23505') throw new Error('memory insert unavailable');
     row = await read();
   }
-  if (!row || row.content !== content || row.source !== brain.agent || row.visibility !== 'private' || !validVector(row.embedding)) {
+  if (!row || row.content !== content || row.source !== source || row.visibility !== 'private' || !validVector(row.embedding)) {
     throw new Error('memory readback failed verification');
   }
   // Repair a missing audit entry after an interrupted write. Memory itself is

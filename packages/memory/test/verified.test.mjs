@@ -75,3 +75,11 @@ test('a reused key with different content fails rather than silently accepting a
   await assert.rejects(saveVerifiedMemory(s.brain, 'different', opts), /verification/);
   assert.equal(s.rows.size, 1);
 });
+test('source separation preserves deterministic writer IDs and machine audit provenance', async t => {
+  embedding(t); const s = fakeBrain();
+  const result = await saveVerifiedMemory(s.brain, 'historical quotation', { ...opts, source: 'codex-transcript', category: 'reference_codex_transcript' });
+  assert.equal(result.id, verifiedMemoryId(s.brain.agent, opts.key));
+  assert.equal(s.rows.get(result.id).source, 'codex-transcript');
+  assert.equal(s.audits[0].written_by, s.brain.agent);
+  await assert.rejects(saveVerifiedMemory(s.brain, 'historical quotation', opts), /verification/);
+});
