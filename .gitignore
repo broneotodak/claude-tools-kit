@@ -183,3 +183,6 @@ tools/dataset-pipeline/wandb/
 # THR employee dump used by thr-name-resolver (sensitive: phones, full names, positions)
 .thr-employees-dump.json
 data/
+
+# a symlink named node_modules is NOT matched by "node_modules/" (dir-only) — this catches it
+node_modules
