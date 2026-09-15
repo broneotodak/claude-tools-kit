@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
+import { NOISE_SOURCES } from '../../packages/memory/src/index.js';
 import { TRANSCRIPT_SOURCE, TRANSCRIPT_CATEGORY, TRANSCRIPT_DAYS, SESSION_CHUNK_LIMIT, MESSAGE_CHUNK_LIMIT,
   listScopedHandoffs } from '../../packages/memory/src/continuity.js';
 
@@ -274,12 +275,13 @@ export async function drain(root, save, { budgetMs = 40000, now = () => Date.now
   } finally { fs.rmSync(lock, { recursive: true, force: true }); }
 }
 
-export const RECALL_EXCLUSIONS = Object.freeze(['codex-transcript', 'wa-primary', 'wa-primary-media',
-  'nclaw_whatsapp_conversation', 'siti-wa', 'wa-chat-importer', 'siti_group_summarizer',
+export const RECALL_EXCLUSIONS = Object.freeze([...NOISE_SOURCES,
   'supervisor', 'backup-sync', 'daily-checkup']);
 
 export function latestHandoff(rows, clean) {
-  rows = rows.filter(row => !RECALL_EXCLUSIONS.includes(row.source));
+  // This path already queries curated handoffs by category and project. A
+  // temporary whole-writer exclusion in general search must not hide them.
+  rows = rows.filter(row => row.source !== TRANSCRIPT_SOURCE && row.category !== TRANSCRIPT_CATEGORY);
   if (!rows.length) return null;
   const newest = [...rows].sort((a, b) => String(b.metadata?.handoff_at || b.created_at).localeCompare(String(a.metadata?.handoff_at || a.created_at)))[0];
   const group = newest.metadata?.handoff_id;

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { _extractCredentialMatches } from '../../packages/memory/src/client.js';
+import { NOISE_SOURCES } from '../../packages/memory/src/index.js';
 import { capture, chunks, drain, enqueuePointer, enforcePendingPolicy, hash, jobs, latestHandoff, readJson, recall, redact, RECALL_EXCLUSIONS, status, visibleMessage, writeJson, writeNewJson } from './core.mjs';
 
 function setup(t) {
@@ -196,9 +197,18 @@ test('semantic recall excludes all agreed capture sources and filters legacy tra
   const r = await recall({ search: async (_, o) => { opts = o; return [
     { content: 'raw legacy chat', category: 'reference_codex_transcript', source: 'codex-neo-mbp' },
     { content: 'curated note', source: 'kb' }, { content: 'WA', source: 'wa-primary' },
+    { content: 'Claude raw text', source: 'claude_code_transcript' }, { content: 'twin raw text', source: 'twin-ingest' },
   ]; } }, 'question', x => x);
   assert.deepEqual(opts.sourceExclude, [...RECALL_EXCLUSIONS]);
-  assert.match(r.text, /curated note/); assert.doesNotMatch(r.text, /raw legacy|WA/);
+  for (const source of NOISE_SOURCES) assert.ok(opts.sourceExclude.includes(source));
+  assert.match(r.text, /curated note/); assert.doesNotMatch(r.text, /raw legacy|WA|raw text/);
+});
+
+test('temporary broad writer exclusion cannot hide a scoped curated handoff', () => {
+  const result = latestHandoff([{ id: 'curated', source: 'codex-neo-mbp', category: 'session_handoff',
+    content: 'Verified handoff', source_ref: { part: 0 }, metadata: { handoff_id: 'group', parts: 1 }, created_at: '2026-09-15' },
+    { id: 'raw', source: 'codex-transcript', category: 'reference_codex_transcript', content: 'raw text', created_at: '2026-09-16' }], x => x);
+  assert.deepEqual(result.ids, ['curated']); assert.equal(result.complete, true);
 });
 
 test('handoff parts are grouped and ordered without mixing older notes or clipping each part', () => {
