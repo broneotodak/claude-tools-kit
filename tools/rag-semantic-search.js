@@ -10,7 +10,10 @@
  * match_memories_hybrid_v2 against the live brain (NEO_BRAIN_URL / memories).
  */
 
-require('dotenv').config();
+const path = require('path');
+// Anchor .env to the CTK repo, not the caller's cwd — running from elsewhere used to load
+// nothing and fail as if credentials were lost. See feedback_ctk_tools_need_absolute_env_path.
+require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
 function printHelp() {
   console.log(`

@@ -8,7 +8,9 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-require('dotenv').config();
+// Anchor .env to the CTK repo, not the caller's cwd — running from elsewhere used to load
+// nothing and fail as if credentials were lost. See feedback_ctk_tools_need_absolute_env_path.
+require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
 // PORTED 2026-06-01: was reading the FROZEN legacy `claude_desktop_memory` table
 // via process.env.SUPABASE_URL (silent stale data). Now reads the live neo-brain

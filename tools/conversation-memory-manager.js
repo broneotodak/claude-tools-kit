@@ -10,7 +10,10 @@
  * Checkpoints land in `memories` with memory_type='conversation_checkpoint'.
  */
 
-require('dotenv').config();
+const path = require('path');
+// Anchor .env to the CTK repo, not the caller's cwd — running from elsewhere used to load
+// nothing and fail as if credentials were lost. See feedback_ctk_tools_need_absolute_env_path.
+require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 const { getNeoBrainClient, MEMORY_TABLE } = require('./lib/neo-brain');
 const { getStandardizedMachineName } = require('./machine-detection');
 
