@@ -12,8 +12,15 @@
  * below only for counts / health / maintenance queries the SDK doesn't cover.
  */
 
+const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+
+// Load CTK's .env by ABSOLUTE path, anchored to this file — NOT the caller's cwd.
+// A bare dotenv.config() reads ./.env relative to wherever the tool was launched, so running
+// any CTK tool from outside the repo (e.g. from ~) silently loaded nothing and the tools died
+// with "NEO_BRAIN_URL ... required" — which reads like lost credentials or a dead brain, but is
+// really just a wrong-directory miss. See feedback_ctk_tools_need_absolute_env_path.
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env'), quiet: true });
 
 const NEO_BRAIN_REF = 'xsunmervpyrplzarebva';     // live PRIMARY
 const LEGACY_ARCHIVE_REF = 'uzamamymfzhelvkwpvgt'; // frozen read-only archive
@@ -63,7 +70,16 @@ function getNeoBrainClient() {
   const url = process.env.NEO_BRAIN_URL;
   const key = process.env.NEO_BRAIN_SERVICE_ROLE_KEY;
   if (!url || !key) {
-    throw new Error('neo-brain: NEO_BRAIN_URL + NEO_BRAIN_SERVICE_ROLE_KEY required (see claude-tools-kit/.env)');
+    const envPath = path.join(__dirname, '..', '..', '.env');
+    const envExists = require('fs').existsSync(envPath);
+    throw new Error(
+      'neo-brain: NEO_BRAIN_URL + NEO_BRAIN_SERVICE_ROLE_KEY not set.\n' +
+      `  Expected them in: ${envPath} (file ${envExists ? 'EXISTS' : 'is MISSING'})\n` +
+      '  This is a CONFIG problem, NOT a dead brain — the memories table is untouched.\n' +
+      (envExists
+        ? '  The .env is there but these two keys are absent or empty — check them.'
+        : '  Restore the .env (keys live in the credential vault); nothing is lost.')
+    );
   }
   if (refOf(url) === LEGACY_ARCHIVE_REF) {
     throw new Error(`neo-brain: NEO_BRAIN_URL points at the FROZEN legacy archive (${LEGACY_ARCHIVE_REF}) — refusing to read stale data`);

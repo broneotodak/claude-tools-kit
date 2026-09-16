@@ -6,7 +6,10 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+const path = require('path');
+// Anchor .env to the CTK repo, not the caller's cwd — running from elsewhere used to load
+// nothing and fail as if credentials were lost. See feedback_ctk_tools_need_absolute_env_path.
+require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
 // Known TODAK Supabase projects
 const KNOWN_PROJECTS = {
