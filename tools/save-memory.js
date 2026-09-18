@@ -41,19 +41,39 @@ if (!NEO_BRAIN_URL || !NEO_BRAIN_KEY) {
 }
 const neoBrain = createClient(NEO_BRAIN_URL, NEO_BRAIN_KEY);
 
+// 2026-09-18: neo-brain is on a LOCAL embedding model (qwen3-embedding:4b @768,
+// Ollama on EdgeXpert). Try local first (default EdgeXpert tailnet), fall back to
+// Google online. Truncate to 768 + L2-normalise so the vector matches the brain.
+const EMBED_DIM = Number(process.env.EMBED_DIM || 768);
+function _finalizeVec(v) {
+  const w = v.length > EMBED_DIM ? v.slice(0, EMBED_DIM) : v;
+  let n = 0; for (const x of w) n += x * x; n = Math.sqrt(n) || 1;
+  return '[' + w.map((x) => x / n).join(',') + ']';
+}
 async function embedText(text) {
-  if (!GEMINI_API_KEY || !text) return null;
+  if (!text) return null;
+  const s = String(text).slice(0, 2048);
+  if ((process.env.EMBED_PROVIDER || 'ollama').toLowerCase() === 'ollama') {
+    const url = (process.env.EMBED_OLLAMA_URL || 'http://100.90.58.53:11434').replace(/\/$/, '') + '/api/embed';
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: process.env.EMBED_OLLAMA_MODEL || 'qwen3-embedding:4b', input: s, keep_alive: '30m' }),
+        signal: AbortSignal.timeout(20000) });
+      if (r.ok) { const d = await r.json(); const v = (Array.isArray(d?.embeddings) && d.embeddings[0]) || d?.embedding; if (v && v.length) return _finalizeVec(v); }
+    } catch { /* local unreachable → online fallback */ }
+  }
+  if (!GEMINI_API_KEY) return null;
   const model = process.env.GEMINI_EMBED_MODEL || 'gemini-embedding-001';
   try {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content: { parts: [{ text: text.slice(0, 2048) }] }, outputDimensionality: 768 }),
+      body: JSON.stringify({ content: { parts: [{ text: s }] }, outputDimensionality: 768 }),
     });
     if (!r.ok) return null;
     const d = await r.json();
     const vals = d?.embedding?.values;
-    return vals ? '[' + vals.join(',') + ']' : null;
+    return vals ? _finalizeVec(vals) : null;
   } catch { return null; }
 }
 
