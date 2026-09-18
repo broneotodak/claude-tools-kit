@@ -19,6 +19,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import "dotenv/config";
+import { pathToFileURL } from "node:url";
 
 const PENDING_THRESHOLD_MIN  = 10;   // pending > 10 min = stuck
 const RUNNING_THRESHOLD_MIN  = 15;   // running > 15 min = handler hung
@@ -29,22 +30,57 @@ const RUNNING_THRESHOLD_MIN  = 15;   // running > 15 min = handler hung
 const LONG_BUDGET_MIN = {
   run_dev_task:  { pending: 240, running: 90 },
   deploy_project: { pending: 30, running: 25 },
+  // Hands jobs (edge-cc / tr-home-cc / nas-cc …): the poller enforces its own
+  // wall clock (payload.budget_min, default 20) and kills at the wall, so a
+  // job is only "hung" once it outlives that budget plus grace. Pending rows
+  // queue behind the single in-flight job on the same box — see
+  // queuedBehindRunning() (false pages 2026-09-18 10:35 and 23:20).
+  run_task:      { pending: 30, running: 20 },
 };
+const HANDS_DEFAULT_BUDGET_MIN = 20;   // cc-hands poller default when payload.budget_min is absent
+const HANDS_GRACE_MIN          = 10;   // ending gates + result write-back after the kill
+const QUEUE_WAIT_MAX_MIN       = 360;  // a pending row behind a busy box is fine for up to 6 h
+
+// Pure decision helpers (exported for tests). `now` is epoch ms.
+export function budgetFor(cmd) {
+  const table = LONG_BUDGET_MIN[cmd.command];
+  if (!table) return null;
+  const b = Number(cmd.payload?.budget_min);
+  if (cmd.command === "run_task" || cmd.command === "run_dev_task") {
+    const running = (Number.isFinite(b) && b > 0 ? b : HANDS_DEFAULT_BUDGET_MIN) + HANDS_GRACE_MIN;
+    return { pending: table.pending, running: Math.max(table.running, running) };
+  }
+  return table;
+}
+// A pending job whose target box is busy with another job is queued, not stuck.
+export function queuedBehindRunning(cmd, runningRows, now) {
+  if (cmd.status !== "pending") return false;
+  const busy = (runningRows || []).some((r) => r.to_agent === cmd.to_agent && r.id !== cmd.id);
+  if (!busy) return false;
+  const ageMin = (now - new Date(cmd.created_at).getTime()) / 60_000;
+  return ageMin < QUEUE_WAIT_MAX_MIN;
+}
 const ALERT_COOLDOWN_HR      = 1;    // don't re-alert same cmd for 1 hour
 const NEO_PHONE              = "60177519610";
 const NEO_OWNER_ID           = "00000000-0000-0000-0000-000000000001";
 // Siti is reached via the agent_commands queue (see notifyNeo), not a direct
 // HTTP endpoint — the old :3800/api/send is offline (connection-refused).
 
-const brain = createClient(
-  process.env.NEO_BRAIN_URL,
-  process.env.NEO_BRAIN_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false } }
-);
+let _brain = null;
+function brain() {
+  if (!_brain) {
+    _brain = createClient(
+      process.env.NEO_BRAIN_URL,
+      process.env.NEO_BRAIN_SERVICE_ROLE_KEY,
+      { auth: { persistSession: false } }
+    );
+  }
+  return _brain;
+}
 
 async function alreadyAlerted(cmdId) {
   const since = new Date(Date.now() - ALERT_COOLDOWN_HR * 3600_000).toISOString();
-  const { data } = await brain
+  const { data } = await brain()
     .from("memories")
     .select("id")
     .eq("source", "supervisor")
@@ -56,7 +92,7 @@ async function alreadyAlerted(cmdId) {
 }
 
 async function recordAlert(cmdId, summary) {
-  await brain.from("memories").insert({
+  await brain().from("memories").insert({
     content: `[stuck-command-monitor] alerted Neo about stuck cmd ${cmdId.slice(0, 8)}: ${summary}`,
     category: "stuck_command_alert",
     source: "supervisor",
@@ -74,7 +110,7 @@ async function notifyNeo(text) {
   // Same path backup-sync / supervisor / timekeeper use (verified: reaches done).
   // Logs loudly on failure instead of silently swallowing (this is the §9 safety net).
   try {
-    const { error } = await brain.from("agent_commands").insert({
+    const { error } = await brain().from("agent_commands").insert({
       from_agent: "stuck-command-monitor",
       to_agent: "siti",
       command: "send_whatsapp_notification",
@@ -97,19 +133,21 @@ async function main() {
   const pendingCutoff = new Date(now - PENDING_THRESHOLD_MIN * 60_000).toISOString();
   const runningCutoff = new Date(now - RUNNING_THRESHOLD_MIN * 60_000).toISOString();
 
-  const { data: pending } = await brain
+  const { data: pending } = await brain()
     .from("agent_commands")
     .select("id,from_agent,to_agent,command,status,created_at,claimed_at,payload")
     .eq("status", "pending")
     .lt("created_at", pendingCutoff)
     .limit(20);
 
-  const { data: running } = await brain
+  // All running rows (not only old ones): a pending job whose box is busy is
+  // queued, not stuck — see queuedBehindRunning().
+  const { data: runningAll } = await brain()
     .from("agent_commands")
     .select("id,from_agent,to_agent,command,status,created_at,claimed_at,payload")
     .eq("status", "running")
-    .lt("created_at", runningCutoff)
-    .limit(20);
+    .limit(50);
+  const running = (runningAll || []).filter((c) => c.created_at < runningCutoff);
 
   // A PARKED job is not a stuck job: the pollers requeue transient failures
   // (session limits etc.) with payload.not_before gating the next attempt.
@@ -126,7 +164,7 @@ async function main() {
     new Date(c.claimed_at || c.created_at).getTime();
   const startOf = (c) => (c.status === "running" ? runningSince(c) : pendingSince(c));
   const withinOwnBudget = (c) => {
-    const budget = LONG_BUDGET_MIN[c.command];
+    const budget = budgetFor(c);
     if (!budget) return false;
     const ageMin = (now - startOf(c)) / 60_000;
     return ageMin < (c.status === "running" ? budget.running : budget.pending);
@@ -135,6 +173,7 @@ async function main() {
     c.status === "pending" && c.payload?.not_before && new Date(c.payload.not_before).getTime() > now;
   const stuck = [...(pending || []), ...(running || [])]
     .filter((c) => !isParkedWaiting(c))
+    .filter((c) => !queuedBehindRunning(c, runningAll, now))
     .filter((c) => !withinOwnBudget(c));
   if (!stuck.length) { console.log("[stuck-monitor] all clear"); return; }
 
@@ -164,4 +203,6 @@ async function main() {
   }
 }
 
-main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+// Run only when executed directly (tests import the helpers above).
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
