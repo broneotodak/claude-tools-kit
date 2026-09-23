@@ -202,7 +202,12 @@ def higgsfield_mac_credits():
     if not cli:
         return None
     try:
-        out = subprocess.run([cli, "workspace", "list", "--json"], capture_output=True, text=True, timeout=60).stdout
+        # The CLI is an npm shim (#!/usr/bin/env node). launchd's PATH has no node, so give it
+        # the PATH the CLI was installed against (same trap hub-watch hit on EdgeXpert).
+        env = dict(os.environ)
+        env["PATH"] = ":".join([os.path.dirname(os.path.realpath(cli)), os.path.dirname(cli),
+                                "/opt/homebrew/bin", "/usr/local/bin", env.get("PATH", "/usr/bin:/bin")])
+        out = subprocess.run([cli, "workspace", "list", "--json"], capture_output=True, text=True, timeout=60, env=env).stdout
         ws = json.loads(out)
         ws = ws if isinstance(ws, list) else (ws.get("workspaces") or ws.get("data") or [])
         pick = next((w for w in ws if w.get("is_selected") or w.get("is_current")), ws[0] if ws else None)
