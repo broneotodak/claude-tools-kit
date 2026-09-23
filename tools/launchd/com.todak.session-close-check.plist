@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 23:00 daily: name every Claude session open > 12 h (one notification, silent if none).
+     NACA audit 2026-09-23 fix 5 — session age is the cost driver (neo-kb Rules.md 3a). -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.todak.session-close-check</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/broneotodak/Projects/claude-tools-kit/tools/token-budget-watch.py</string>
+    <string>--quiet</string>
+    <string>--evening</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/broneotodak/Projects/claude-tools-kit/token-budget-watch.log</string>
+  <key>StandardErrorPath</key><string>/Users/broneotodak/Projects/claude-tools-kit/token-budget-watch.log</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>
