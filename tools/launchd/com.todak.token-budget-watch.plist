@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 08:15 daily: budget warning (macOS notification at 60/80/100%) + push the Mac's
+     meters to neo-brain in time for the 08:30 money line built on EdgeXpert. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.todak.token-budget-watch</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/broneotodak/Projects/claude-tools-kit/tools/token-budget-watch.py</string>
+    <string>--quiet</string>
+    <string>--push</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>15</integer></dict>
+  <key>StandardOutPath</key><string>/Users/broneotodak/Projects/claude-tools-kit/token-budget-watch.log</string>
+  <key>StandardErrorPath</key><string>/Users/broneotodak/Projects/claude-tools-kit/token-budget-watch.log</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>
