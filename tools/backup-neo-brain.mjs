@@ -72,39 +72,53 @@ async function countRows(table) {
 
 const AUTH_HEADERS = { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: "application/json" };
 
+// One page fetch with retries: a single slow page (57014 statement timeout, 5xx,
+// network blip) must not throw away the rest of the table. 2026-09-24: three
+// tables died mid-way on one busy night and the snapshot was marked failed.
+async function getPage(url, extraHeaders = {}) {
+  let last = "";
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const r = await fetch(url, { headers: { ...AUTH_HEADERS, ...extraHeaders } });
+      if (r.ok) return await r.json();
+      last = `${r.status}: ${(await r.text()).slice(0, 200)}`;
+      if (r.status < 500) break;               // 4xx will not fix itself
+    } catch (e) { last = String(e?.message || e); }
+    await new Promise((res) => setTimeout(res, 5000 * attempt));
+  }
+  throw new Error(last);
+}
+
 async function *fetchRows(table) {
-  // Prefer keyset pagination when the table has a numeric `id`: deep OFFSET
-  // pages on big tables (agent_metrics, 1.6M rows) get progressively slower
-  // until Postgres kills them with a statement timeout (57014 — bit the
-  // 2026-07-20 nightly at row 1.27M). Keyset stays constant-speed at any depth.
-  const probe = await fetch(`${URL}/rest/v1/${encodeURIComponent(table)}?select=*&order=id.asc&limit=1`, { headers: AUTH_HEADERS });
-  if (probe.ok) {
-    const first = await probe.json();
-    if (Array.isArray(first) && first.length && typeof first[0].id === "number") {
-      let rows = first;
-      while (rows.length) {
-        for (const row of rows) yield row;
-        const lastId = rows[rows.length - 1].id;
-        const r = await fetch(`${URL}/rest/v1/${encodeURIComponent(table)}?select=*&order=id.asc&id=gt.${lastId}&limit=${PAGE}`, { headers: AUTH_HEADERS });
-        if (!r.ok) throw new Error(`fetch ${table} ${r.status}: ${(await r.text()).slice(0, 200)}`);
-        rows = await r.json();
-        if (!Array.isArray(rows)) throw new Error(`${table}: non-array response`);
-      }
-      return;
+  // Keyset pagination whenever the table has an `id` — numeric OR text/uuid.
+  // Deep OFFSET pages get progressively slower until Postgres kills them with a
+  // statement timeout (57014): agent_metrics at row 1.27M on 2026-07-20, and on
+  // 2026-09-24 wa_messages / media / agent_metrics, whose uuid ids still fell
+  // through to OFFSET. `id=gt.<value>` works for uuid too (Postgres compares
+  // uuids), so keyset is constant-speed at any depth for every table with an id.
+  const T = encodeURIComponent(table);
+  let first = null;
+  try { first = await getPage(`${URL}/rest/v1/${T}?select=*&order=id.asc&limit=1`); } catch { first = null; }
+  if (Array.isArray(first) && first.length && (typeof first[0].id === "number" || typeof first[0].id === "string")) {
+    let rows = first;
+    while (rows.length) {
+      for (const row of rows) yield row;
+      const lastId = rows[rows.length - 1].id;
+      try {
+        rows = await getPage(`${URL}/rest/v1/${T}?select=*&order=id.asc&id=gt.${encodeURIComponent(lastId)}&limit=${PAGE}`);
+      } catch (e) { throw new Error(`fetch ${table} ${e.message}`); }
+      if (!Array.isArray(rows)) throw new Error(`${table}: non-array response`);
     }
+    return;
   }
   // Fallback: offset pagination for tables without a numeric id (uuid pks etc.)
   let offset = 0;
   while (true) {
     const to = offset + PAGE - 1;
-    const r = await fetch(`${URL}/rest/v1/${encodeURIComponent(table)}?select=*`, {
-      headers: { ...AUTH_HEADERS, Range: `${offset}-${to}`, "Range-Unit": "items" },
-    });
-    if (!r.ok) {
-      const body = await r.text();
-      throw new Error(`fetch ${table} ${r.status}: ${body.slice(0, 200)}`);
-    }
-    const rows = await r.json();
+    let rows;
+    try {
+      rows = await getPage(`${URL}/rest/v1/${encodeURIComponent(table)}?select=*`, { Range: `${offset}-${to}`, "Range-Unit": "items" });
+    } catch (e) { throw new Error(`fetch ${table} ${e.message}`); }
     if (!Array.isArray(rows)) throw new Error(`${table}: non-array response`);
     for (const row of rows) yield row;
     if (rows.length < PAGE) return;
