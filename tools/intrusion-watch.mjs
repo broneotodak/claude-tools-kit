@@ -270,8 +270,12 @@ function tailnet() {
 async function checkTailnet() {
   const peers = tailnet();
   if (!peers) return null;
-  const snap = state.snapshots.tailnet || {};
+  // Snapshot format version: when the key scheme changes, re-baseline silently
+  // instead of paging "new device" for every node we already knew (25 Sep lesson).
+  const SNAP_V = 2;
+  const snap = state.snapshots.tailnet_v === SNAP_V ? (state.snapshots.tailnet || {}) : {};
   const first = !Object.keys(snap).length;
+  state.snapshots.tailnet_v = SNAP_V;
   const cur = {};
   for (const p of peers) {
     // keyed by IP: nodes shared in from another tailnet all show as "device-of-shared-to-user"

@@ -42,7 +42,10 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 
-VERSION = "sentinel-v1.0"
+VERSION = "sentinel-v1.1"
+# Same PATH under cron, launchd and an SSH shell — otherwise `sshd -T` / `ss` /
+# `tailscale` resolve differently per launcher and every run diffs the baseline.
+os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin:" + os.environ.get("PATH", "")
 ARGS = sys.argv[1:]
 FLAG = lambda f: f in ARGS
 OPT = lambda k, d=None: (ARGS[ARGS.index(k) + 1] if k in ARGS and ARGS.index(k) + 1 < len(ARGS) else d)
