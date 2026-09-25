@@ -186,18 +186,22 @@ async function pullHosts() {
 
 // ── 2. sentinels: freshness + events + diffs ─────────────────────────────────
 async function checkSentinels() {
-  const { data: rows } = await brain.from("agent_registry").select("agent_name,status,meta").like("agent_name", "sentinel-%").eq("status", "active");
+  // NOT filtered on status=active: naca-monitor's registry-status-writeback flips
+  // active↔offline by heartbeat age, and an "offline" sentinel is exactly the one we must judge.
+  const { data: rows } = await brain.from("agent_registry").select("agent_name,status,meta").like("agent_name", "sentinel-%").is("archived_at", null);
   const names = (rows || []).map((r) => r.agent_name);
   const { data: hbs } = await brain.from("agent_heartbeats").select("agent_name,status,reported_at,meta").in("agent_name", names.length ? names : ["-"]);
   const byName = Object.fromEntries((hbs || []).map((h) => [h.agent_name, h]));
-  const summary = { total: names.length, fresh: 0, silent: [] };
+  const summary = { total: names.length, fresh: 0, silent: [], pending: [] };
   for (const r of rows || []) {
     const name = r.agent_name, host = name.replace(/^sentinel-/, "");
     const hb = byName[name];
     const thr = r.meta?.hb_threshold_min || 30;
     if (!hb || ago(hb.reported_at) > thr) {
+      // mode "manual" = not installed yet / a laptop that sleeps: listed, never paged, never degrades the judge
+      if (r.meta?.mode === "manual") { summary.pending.push(host); continue; }
       summary.silent.push(host);
-      if (r.meta?.mode !== "manual") await page(`silent:${name}`, "🚨", `sentinel silent on ${host}`, `No report for ${hb ? ago(hb.reported_at) + " min" : "ever"} (limit ${thr}). A box that stops reporting is either down, cut off, or someone killed the watcher.\nCheck: ssh in, \`~/.naca/sentinel/sentinel.log\`, crontab -l.`, { cooldownH: 3, level: "critical" });
+      await page(`silent:${name}`, "🚨", `sentinel silent on ${host}`, `No report for ${hb ? ago(hb.reported_at) + " min" : "ever"} (limit ${thr}). A box that stops reporting is either down, cut off, or someone killed the watcher.\nCheck: ssh in, \`~/.naca/sentinel/sentinel.log\`, crontab -l.`, { cooldownH: 3, level: "critical" });
       continue;
     }
     summary.fresh++;
@@ -270,11 +274,13 @@ async function checkTailnet() {
   const first = !Object.keys(snap).length;
   const cur = {};
   for (const p of peers) {
-    cur[p.name] = { ip: p.ip, user: p.user, created: p.created, ssh: p.ssh };
-    if (!first && !snap[p.name]) await page(`tailnet:new:${p.name}`, "🚨", `new device on the tailnet: ${p.name}`, `${p.os || "?"} · ${p.ip} · user ${p.user} · created ${p.created?.slice(0, 16)}\nTodak01 sat on our tailnet for 4 months before it was used. If you did not add this, remove it at login.tailscale.com → Machines.`, { level: "critical", cooldownH: 24 });
-    if (p.ssh && !allow.ts_ssh_ok?.includes(p.name) && !(snap[p.name]?.ssh)) await page(`tailnet:ssh:${p.name}`, "⚠️", `Tailscale SSH server advertised by ${p.name}`, `Node ${p.name} (${p.ip}) is accepting Tailscale SSH. Turn it off on that box: \`sudo tailscale set --ssh=false\`.`, { cooldownH: 24 });
+    // keyed by IP: nodes shared in from another tailnet all show as "device-of-shared-to-user"
+    const k = `${p.name}@${p.ip}`;
+    cur[k] = { ip: p.ip, user: p.user, created: p.created, ssh: p.ssh };
+    if (!first && !snap[k]) await page(`tailnet:new:${k}`, "🚨", `new device on the tailnet: ${p.name}`, `${p.os || "?"} · ${p.ip} · user ${p.user} · created ${p.created?.slice(0, 16)}\nTodak01 sat on our tailnet for 4 months before it was used. If you did not add this, remove it at login.tailscale.com → Machines.`, { level: "critical", cooldownH: 24 });
+    if (p.ssh && !allow.ts_ssh_ok?.includes(p.name) && !(snap[k]?.ssh)) await page(`tailnet:ssh:${k}`, "⚠️", `Tailscale SSH server advertised by ${p.name}`, `Node ${p.name} (${p.ip}) is accepting Tailscale SSH. Turn it off on that box: \`sudo tailscale set --ssh=false\`.`, { cooldownH: 24 });
   }
-  for (const name of Object.keys(snap)) if (!cur[name]) notes.push(`tailnet: ${name} removed`);
+  for (const k of Object.keys(snap)) if (!cur[k]) notes.push(`tailnet: ${k} removed`);
   state.snapshots.tailnet = cur;
   const stale = peers.filter((p) => !p.online && p.lastSeen && ago(p.lastSeen) > 14 * 1440).map((p) => `${p.name} (${Math.round(ago(p.lastSeen) / 1440)}d)`);
   return { n: peers.length, online: peers.filter((p) => p.online).length, stale, sshNodes: peers.filter((p) => p.ssh).map((p) => p.name) };
@@ -365,7 +371,7 @@ async function checkBrain() {
 function dailyText(sent) {
   const hosts = Object.keys(state.acc).sort();
   const lines = [header("🛡️", `security line · ${MYT().slice(0, 10)}`)];
-  lines.push(`Sentinels: ${sent.fresh}/${sent.total} fresh${sent.silent.length ? ` · SILENT: ${sent.silent.join(", ")}` : ""}`);
+  lines.push(`Sentinels: ${sent.fresh}/${sent.total} fresh${sent.silent.length ? ` · SILENT: ${sent.silent.join(", ")}` : ""}${sent.pending?.length ? ` · not installed/asleep: ${sent.pending.join(", ")}` : ""}`);
   const lg = hosts.map((h) => { const a = state.acc[h]; const tot = Object.values(a.logins).reduce((s, n) => s + n, 0); const who = Object.entries(a.logins).map(([k, n]) => `${k.split("@")[0]}←${ipLabel(k.split("@")[1]) || k.split("@")[1]}`).slice(0, 3); return tot ? `${h} ${tot}${a.unknown ? ` (${a.unknown} UNKNOWN)` : ""} [${[...new Set(who)].join(", ")}]` : null; }).filter(Boolean);
   lines.push(`Logins 24h: ${lg.length ? lg.join(" · ") : "none"}`);
   const sudo = hosts.reduce((s, h) => s + state.acc[h].sudo, 0), failed = hosts.reduce((s, h) => s + state.acc[h].failed, 0), ts = hosts.reduce((s, h) => s + state.acc[h].ts_ssh, 0);
@@ -436,6 +442,6 @@ async function main() {
     const status = sent.silent.length || pages.some((p) => !p.dry && p.level === "critical") ? "degraded" : "ok";
     await brain.from("agent_heartbeats").upsert({ agent_name: ME, status, reported_at: new Date().toISOString(), meta: { version: VERSION, mode, sentinels: sent, pages: pages.length, selftests, notes: notes.slice(0, 10), github: state.last_github?.status, hetzner: state.last_hetzner?.status, tailnet: state.last_tailnet?.n, siti_line: state.last_brain?.siti_line, last_daily: state.last_daily } }, { onConflict: "agent_name" });
   }
-  console.log(`[${new Date().toISOString()}] ${ME} ${mode}: sentinels ${sent.fresh}/${sent.total}${sent.silent.length ? ` silent=${sent.silent.join(",")}` : ""} pages=${pages.length}${selftests ? ` (selftest ${selftests})` : ""} notes=${notes.length}${notes.length ? " → " + notes.slice(0, DRY ? 30 : 4).join(" | ") : ""}`);
+  console.log(`[${new Date().toISOString()}] ${ME} ${mode}: sentinels ${sent.fresh}/${sent.total}${sent.silent.length ? ` silent=${sent.silent.join(",")}` : ""}${sent.pending?.length ? ` pending=${sent.pending.join(",")}` : ""} pages=${pages.length}${selftests ? ` (selftest ${selftests})` : ""} notes=${notes.length}${notes.length ? " → " + notes.slice(0, DRY ? 30 : 4).join(" | ") : ""}`);
 }
 await main();

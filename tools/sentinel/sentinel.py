@@ -235,7 +235,13 @@ def units():
         return clean(out)
     out = sh("systemctl list-unit-files --state=enabled --no-legend 2>/dev/null | awk '{print $1}'").splitlines()
     out += [f"/etc/systemd/system/{f}" for f in (os.listdir("/etc/systemd/system") if os.path.isdir("/etc/systemd/system") else []) if f.endswith((".service", ".timer", ".socket"))]
-    out += ["user:" + l for l in sh("systemctl --user list-unit-files --state=enabled --no-legend 2>/dev/null | awk '{print $1}'").splitlines()]
+    # user units: read the unit FILES from disk for every home. `systemctl --user`
+    # only answers inside a login session (not under cron) and made every cron
+    # run look like all user units had been removed.
+    for user, home in homes():
+        d = os.path.join(home, ".config", "systemd", "user")
+        listing = sh(f"find {d} -maxdepth 2 \\( -name '*.service' -o -name '*.timer' -o -name '*.socket' \\) 2>/dev/null", sudo=(SUDO and user not in (os.environ.get("USER"), os.environ.get("LOGNAME"))))
+        out += [f"user:{user}:{os.path.relpath(l.strip(), d)}" for l in listing.splitlines() if l.strip()]
     return clean(l for l in out if not l.startswith("snap-"))
 
 
