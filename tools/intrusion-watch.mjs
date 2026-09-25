@@ -136,6 +136,17 @@ async function sendEmail(subject, text) {
     return { ok: r.ok, why: `http ${r.status}` };
   } catch (e) { return { ok: false, why: e.message }; }
 }
+/** SMS via Twilio — the channel that does not depend on Siti, EdgeXpert or e-mail. Numbers in registry meta.alerts. */
+async function sendSMS(text) {
+  const from = meta.alerts?.sms_from, to = meta.alerts?.sms_to;
+  if (!from || !to) return { ok: false, why: "no sms numbers" };
+  const sid = await vault("twilio", "account_sid"), tok = await vault("twilio", "auth_token");
+  if (!sid || !tok) return { ok: false, why: "no twilio creds" };
+  try {
+    const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, { method: "POST", headers: { Authorization: "Basic " + Buffer.from(`${sid}:${tok}`).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ From: from, To: to, Body: text.replace(/\*/g, "").slice(0, 300) }), signal: AbortSignal.timeout(10000) });
+    return { ok: r.status === 201 || r.status === 200, why: `http ${r.status}` };
+  } catch (e) { return { ok: false, why: e.message }; }
+}
 async function logAlert(text, level, key) {
   if (!nb) return;
   try { await nb.save(`[${ME}] ${text}`, { category: "security_alert", type: "event", importance: level === "critical" ? 8 : 6, visibility: "internal", source: ME, metadata: { signal: key, level, host: HOST_LABEL } }); } catch { /* best effort */ }
@@ -151,7 +162,12 @@ async function page(key, emoji, signal, body, { cooldownH = 6, level = "warning"
   if (channel !== "email") {
     const r = await sendWA(text);
     delivered = r.ok;
-    if (!r.ok) { console.error(`[${ME}] WA send failed (${r.why}) — queuing + e-mail`); await queueWA(text); }
+    if (!r.ok) { console.error(`[${ME}] WA send failed (${r.why}) — queuing + SMS + e-mail`); await queueWA(text); }
+  }
+  // Critical pages ALWAYS also go by SMS (a WhatsApp 200 is not a delivery); any page goes by SMS when WhatsApp failed.
+  if (level === "critical" || !delivered) {
+    const s = await sendSMS(`${header(emoji, signal)}\n${body}`.replace(/\n\[~[^\]]*\]/, ""));
+    if (s.ok) delivered = true; else console.error(`[${ME}] SMS failed (${s.why})`);
   }
   if (!delivered) {
     const e = await sendEmail(`${emoji} NACA security: ${signal}`, text);
@@ -364,6 +380,10 @@ async function checkBrain() {
   const { data: regNew } = await brain.from("agent_registry").select("agent_name,registered_at").gt("registered_at", state.registry_watermark || new Date(NOW - 86400e3).toISOString());
   for (const r of regNew || []) notes.push(`new registry row: ${r.agent_name}`);
   state.registry_watermark = new Date().toISOString();
+  // the second watcher (neo-twin) watches us; we watch it back
+  const { data: wd } = await brain.from("agent_heartbeats").select("reported_at,meta").eq("agent_name", "watchdog-twin").maybeSingle();
+  out.watchdog = wd ? (ago(wd.reported_at) > 40 ? `stale (${ago(wd.reported_at)} min)` : "fresh") : "missing";
+  if (wd && ago(wd.reported_at) > 40) await page("watchdog:stale", "⚠️", "second watcher on neo-twin is silent", `watchdog-twin last reported ${ago(wd.reported_at)} min ago. If neo-twin is down, the SMS fallback for an EdgeXpert outage is gone too.\nCheck: ssh root@neo-twin, /root/.naca/watchdog/watchdog.log.`, { cooldownH: 6 });
   const { data: wl } = await brain.from("agent_heartbeats").select("reported_at,meta").eq("agent_name", "wa-line-watch").maybeSingle();
   const lineState = wl?.meta?.line_state || "?";
   out.siti_line = ago(wl?.reported_at) > 20 ? `stale (${ago(wl?.reported_at)} min)` : lineState;
@@ -387,7 +407,7 @@ function dailyText(sent) {
   lines.push(`GitHub: ${state.last_github?.status || "?"}${state.last_github?.keys != null ? ` (${state.last_github.keys} keys, ${state.last_github.public} public repos)` : ""} · Hetzner: ${state.last_hetzner?.status || "?"}${state.last_hetzner?.servers != null ? ` (${state.last_hetzner.servers} servers)` : ""}`);
   const b = state.last_brain || {};
   lines.push(`neo-brain: auth users ${b.auth_users ?? "?"} · vault writes ${state.daily_vault_writes || 0} · unknown agents ${b.unknown_agents?.length || 0} · Siti line ${b.siti_line || "?"}`);
-  lines.push(`Alerts sent 24h: ${state.daily_pages || 0}${state.selftest_ok ? " · selftest ✓" : ""}`);
+  lines.push(`Alerts sent 24h: ${state.daily_pages || 0}${state.selftest_ok ? " · selftest ✓" : ""} · SMS fallback ${meta.alerts?.sms_to ? "armed" : "OFF"} · twin watchdog ${b.watchdog || "?"}`);
   return lines.join("\n");
 }
 function weeklyText(sent) {
