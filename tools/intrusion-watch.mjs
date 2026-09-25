@@ -259,6 +259,9 @@ async function checkSentinels() {
       const d = m.diff?.[sec] || { added: [], removed: [] };
       a.changes.push(`${sec}: +${d.added.length}/-${d.removed.length}`);
       const crit = CRIT_SECTIONS.has(sec);
+      // Laptops (mode "manual") sleep, wake on other networks, open and close apps:
+      // their ports/units/temp files churn by nature. Only the access surface pages there.
+      if (r.meta?.mode === "manual" && !crit && sec !== "selftest") { notes.push(`${host}: ${sec} changed (+${d.added.length}/-${d.removed.length}, laptop — not paged)`); continue; }
       const dry = isTest || sec === "selftest";
       const body = `${d.added.length ? `added:\n${fmtList(d.added)}` : ""}${d.removed.length ? `\nremoved:\n${fmtList(d.removed)}` : ""}`.trim() || "(details truncated)";
       await page(`change:${name}:${sec}`, crit ? "🚨" : "⚠️", `${sec} changed on ${host}`, `${body}\n${crit ? "This is a persistence/access surface — verify NOW who did it." : "If this was a deploy, ignore; otherwise check the box."}`, { level: crit ? "critical" : "warning", cooldownH: crit ? 2 : 6, dry });
