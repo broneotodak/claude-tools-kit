@@ -229,8 +229,10 @@ async function checkSentinels() {
     // logins
     for (const l of ev.logins || []) {
       const key = `${l.u}@${l.ip}`;
-      a.logins[key] = (a.logins[key] || 0) + l.n;
       const kl = keyLabel(l.fp), il = ipLabel(l.ip);
+      // the judge's own pull-mode SSH (EdgeXpert key into academy / NAS) is machinery, not a person: count apart
+      if (kl && /edgexpert/i.test(kl) && (meta.pull_hosts || []).some((p) => p.name === name)) { a.pulls = (a.pulls || 0) + l.n; continue; }
+      a.logins[key] = (a.logins[key] || 0) + l.n;
       // The 24 Sep signature was a KNOWN key (Neo's stolen Mac key) from an UNKNOWN
       // IP — so an unknown IP always pages, even with a known key. An unknown key
       // from a known place pages too (a key nobody allow-listed just got deployed).
@@ -404,7 +406,8 @@ function dailyText(sent) {
   const lg = hosts.map((h) => { const a = state.acc[h]; const tot = Object.values(a.logins).reduce((s, n) => s + n, 0); const who = Object.entries(a.logins).map(([k, n]) => `${k.split("@")[0]}←${ipLabel(k.split("@")[1]) || k.split("@")[1]}`).slice(0, 3); return tot ? `${h} ${tot}${a.unknown ? ` (${a.unknown} UNKNOWN)` : ""} [${[...new Set(who)].join(", ")}]` : null; }).filter(Boolean);
   lines.push(`Logins 24h: ${lg.length ? lg.join(" · ") : "none"}`);
   const sudo = hosts.reduce((s, h) => s + state.acc[h].sudo, 0), failed = hosts.reduce((s, h) => s + state.acc[h].failed, 0), ts = hosts.reduce((s, h) => s + state.acc[h].ts_ssh, 0);
-  lines.push(`sudo ${sudo} · failed/bruteforce ${failed} · Tailscale-SSH sessions ${ts} · unknown logins ${hosts.reduce((s, h) => s + state.acc[h].unknown, 0)}`);
+  const pulls = hosts.reduce((s, h) => s + (state.acc[h].pulls || 0), 0);
+  lines.push(`sudo ${sudo} · internet bots bounced off public SSH ${failed} · Tailscale-SSH sessions ${ts} · unknown logins ${hosts.reduce((s, h) => s + state.acc[h].unknown, 0)}${pulls ? ` · judge's own pulls ${pulls} (not counted above)` : ""}`);
   const ch = hosts.flatMap((h) => state.acc[h].changes.map((c) => `${h} ${c}`));
   lines.push(`Changes: ${ch.length ? ch.slice(0, 5).join(" · ") : "none"}`);
   const t = state.last_tailnet || {};
