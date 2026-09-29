@@ -113,12 +113,12 @@ if (!regRow) { console.error(`[${ME}] no registry row — run --init --seed <fil
 
 // ── alerting ─────────────────────────────────────────────────────────────────
 function header(emoji, signal) { return `${emoji} NACA · ${signal}\n[~ ${ME} on ${HOST_LABEL}]`; }
-async function sendWA(text) {
+async function sendWA(text, toJid = NEO_JID) {
   const env = existsSync(SITI_ENV) ? readFileSync(SITI_ENV, "utf-8") : "";
   const token = env.match(/^SEND_API_TOKEN=(.+)$/m)?.[1]?.trim();
   if (!token) return { ok: false, why: "no SEND_API_TOKEN" };
   try {
-    const r = await fetch(SITI_URL, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ type: "send", toJid: NEO_JID, text }), signal: AbortSignal.timeout(8000) });
+    const r = await fetch(SITI_URL, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ type: "send", toJid, text }), signal: AbortSignal.timeout(8000) });
     return { ok: r.status === 200, why: `http ${r.status}` };
   } catch (e) { return { ok: false, why: e.message }; }
 }
@@ -152,7 +152,7 @@ async function logAlert(text, level, key) {
   try { await nb.save(`[${ME}] ${text}`, { category: "security_alert", type: "event", importance: level === "critical" ? 8 : 6, visibility: "internal", source: ME, metadata: { signal: key, level, host: HOST_LABEL } }); } catch { /* best effort */ }
 }
 /** page(key, emoji, signal, body, {cooldownH, level, channel}) — dedupes per key. */
-async function page(key, emoji, signal, body, { cooldownH = 6, level = "warning", channel = "wa", dry = false } = {}) {
+async function page(key, emoji, signal, body, { cooldownH = 6, level = "warning", channel = "wa", dry = false, host = null } = {}) {
   const last = state.last_alerts[key];
   if (last && NOW - new Date(last).getTime() < cooldownH * 3600e3) { console.log(`[${ME}] (cooldown) ${key}`); return false; }
   const text = `${header(emoji, signal)}\n${body}`.trim();
@@ -163,6 +163,12 @@ async function page(key, emoji, signal, body, { cooldownH = 6, level = "warning"
     const r = await sendWA(text);
     delivered = r.ok;
     if (!r.ok) { console.error(`[${ME}] WA send failed (${r.why}) — queuing + SMS + e-mail`); await queueWA(text); }
+    // Per-host copies: registry meta.alerts.per_host = { "<host>": ["<phone>@s.whatsapp.net", ...] } (the box owner, e.g. Kai for academy).
+    // WhatsApp only — SMS and e-mail fallbacks stay Neo's. Never blocks or replaces the owner page.
+    for (const jid of (host && meta.alerts?.per_host?.[host]) || []) {
+      const c = await sendWA(text, jid);
+      console.log(`[${ME}] copy to ${jid.replace(/@.*/, "")} for ${host}: ${c.ok ? "sent" : "failed " + c.why}`);
+    }
   }
   // Critical pages ALWAYS also go by SMS (a WhatsApp 200 is not a delivery); any page goes by SMS when WhatsApp failed.
   if (level === "critical" || !delivered) {
@@ -217,7 +223,7 @@ async function checkSentinels() {
       // mode "manual" = not installed yet / a laptop that sleeps: listed, never paged, never degrades the judge
       if (r.meta?.mode === "manual") { summary.pending.push(host); continue; }
       summary.silent.push(host);
-      await page(`silent:${name}`, "🚨", `sentinel silent on ${host}`, `No report for ${hb ? ago(hb.reported_at) + " min" : "ever"} (limit ${thr}). A box that stops reporting is either down, cut off, or someone killed the watcher.\nCheck: ssh in, \`~/.naca/sentinel/sentinel.log\`, crontab -l.`, { cooldownH: 3, level: "critical" });
+      await page(`silent:${name}`, "🚨", `sentinel silent on ${host}`, `No report for ${hb ? ago(hb.reported_at) + " min" : "ever"} (limit ${thr}). A box that stops reporting is either down, cut off, or someone killed the watcher.\nCheck: ssh in, \`~/.naca/sentinel/sentinel.log\`, crontab -l.`, { host, cooldownH: 3, level: "critical" });
       continue;
     }
     summary.fresh++;
@@ -241,20 +247,20 @@ async function checkSentinels() {
         a.unknown += l.n;
         const crit = unknownKey;
         const why = unknownIp && unknownKey ? "unknown IP AND unknown key" : unknownIp ? `known key from an UNKNOWN place${kl ? ` (${kl})` : ""}` : "key not in the allow-list";
-        await page(`login:${l.ip}:${(l.fp || l.m).slice(7, 15)}`, crit ? "🚨" : "⚠️", `${why} — login on ${host}`, `${l.n}× as *${l.u}* from ${l.ip}${il ? ` (${il})` : ""} via ${l.m}${l.fp ? `\nkey ${l.fp}${kl ? ` (${kl})` : ""}` : ""}\nIf this is you (new place / new key), reply *allow ${l.ip}* or *allow key ${(l.fp || "").slice(7, 15)}*. If not: kill the session on ${host} and remove the key.`, { level: crit ? "critical" : "warning", dry: isTest });
+        await page(`login:${l.ip}:${(l.fp || l.m).slice(7, 15)}`, crit ? "🚨" : "⚠️", `${why} — login on ${host}`, `${l.n}× as *${l.u}* from ${l.ip}${il ? ` (${il})` : ""} via ${l.m}${l.fp ? `\nkey ${l.fp}${kl ? ` (${kl})` : ""}` : ""}\nIf this is you (new place / new key), reply *allow ${l.ip}* or *allow key ${(l.fp || "").slice(7, 15)}*. If not: kill the session on ${host} and remove the key.`, { host, level: crit ? "critical" : "warning", dry: isTest });
       }
     }
     a.failed += ev.failed || 0;
     for (const [pair, n] of Object.entries(ev.sudo?.by || {})) {
       a.sudo += n;
-      if (allow.sudo_ok?.length && !allow.sudo_ok.includes(pair)) await page(`sudo:${name}:${pair}`, "⚠️", `unexpected sudo on ${host}`, `${pair} ran ${n} sudo command(s):\n${fmtList(ev.sudo.last || [], 5)}`, { dry: isTest });
+      if (allow.sudo_ok?.length && !allow.sudo_ok.includes(pair)) await page(`sudo:${name}:${pair}`, "⚠️", `unexpected sudo on ${host}`, `${pair} ran ${n} sudo command(s):\n${fmtList(ev.sudo.last || [], 5)}`, { host, dry: isTest });
     }
     if (ev.ts_ssh?.length) {
       a.ts_ssh += ev.ts_ssh.length;
-      if (!allow.ts_ssh_ok?.includes(host)) await page(`tsssh:${name}`, "🚨", `Tailscale SSH session on ${host}`, `Tailscale SSH is supposed to be OFF everywhere since 25 Sep (that is how Todak01 got root).\n${fmtList(ev.ts_ssh, 6)}\nFix: \`sudo tailscale set --ssh=false\` on ${host}, then find who did it in the admin console.`, { level: "critical", dry: isTest });
+      if (!allow.ts_ssh_ok?.includes(host)) await page(`tsssh:${name}`, "🚨", `Tailscale SSH session on ${host}`, `Tailscale SSH is supposed to be OFF everywhere since 25 Sep (that is how Todak01 got root).\n${fmtList(ev.ts_ssh, 6)}\nFix: \`sudo tailscale set --ssh=false\` on ${host}, then find who did it in the admin console.`, { host, level: "critical", dry: isTest });
     }
-    if (ev.user_changes?.length) await page(`users:${name}`, "🚨", `account change on ${host}`, fmtList(ev.user_changes, 8), { level: "critical", dry: isTest });
-    if (ev.pkg_installs?.length) { a.pkg += ev.pkg_installs.length; await page(`pkg:${name}`, "⚠️", `packages installed on ${host}`, `${ev.pkg_installs.length} install(s) — the intruder's first move on tr-home was \`apt install docker\`.\n${fmtList(ev.pkg_installs, 6)}`, { cooldownH: 12, dry: isTest }); }
+    if (ev.user_changes?.length) await page(`users:${name}`, "🚨", `account change on ${host}`, fmtList(ev.user_changes, 8), { host, level: "critical", dry: isTest });
+    if (ev.pkg_installs?.length) { a.pkg += ev.pkg_installs.length; await page(`pkg:${name}`, "⚠️", `packages installed on ${host}`, `${ev.pkg_installs.length} install(s) — the intruder's first move on tr-home was \`apt install docker\`.\n${fmtList(ev.pkg_installs, 6)}`, { host, cooldownH: 12, dry: isTest }); }
     if (m.rebooted) { a.reboots++; notes.push(`${host} rebooted (uptime ${Math.round((m.uptime_s || 0) / 60)} min)`); }
     // config diffs
     for (const sec of m.changed || []) {
@@ -268,14 +274,14 @@ async function checkSentinels() {
       if (sec === "authkeys" && d.added.length && !d.removed.length && d.added.every((l) => keyLabel((l.match(/SHA256:\S+/) || [])[0]))) { notes.push(`${host}: authorized key added (allow-listed): ${d.added.map((l) => keyLabel((l.match(/SHA256:\S+/) || [])[0])).join("; ")}`); continue; }
       const dry = isTest || sec === "selftest";
       const body = `${d.added.length ? `added:\n${fmtList(d.added)}` : ""}${d.removed.length ? `\nremoved:\n${fmtList(d.removed)}` : ""}`.trim() || "(details truncated)";
-      await page(`change:${name}:${sec}`, crit ? "🚨" : "⚠️", `${sec} changed on ${host}`, `${body}\n${crit ? "This is a persistence/access surface — verify NOW who did it." : "If this was a deploy, ignore; otherwise check the box."}`, { level: crit ? "critical" : "warning", cooldownH: crit ? 2 : 6, dry });
+      await page(`change:${name}:${sec}`, crit ? "🚨" : "⚠️", `${sec} changed on ${host}`, `${body}\n${crit ? "This is a persistence/access surface — verify NOW who did it." : "If this was a deploy, ignore; otherwise check the box."}`, { host, level: crit ? "critical" : "warning", cooldownH: crit ? 2 : 6, dry });
     }
     // posture regressions (facts)
     const f = m.facts || {};
-    if (f.password_auth === "yes") await page(`posture:${name}:pw`, "🚨", `password SSH turned ON on ${host}`, "PasswordAuthentication yes — keys-only is the rule since 25 Sep.", { level: "critical", cooldownH: 12, dry: isTest });
-    if (String(f.ts_run_ssh).toLowerCase() === "true" && !allow.ts_ssh_ok?.includes(host)) await page(`posture:${name}:tsssh`, "🚨", `Tailscale SSH server ON on ${host}`, "RunSSH=true — turn it off: `sudo tailscale set --ssh=false`.", { level: "critical", cooldownH: 12, dry: isTest });
-    if (/https?:\/\//.test(f.ts_funnel || "")) await page(`posture:${name}:funnel`, "🚨", `Tailscale Funnel exposed on ${host}`, `${f.ts_funnel}\nThe intruder published tr-home to the internet this way. \`tailscale funnel reset\`.`, { level: "critical", cooldownH: 12, dry: isTest });
-    if (f.preload) await page(`posture:${name}:preload`, "🚨", `ld.so.preload present on ${host}`, "A preload library is the classic rootkit hook.", { level: "critical", cooldownH: 12, dry: isTest });
+    if (f.password_auth === "yes") await page(`posture:${name}:pw`, "🚨", `password SSH turned ON on ${host}`, "PasswordAuthentication yes — keys-only is the rule since 25 Sep.", { host, level: "critical", cooldownH: 12, dry: isTest });
+    if (String(f.ts_run_ssh).toLowerCase() === "true" && !allow.ts_ssh_ok?.includes(host)) await page(`posture:${name}:tsssh`, "🚨", `Tailscale SSH server ON on ${host}`, "RunSSH=true — turn it off: `sudo tailscale set --ssh=false`.", { host, level: "critical", cooldownH: 12, dry: isTest });
+    if (/https?:\/\//.test(f.ts_funnel || "")) await page(`posture:${name}:funnel`, "🚨", `Tailscale Funnel exposed on ${host}`, `${f.ts_funnel}\nThe intruder published tr-home to the internet this way. \`tailscale funnel reset\`.`, { host, level: "critical", cooldownH: 12, dry: isTest });
+    if (f.preload) await page(`posture:${name}:preload`, "🚨", `ld.so.preload present on ${host}`, "A preload library is the classic rootkit hook.", { host, level: "critical", cooldownH: 12, dry: isTest });
   }
   return summary;
 }
