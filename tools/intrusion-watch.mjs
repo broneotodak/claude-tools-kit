@@ -48,7 +48,7 @@ const opt = (k, d = null) => (ARGS.includes(k) ? ARGS[ARGS.indexOf(k) + 1] : d);
 const DRY = flag("--dry-run");
 const ME = "intrusion-watch";
 const HOST_LABEL = "edgexpert";
-const VERSION = "intrusion-watch-v1.2"; // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
+const VERSION = "intrusion-watch-v1.3"; // v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
 const NOW = Date.now();
 const MYT = (d = new Date()) => new Date(d).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour12: false });
 const ago = (iso) => (iso ? Math.round((NOW - new Date(iso).getTime()) / 60000) : Infinity);
@@ -193,11 +193,20 @@ async function logAlert(text, level, key) {
   if (!nb) return;
   try { await nb.save(`[${ME}] ${text}`, { category: "security_alert", type: "event", importance: level === "critical" ? 8 : 6, visibility: "internal", source: ME, metadata: { signal: key, level, host: HOST_LABEL } }); } catch { /* best effort */ }
 }
+const PAGE_CAP = Number(meta.alerts?.page_cap || 3);
+let sentThisRun = 0;
+const overflow = [];
 /** page(key, emoji, signal, body, {cooldownH, level, channel}) — dedupes per key. */
 async function page(key, emoji, signal, body, { cooldownH = 6, level = "warning", channel = "wa", dry = false, host = null } = {}) {
   const last = state.last_alerts[key];
   if (last && NOW - new Date(last).getTime() < cooldownH * 3600e3) { console.log(`[${ME}] (cooldown) ${key}`); return false; }
   const text = `${header(emoji, signal)}\n${body}`.trim();
+  // Burst cap: WhatsApp flags numbers that send floods. Critical pages always go; warnings beyond
+  // PAGE_CAP in one run fold into a single summary sent at the end of the run.
+  if (!dry && !DRY && level !== "critical" && channel !== "email" && sentThisRun >= PAGE_CAP) {
+    overflow.push(`${emoji} ${signal}`); state.last_alerts[key] = new Date().toISOString(); pages.push({ key, level, signal, dry, folded: true }); return true;
+  }
+  if (!dry && !DRY && channel !== "email") sentThisRun++;
   pages.push({ key, level, signal, dry });
   if (DRY || dry) { console.log(`[${ME}] ${dry ? "SELFTEST" : "DRY-RUN"} alert →\n${text}\n`); if (!dry) return true; state.last_alerts[key] = new Date().toISOString(); return true; }
   let delivered = false;
@@ -544,6 +553,11 @@ async function main() {
     const text = weeklyText(sent);
     if (DRY) console.log(text); else { const r = await sendWA(text); if (!r.ok) { await queueWA(text); await sendEmail("🧭 NACA weekly security routine", text); } console.log(`[${ME}] weekly routine ${r.ok ? "sent" : "queued"}`); }
     state.last_weekly = new Date().toISOString();
+  }
+  if (overflow.length) {
+    const text = `${header("📦", `${overflow.length} more alert(s) this cycle, folded`)}\n${fmtList(overflow, 15)}\n(burst cap ${PAGE_CAP}/run keeps Siti's number under WhatsApp's spam radar; ask me for details)`;
+    const r = await sendWA(text); if (!r.ok) await queueWA(text);
+    console.log(`[${ME}] folded ${overflow.length} warning page(s) into one`);
   }
   state.last_run = new Date().toISOString();
   state.last_notes = notes.slice(0, 20);
