@@ -42,7 +42,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 
-VERSION = "sentinel-v1.2"  # v1.2: egress fingerprint (who talks to which network owner)
+VERSION = "sentinel-v1.3"  # v1.2: egress fingerprint (who talks to which network owner) · v1.3: 7-day sliding window
 # Same PATH under cron, launchd and an SSH shell — otherwise `sshd -T` / `ss` /
 # `tailscale` resolve differently per launcher and every run diffs the baseline.
 os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin:" + os.environ.get("PATH", "")
@@ -503,6 +503,11 @@ def outbound():
 # judge pages on. Owner = ASN name via Team Cymru (TCP 43), cached 7 days in state.
 ASN_CACHE = {}
 ASN_TTL = 7 * 86400
+# Pairs are remembered for 7 days: a connection that is only open some of the time (an
+# agent that calls its API once an hour) must not flap in and out of the fingerprint. A
+# pair is "new" only when it has not been seen for a week; it drops out after a week unseen.
+EGRESS_SEEN = {}
+EGRESS_TTL = 7 * 86400
 
 
 def _cymru(ips):
@@ -570,9 +575,14 @@ def _established():
 
 
 def egress():
+    now = time.time()
     pairs = _established()
     owners = asn_owners([ip for ip, _ in pairs])
-    return sorted({f"{proc or '?'} -> {owners.get(ip, 'unresolved')}" for ip, proc in pairs})[:MAX_LIST]
+    for ip, proc in pairs:
+        EGRESS_SEEN[f"{proc or '?'} -> {owners.get(ip, 'unresolved')}"] = now
+    for k in [k for k, t in EGRESS_SEEN.items() if now - t > EGRESS_TTL]:
+        EGRESS_SEEN.pop(k, None)
+    return sorted(EGRESS_SEEN)[:MAX_LIST]
 
 
 SECTIONS["egress"] = egress
@@ -613,6 +623,10 @@ def main():
     reset = FLAG("--reset") or not state.get("sections")
     ASN_CACHE.clear()
     ASN_CACHE.update(state.get("asn_cache") or {})
+    EGRESS_SEEN.clear()
+    EGRESS_SEEN.update(state.get("egress_seen") or {})
+    if not EGRESS_SEEN:  # upgrading from v1.2: the last snapshot becomes the window's seed, so nothing pages
+        EGRESS_SEEN.update({l: now for l in (state.get("sections") or {}).get("egress", [])})
     since = float(state.get("last_run", now - 600))
     if now - since > 6 * 3600:
         since = now - 6 * 3600  # never replay more than 6h of journal
@@ -659,7 +673,8 @@ def main():
 
     if not FLAG("--selftest"):
         state = {"last_run": now, "boot_id": bid, "sections": sections, "name": NAME, "version": VERSION,
-                 "asn_cache": {k: v for k, v in ASN_CACHE.items() if now - v.get("t", 0) < ASN_TTL}}
+                 "asn_cache": {k: v for k, v in ASN_CACHE.items() if now - v.get("t", 0) < ASN_TTL},
+                 "egress_seen": dict(EGRESS_SEEN)}
         json.dump(state, open(STATE_FILE, "w"))
         try:
             os.chmod(STATE_FILE, 0o600)
