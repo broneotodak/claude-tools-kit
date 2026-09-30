@@ -42,7 +42,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 
-VERSION = "sentinel-v1.3"  # v1.2: egress fingerprint (who talks to which network owner) · v1.3: 7-day sliding window
+VERSION = "sentinel-v1.4"  # v1.2 egress fingerprint · v1.3 7-day window · v1.4 outbound only (inbound peers of sshd/web/etc. excluded)
 # Same PATH under cron, launchd and an SSH shell — otherwise `sshd -T` / `ss` /
 # `tailscale` resolve differently per launcher and every run diffs the baseline.
 os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin:" + os.environ.get("PATH", "")
@@ -548,15 +548,33 @@ def asn_owners(ips):
     return {ip: (ASN_CACHE.get(ip) or {}).get("o") or "unresolved" for ip in set(ips)}
 
 
+def _listening_ports():
+    """Local TCP ports something is listening on — a connection whose local port is one of these is INBOUND."""
+    txt = sh("lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR>1{print $9}'") if IS_MAC else sh("ss -tlnH 2>/dev/null")
+    ports = set()
+    for l in txt.splitlines():
+        tok = l.split()[3] if (not IS_MAC and len(l.split()) > 3) else l.strip()
+        m = re.search(r":(\d+)$", tok)
+        if m:
+            ports.add(m.group(1))
+    return ports
+
+
 def _established():
-    """(remote_ip, process) for established TCP sockets; loopback, LAN and tailnet excluded."""
+    """(remote_ip, process) for OUTBOUND established TCP sockets; loopback, LAN, tailnet and
+    inbound connections (peer of a port we listen on: sshd, caddy, …) excluded — a bot knocking
+    on public SSH is not this box talking out."""
     pairs = []
+    listening = _listening_ports()
     if IS_MAC:
         txt = sh("lsof -nP -iTCP -sTCP:ESTABLISHED 2>/dev/null | awk 'NR>1{print $9\" \"$1}'")
         for l in txt.splitlines():
             if "->" not in l:
                 continue
-            ip = l.split()[0].split("->")[-1].rsplit(":", 1)[0].strip("[]")
+            local, remote = l.split()[0].split("->", 1)
+            if local.rsplit(":", 1)[-1] in listening:
+                continue
+            ip = remote.rsplit(":", 1)[0].strip("[]")
             pairs.append((ip, l.split()[1]))
     else:
         # root (or passwordless sudo) sees every user's process name; otherwise only our own
@@ -565,6 +583,8 @@ def _established():
             p = l.split()
             if len(p) < 4:
                 continue
+            if p[2].rsplit(":", 1)[-1] in listening:
+                continue  # inbound: someone connected to a port we serve
             ip = p[3].rsplit(":", 1)[0].strip("[]")
             m = re.search(r'\("([^"]+)"', l)
             pairs.append((ip, m.group(1) if m else ""))
@@ -627,6 +647,8 @@ def main():
     EGRESS_SEEN.update(state.get("egress_seen") or {})
     if not EGRESS_SEEN:  # upgrading from v1.2: the last snapshot becomes the window's seed, so nothing pages
         EGRESS_SEEN.update({l: now for l in (state.get("sections") or {}).get("egress", [])})
+    for k in [k for k in EGRESS_SEEN if k.startswith("sshd ->")]:  # v1.2/v1.3 counted inbound SSH peers; forget them
+        EGRESS_SEEN.pop(k, None)
     since = float(state.get("last_run", now - 600))
     if now - since > 6 * 3600:
         since = now - 6 * 3600  # never replay more than 6h of journal
