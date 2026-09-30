@@ -48,7 +48,7 @@ const opt = (k, d = null) => (ARGS.includes(k) ? ARGS[ARGS.indexOf(k) + 1] : d);
 const DRY = flag("--dry-run");
 const ME = "intrusion-watch";
 const HOST_LABEL = "edgexpert";
-const VERSION = "intrusion-watch-v1.1"; // v1.1: maintenance windows (folded pages) + egress pages
+const VERSION = "intrusion-watch-v1.2"; // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
 const NOW = Date.now();
 const MYT = (d = new Date()) => new Date(d).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour12: false });
 const ago = (iso) => (iso ? Math.round((NOW - new Date(iso).getTime()) / 60000) : Infinity);
@@ -88,6 +88,16 @@ state.acc ||= {}; state.history ||= []; state.last_alerts ||= {}; state.seen ||=
 meta.maintenance = (meta.maintenance || []).filter((w) => new Date(w.until).getTime() > NOW - 7 * 86400e3);
 const inMaint = (host) => meta.maintenance.find((w) => w.host === host && new Date(w.until).getTime() > NOW);
 const folded = {};        // host → lines collected under a window, flushed as one page per report
+// Egress: a box's own services reach the big clouds all day (Claude, Gemini, Supabase behind
+// Cloudflare, AWS-hosted SaaS, Apple push, GitHub). Those owners are NOTES, not pages. A page is
+// for an owner outside this list (a residential ISP, a mobile carrier, a bargain VPS host) —
+// that is what a phone-home looks like. Extend without code: registry meta.allow.egress_owners.
+const KNOWN_EGRESS_OWNERS = (allow.egress_owners && allow.egress_owners.length) ? allow.egress_owners : [
+  "CLOUDFLARENET", "ANTHROPIC", "GOOGLE", "GOOGLE-CLOUD-PLATFORM", "AMAZON", "FACEBOOK", "AKAMAI-ASN", "AKAMAI-AS",
+  "FASTLY", "MICROSOFT", "APPLE-ENGINEERING", "GITHUB", "TWILIO", "HETZNER", "TAILSCALE", "ORACLE-BMC", "DIGITALOCEAN",
+  "ELEVENLABS", "OPENAI", "AKAMAI-LINODE-AP",
+];
+const knownOwner = (line) => { const o = (line.split(" -> ")[1] || "").toUpperCase(); return KNOWN_EGRESS_OWNERS.some((k) => o.startsWith(k.toUpperCase())); };
 const pages = [];         // alerts raised this run
 const notes = [];         // quiet findings for the daily line
 const keyLabel = (fp) => allow.key_fps.find((k) => fp && fp.startsWith(k.fp))?.label;
@@ -322,7 +332,10 @@ async function checkSentinels() {
       if (inMaint(host) && !isTest) { (folded[host] ||= []).push(`${crit ? "🚨 " : ""}${sec} +${d.added.length}/-${d.removed.length}${d.added.length ? ": " + d.added.slice(0, 2).map((l) => l.slice(0, 70)).join(" · ") : ""}`); continue; }
       if (sec === "egress") {
         // one page per NEW "process -> network owner" pair (24h cooldown per pair); a pair that stopped is only a note
-        for (const line of d.added) await page(`change:${name}:egress:${line}`, "⚠️", `new outbound destination on ${host}`, egressBody(line, m, host), { host, cooldownH: 24, dry: isTest });
+        for (const line of d.added) {
+          if (knownOwner(line)) { notes.push(`${host}: new outbound ${line} (known provider — not paged)`); continue; }
+          await page(`change:${name}:egress:${line}`, "⚠️", `new outbound destination on ${host}`, egressBody(line, m, host), { host, cooldownH: 24, dry: isTest });
+        }
         if (d.removed.length) notes.push(`${host}: egress stopped → ${d.removed.slice(0, 3).join("; ")}`);
         continue;
       }
