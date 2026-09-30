@@ -14,6 +14,9 @@
 //   */10 * * * *  intrusion-watch.mjs            every-10-min judge (+ pulls the
 //                                                 SSH-only hosts listed in the registry row)
 //   45 8 * * *    intrusion-watch.mjs --daily     one WhatsApp line: the day's security picture
+//   intrusion-watch.mjs --maintenance <host> --for 3h [--note "clean rebuild"] [--now]
+//                  announce planned work: that box's changes fold into ONE digest per report until the window ends
+//   intrusion-watch.mjs --maintenance-clear <host>
 //   15 9 * * 1    intrusion-watch.mjs --weekly    the security ROUTINE: posture + chores
 //   --init --seed <json>                          create/refresh the registry rows + allow-list
 //   --dry-run                                     print alerts, send nothing
@@ -45,7 +48,7 @@ const opt = (k, d = null) => (ARGS.includes(k) ? ARGS[ARGS.indexOf(k) + 1] : d);
 const DRY = flag("--dry-run");
 const ME = "intrusion-watch";
 const HOST_LABEL = "edgexpert";
-const VERSION = "intrusion-watch-v1.0";
+const VERSION = "intrusion-watch-v1.1"; // v1.1: maintenance windows (folded pages) + egress pages
 const NOW = Date.now();
 const MYT = (d = new Date()) => new Date(d).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour12: false });
 const ago = (iso) => (iso ? Math.round((NOW - new Date(iso).getTime()) / 60000) : Infinity);
@@ -77,6 +80,14 @@ const meta = regRow?.meta || {};
 const allow = meta.allow || { key_fps: [], ips: [], cidrs: ["100.64.0.0/10"], sudo_ok: [], ts_ssh_ok: [] };
 const state = meta.state || { last_alerts: {}, seen: {}, snapshots: {}, acc: {}, history: [] };
 state.acc ||= {}; state.history ||= []; state.last_alerts ||= {}; state.seen ||= {}; state.snapshots ||= {};
+// ── maintenance windows: meta.maintenance = [{host, until, by, note}] ────────
+// During a window, a box's config diffs, package installs, posture regressions and
+// a silent sentinel fold into ONE "🛠 in maintenance" page per sentinel report (every
+// item still listed, crit ones marked). Logins, sudo, Tailscale-SSH and account changes
+// are never folded. Windows expire on their own; the last 7 days stay for the record.
+meta.maintenance = (meta.maintenance || []).filter((w) => new Date(w.until).getTime() > NOW - 7 * 86400e3);
+const inMaint = (host) => meta.maintenance.find((w) => w.host === host && new Date(w.until).getTime() > NOW);
+const folded = {};        // host → lines collected under a window, flushed as one page per report
 const pages = [];         // alerts raised this run
 const notes = [];         // quiet findings for the daily line
 const keyLabel = (fp) => allow.key_fps.find((k) => fp && fp.startsWith(k.fp))?.label;
@@ -85,6 +96,27 @@ const ipLabel = (ip) => {
   if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(clean) || clean.startsWith("fd7a:")) return "tailnet";
   return allow.ips.find((k) => k.ip === clean)?.label;
 };
+
+// ── maintenance CLI ──────────────────────────────────────────────────────────
+if (flag("--maintenance") || flag("--maintenance-clear")) {
+  const clear = flag("--maintenance-clear");
+  const host = opt(clear ? "--maintenance-clear" : "--maintenance");
+  if (!host) { console.error("usage: --maintenance <host> --for 3h [--note text] [--now] | --maintenance-clear <host>"); process.exit(2); }
+  const dm = /^(\d+)([mhd])$/.exec(opt("--for", "3h") || "");
+  if (!clear && !dm) { console.error("--for must look like 45m, 3h or 1d"); process.exit(2); }
+  const ms = clear ? 0 : Number(dm[1]) * { m: 60e3, h: 3600e3, d: 86400e3 }[dm[2]];
+  // The judge reads this row at :x0 and writes {...meta, state} 10–20 s later; a write in that
+  // window is clobbered. Wait for :x2–:x8 unless --now.
+  if (!flag("--now")) { let m = new Date().getMinutes() % 10; while (!(m >= 2 && m <= 8)) { await new Promise((r) => setTimeout(r, 15000)); m = new Date().getMinutes() % 10; } }
+  const { data: fresh } = await brain.from("agent_registry").select("meta").eq("agent_name", ME).maybeSingle();
+  const fm = fresh?.meta || {};
+  const list = (fm.maintenance || []).filter((w) => w.host !== host);
+  if (!clear) list.push({ host, until: new Date(Date.now() + ms).toISOString(), by: process.env.MAINT_BY || `${process.env.USER || "operator"}@${process.env.HOSTNAME || "cli"}`, note: opt("--note", ""), since: new Date().toISOString() });
+  const { error } = await brain.from("agent_registry").update({ meta: { ...fm, maintenance: list } }).eq("agent_name", ME);
+  if (error) { console.error(`[${ME}] maintenance write failed: ${error.message}`); process.exit(1); }
+  console.log(clear ? `[${ME}] maintenance cleared for ${host}` : `[${ME}] maintenance: ${host} until ${MYT(Date.now() + ms)} MYT (${opt("--for", "3h")}) — "${opt("--note", "")}"`);
+  process.exit(0);
+}
 
 // ── init: create/refresh rows from a seed file (IPs stay out of git) ─────────
 if (flag("--init")) {
@@ -190,6 +222,19 @@ async function page(key, emoji, signal, body, { cooldownH = 6, level = "warning"
 function acc(host) { return (state.acc[host] ||= { logins: {}, unknown: 0, sudo: 0, failed: 0, ts_ssh: 0, changes: [], pkg: 0, reboots: 0 }); }
 const fmtList = (arr, n = 6) => arr.slice(0, n).map((l) => `  • ${l}`).join("\n") + (arr.length > n ? `\n  … +${arr.length - n} more` : "");
 const CRIT_SECTIONS = new Set(["authkeys", "sudoers", "preload", "sshd", "suid", "admins", "users"]);
+/** One digest page per sentinel report for a box under maintenance; never SMS (level warning), no cooldown (the report ts dedupes). */
+async function flushMaint(name, host, ts) {
+  const lines = folded[host]; if (!lines?.length) return;
+  const w = inMaint(host) || {};
+  await page(`maint:${name}:${ts}`, "🛠", `${host} in maintenance — ${lines.length} change(s)`, `by ${w.by || "?"} until ${MYT(w.until).slice(0, 17)} MYT${w.note ? ` — ${w.note}` : ""}\n${fmtList(lines, 12)}\n(folded: planned work announced with --maintenance; logins and account changes still page on their own)`, { host, cooldownH: 0, level: "warning" });
+  folded[host] = [];
+}
+/** Body for a new "process -> owner" egress pair, with the live addresses behind it when the sentinel sent them. */
+function egressBody(line, m, host) {
+  const proc = line.split(" -> ")[0];
+  const ips = (m.outbound || []).filter((o) => (o.proc || "?") === proc).map((o) => `${o.ip} ×${o.n}`).slice(0, 5);
+  return `\`${line}\` — a program on ${host} is talking to a network it had not talked to before.${ips.length ? `\nnow: ${ips.join(", ")}` : ""}\nA new provider or a deploy? ignore. Otherwise on ${host}: \`sudo ss -tnp state established\` and find that process.`;
+}
 
 // ── 1. pull-mode hosts (boxes we do not put a brain key on) ─────────────────
 async function pullHosts() {
@@ -222,6 +267,7 @@ async function checkSentinels() {
     if (!hb || ago(hb.reported_at) > thr) {
       // mode "manual" = not installed yet / a laptop that sleeps: listed, never paged, never degrades the judge
       if (r.meta?.mode === "manual") { summary.pending.push(host); continue; }
+      if (inMaint(host)) { (folded[host] ||= []).push(`sentinel silent ${hb ? ago(hb.reported_at) + " min" : ""} — expected while the box is being rebuilt`); summary.pending.push(`${host} (maintenance)`); await flushMaint(name, host, hb?.meta?.ts || String(NOW)); continue; }
       summary.silent.push(host);
       await page(`silent:${name}`, "🚨", `sentinel silent on ${host}`, `No report for ${hb ? ago(hb.reported_at) + " min" : "ever"} (limit ${thr}). A box that stops reporting is either down, cut off, or someone killed the watcher.\nCheck: ssh in, \`~/.naca/sentinel/sentinel.log\`, crontab -l.`, { host, cooldownH: 3, level: "critical" });
       continue;
@@ -260,7 +306,8 @@ async function checkSentinels() {
       if (!allow.ts_ssh_ok?.includes(host)) await page(`tsssh:${name}`, "🚨", `Tailscale SSH session on ${host}`, `Tailscale SSH is supposed to be OFF everywhere since 25 Sep (that is how Todak01 got root).\n${fmtList(ev.ts_ssh, 6)}\nFix: \`sudo tailscale set --ssh=false\` on ${host}, then find who did it in the admin console.`, { host, level: "critical", dry: isTest });
     }
     if (ev.user_changes?.length) await page(`users:${name}`, "🚨", `account change on ${host}`, fmtList(ev.user_changes, 8), { host, level: "critical", dry: isTest });
-    if (ev.pkg_installs?.length) { a.pkg += ev.pkg_installs.length; await page(`pkg:${name}`, "⚠️", `packages installed on ${host}`, `${ev.pkg_installs.length} install(s) — the intruder's first move on tr-home was \`apt install docker\`.\n${fmtList(ev.pkg_installs, 6)}`, { host, cooldownH: 12, dry: isTest }); }
+    if (ev.pkg_installs?.length && inMaint(host)) { a.pkg += ev.pkg_installs.length; (folded[host] ||= []).push(`pkg: ${ev.pkg_installs.length} install(s) — ${ev.pkg_installs.slice(0, 3).map((x) => x.replace(/^\S+ \S+ install /, "")).join(", ")}`); }
+    else if (ev.pkg_installs?.length) { a.pkg += ev.pkg_installs.length; await page(`pkg:${name}`, "⚠️", `packages installed on ${host}`, `${ev.pkg_installs.length} install(s) — the intruder's first move on tr-home was \`apt install docker\`.\n${fmtList(ev.pkg_installs, 6)}`, { host, cooldownH: 12, dry: isTest }); }
     if (m.rebooted) { a.reboots++; notes.push(`${host} rebooted (uptime ${Math.round((m.uptime_s || 0) / 60)} min)`); }
     // config diffs
     for (const sec of m.changed || []) {
@@ -272,12 +319,25 @@ async function checkSentinels() {
       if (r.meta?.mode === "manual" && !crit && sec !== "selftest") { notes.push(`${host}: ${sec} changed (+${d.added.length}/-${d.removed.length}, laptop — not paged)`); continue; }
       // A key that was announced and allow-listed BEFORE it landed is the agreed deploy path — note, don't page.
       if (sec === "authkeys" && d.added.length && !d.removed.length && d.added.every((l) => keyLabel((l.match(/SHA256:\S+/) || [])[0]))) { notes.push(`${host}: authorized key added (allow-listed): ${d.added.map((l) => keyLabel((l.match(/SHA256:\S+/) || [])[0])).join("; ")}`); continue; }
+      if (inMaint(host) && !isTest) { (folded[host] ||= []).push(`${crit ? "🚨 " : ""}${sec} +${d.added.length}/-${d.removed.length}${d.added.length ? ": " + d.added.slice(0, 2).map((l) => l.slice(0, 70)).join(" · ") : ""}`); continue; }
+      if (sec === "egress") {
+        // one page per NEW "process -> network owner" pair (24h cooldown per pair); a pair that stopped is only a note
+        for (const line of d.added) await page(`change:${name}:egress:${line}`, "⚠️", `new outbound destination on ${host}`, egressBody(line, m, host), { host, cooldownH: 24, dry: isTest });
+        if (d.removed.length) notes.push(`${host}: egress stopped → ${d.removed.slice(0, 3).join("; ")}`);
+        continue;
+      }
       const dry = isTest || sec === "selftest";
       const body = `${d.added.length ? `added:\n${fmtList(d.added)}` : ""}${d.removed.length ? `\nremoved:\n${fmtList(d.removed)}` : ""}`.trim() || "(details truncated)";
       await page(`change:${name}:${sec}`, crit ? "🚨" : "⚠️", `${sec} changed on ${host}`, `${body}\n${crit ? "This is a persistence/access surface — verify NOW who did it." : "If this was a deploy, ignore; otherwise check the box."}`, { host, level: crit ? "critical" : "warning", cooldownH: crit ? 2 : 6, dry });
     }
     // posture regressions (facts)
     const f = m.facts || {};
+    if (inMaint(host)) {
+      const bad = [f.password_auth === "yes" && "🚨 password SSH ON", String(f.ts_run_ssh).toLowerCase() === "true" && "🚨 Tailscale SSH server ON", /https?:\/\//.test(f.ts_funnel || "") && "🚨 Tailscale Funnel exposed", f.preload && "🚨 ld.so.preload present"].filter(Boolean);
+      if (bad.length) (folded[host] ||= []).push(...bad);
+      await flushMaint(name, host, m.ts);
+      continue;
+    }
     if (f.password_auth === "yes") await page(`posture:${name}:pw`, "🚨", `password SSH turned ON on ${host}`, "PasswordAuthentication yes — keys-only is the rule since 25 Sep.", { host, level: "critical", cooldownH: 12, dry: isTest });
     if (String(f.ts_run_ssh).toLowerCase() === "true" && !allow.ts_ssh_ok?.includes(host)) await page(`posture:${name}:tsssh`, "🚨", `Tailscale SSH server ON on ${host}`, "RunSSH=true — turn it off: `sudo tailscale set --ssh=false`.", { host, level: "critical", cooldownH: 12, dry: isTest });
     if (/https?:\/\//.test(f.ts_funnel || "")) await page(`posture:${name}:funnel`, "🚨", `Tailscale Funnel exposed on ${host}`, `${f.ts_funnel}\nThe intruder published tr-home to the internet this way. \`tailscale funnel reset\`.`, { host, level: "critical", cooldownH: 12, dry: isTest });

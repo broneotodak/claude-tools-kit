@@ -42,7 +42,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 
-VERSION = "sentinel-v1.1"
+VERSION = "sentinel-v1.2"  # v1.2: egress fingerprint (who talks to which network owner)
 # Same PATH under cron, launchd and an SSH shell — otherwise `sshd -T` / `ss` /
 # `tailscale` resolve differently per launcher and every run diffs the baseline.
 os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin:" + os.environ.get("PATH", "")
@@ -377,7 +377,7 @@ SECTIONS = {
     "users": users, "admins": admins, "authkeys": authkeys, "sudoers": sudoers, "listen": listen, "units": units,
     "cron": cron, "docker": docker, "tailscale": tailscale, "sshd": sshd, "preload": preload, "suid": suid,
     "pm2": pm2, "home_rc": home_rc, "tmp_exec": tmp_exec, "hosts": hosts_file,
-}
+}  # + "egress", registered below where it is defined
 
 
 # ── events since last run ─────────────────────────────────────────────────────
@@ -496,6 +496,85 @@ def outbound():
     return [{"ip": k[0], "proc": k[1], "n": n} for k, n in sorted(agg.items(), key=lambda x: -x[1])[:10]]
 
 
+# ── egress: who talks to whom, by network owner ───────────────────────────────
+# A leftover from a root session that only phones home never shows up in ports,
+# crons or units. This fingerprints "process -> network owner" for every
+# established outbound socket (tailnet/LAN excluded); a NEW pair is a change the
+# judge pages on. Owner = ASN name via Team Cymru (TCP 43), cached 7 days in state.
+ASN_CACHE = {}
+ASN_TTL = 7 * 86400
+
+
+def _cymru(ips):
+    """Bulk ASN lookup via whois.cymru.com. Returns {ip: 'ASNAME (CC)'}; missing entries on failure."""
+    out = {}
+    if not ips:
+        return out
+    import socket
+    try:
+        sock = socket.create_connection(("whois.cymru.com", 43), timeout=6)
+        sock.settimeout(8)
+        sock.sendall(("begin\nverbose\n" + "\n".join(ips) + "\nend\n").encode())
+        buf = b""
+        while True:
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            buf += chunk
+        sock.close()
+    except Exception:
+        return out
+    for line in buf.decode(errors="replace").splitlines():
+        parts = [x.strip() for x in line.split("|")]
+        if len(parts) < 7 or not parts[1] or parts[0].upper().startswith("AS "):
+            continue  # header row "AS | IP | BGP Prefix | CC | Registry | Allocated | AS Name"
+        asn, ip, cc, name = parts[0], parts[1], parts[3], parts[6]
+        short = re.split(r"[,;]| - ", name)[0].strip()[:32] or f"AS{asn}"
+        out[ip] = f"{short} ({cc})" if cc else short
+    return out
+
+
+def asn_owners(ips):
+    now = time.time()
+    need = [ip for ip in set(ips) if not (ASN_CACHE.get(ip) and now - ASN_CACHE[ip].get("t", 0) < ASN_TTL)]
+    if need:
+        for ip, owner in _cymru(sorted(need)[:50]).items():
+            ASN_CACHE[ip] = {"o": owner, "t": now}
+    return {ip: (ASN_CACHE.get(ip) or {}).get("o") or "unresolved" for ip in set(ips)}
+
+
+def _established():
+    """(remote_ip, process) for established TCP sockets; loopback, LAN and tailnet excluded."""
+    pairs = []
+    if IS_MAC:
+        txt = sh("lsof -nP -iTCP -sTCP:ESTABLISHED 2>/dev/null | awk 'NR>1{print $9\" \"$1}'")
+        for l in txt.splitlines():
+            if "->" not in l:
+                continue
+            ip = l.split()[0].split("->")[-1].rsplit(":", 1)[0].strip("[]")
+            pairs.append((ip, l.split()[1]))
+    else:
+        # root (or passwordless sudo) sees every user's process name; otherwise only our own
+        txt = sh("ss -tnpH state established 2>/dev/null", sudo=SUDO and not IS_ROOT) or sh("ss -tnpH state established 2>/dev/null")
+        for l in txt.splitlines():
+            p = l.split()
+            if len(p) < 4:
+                continue
+            ip = p[3].rsplit(":", 1)[0].strip("[]")
+            m = re.search(r'\("([^"]+)"', l)
+            pairs.append((ip, m.group(1) if m else ""))
+    return [(ip, proc) for ip, proc in pairs if ip and not PRIVATE.match(ip) and not LOOPBACK.match(ip) and not ip.startswith("::ffff:100.")]
+
+
+def egress():
+    pairs = _established()
+    owners = asn_owners([ip for ip, _ in pairs])
+    return sorted({f"{proc or '?'} -> {owners.get(ip, 'unresolved')}" for ip, proc in pairs})[:MAX_LIST]
+
+
+SECTIONS["egress"] = egress
+
+
 def boot_id():
     if IS_MAC:
         return sh("sysctl -n kern.boottime").strip()[:40]
@@ -529,6 +608,8 @@ def main():
     except Exception:
         state = {}
     reset = FLAG("--reset") or not state.get("sections")
+    ASN_CACHE.clear()
+    ASN_CACHE.update(state.get("asn_cache") or {})
     since = float(state.get("last_run", now - 600))
     if now - since > 6 * 3600:
         since = now - 6 * 3600  # never replay more than 6h of journal
@@ -545,6 +626,8 @@ def main():
     diff, changed = {}, []
     if not reset:
         for name, lines in sections.items():
+            if name not in prev:
+                continue  # a collector added by an upgrade: baseline it silently on its first run
             a, b = set(prev.get(name, [])), set(lines)
             if a != b:
                 changed.append(name)
@@ -572,7 +655,8 @@ def main():
     status = "degraded" if degraded else "ok"
 
     if not FLAG("--selftest"):
-        state = {"last_run": now, "boot_id": bid, "sections": sections, "name": NAME, "version": VERSION}
+        state = {"last_run": now, "boot_id": bid, "sections": sections, "name": NAME, "version": VERSION,
+                 "asn_cache": {k: v for k, v in ASN_CACHE.items() if now - v.get("t", 0) < ASN_TTL}}
         json.dump(state, open(STATE_FILE, "w"))
         try:
             os.chmod(STATE_FILE, 0o600)
