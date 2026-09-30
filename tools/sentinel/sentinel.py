@@ -563,7 +563,10 @@ def _established():
             ip = p[3].rsplit(":", 1)[0].strip("[]")
             m = re.search(r'\("([^"]+)"', l)
             pairs.append((ip, m.group(1) if m else ""))
-    return [(ip, proc) for ip, proc in pairs if ip and not PRIVATE.match(ip) and not LOOPBACK.match(ip) and not ip.startswith("::ffff:100.")]
+    # pm2 retitles its children ("node /home/neo/…"), and ss cuts names at 15 chars: keep the first token
+    # so the pair key is stable ("node -> CLOUDFLARENET (US)") and does not churn with paths.
+    return [(ip, (proc or "").split()[0] if (proc or "").strip() else "") for ip, proc in pairs
+            if ip and not PRIVATE.match(ip) and not LOOPBACK.match(ip) and not ip.startswith("::ffff:100.")]
 
 
 def egress():
