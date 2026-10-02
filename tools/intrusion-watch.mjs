@@ -18,6 +18,7 @@
 //                  announce planned work: that box's changes fold into ONE digest per report until the window ends
 //   intrusion-watch.mjs --maintenance-clear <host>
 //   15 9 * * 1    intrusion-watch.mjs --weekly    the security ROUTINE: posture + chores
+//   (v1.4, 2026-10-02) also judges the vault read log public.credential_reads
 //   --init --seed <json>                          create/refresh the registry rows + allow-list
 //   --dry-run                                     print alerts, send nothing
 //
@@ -48,7 +49,7 @@ const opt = (k, d = null) => (ARGS.includes(k) ? ARGS[ARGS.indexOf(k) + 1] : d);
 const DRY = flag("--dry-run");
 const ME = "intrusion-watch";
 const HOST_LABEL = "edgexpert";
-const VERSION = "intrusion-watch-v1.3"; // v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
+const VERSION = "intrusion-watch-v1.4"; // v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
 const NOW = Date.now();
 const MYT = (d = new Date()) => new Date(d).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour12: false });
 const ago = (iso) => (iso ? Math.round((NOW - new Date(iso).getTime()) / 60000) : Infinity);
@@ -486,6 +487,52 @@ async function checkBrain() {
   return out;
 }
 
+// ── 7. vault reads (credential_reads, logged by get_credential since 2026-10-02) ─
+// Config: registry meta.vault = { bulk_distinct: 25, never_read: ["netlify_v2", ...], learn_days: 7 }.
+// Learned pairs (key -> secrets it reads) live in state.vault_pairs; a pair seen for the first
+// time AFTER the learning window pages once (warning). Unknown keys / bulk sweeps / a key that
+// must never read the vault page at once (critical).
+async function checkVaultReads() {
+  const cfg = { bulk_distinct: 25, never_read: ["netlify_v2", "legacy_service_role"], learn_days: 7, ...(meta.vault || {}) };
+  state.vault_learn_until ||= new Date(NOW + cfg.learn_days * 86400e3).toISOString();
+  const learning = NOW < new Date(state.vault_learn_until).getTime();
+  const wm = state.vault_reads_watermark || 0;
+  const { data: rows, error } = await brain.from("credential_reads").select("id,read_at,service,credential_type,key_name,key_fp,ip,via").gt("id", wm).order("id").limit(5000);
+  if (error) return { status: `read log unavailable: ${error.message.slice(0, 60)}` };
+  if (!rows?.length) return { status: "ok", reads: 0, learning };
+  state.vault_reads_watermark = rows[rows.length - 1].id;
+  state.vault_pairs ||= {};
+  const byKey = {};
+  for (const r of rows) {
+    const who = r.key_name || (r.via === "sql" ? "direct-sql" : `UNKNOWN:${r.key_fp || "nokey"}`);
+    const sec = `${r.service}/${r.credential_type || "*"}`;
+    (byKey[who] ||= { n: 0, secrets: new Set(), ips: new Set(), fresh: [] }).n++;
+    byKey[who].secrets.add(sec); if (r.ip) byKey[who].ips.add(r.ip);
+    const known = (state.vault_pairs[who] ||= []);
+    if (!known.includes(sec)) { known.push(sec); byKey[who].fresh.push(sec); }
+  }
+  state.daily_vault_reads ||= {};
+  for (const [who, k] of Object.entries(byKey)) {
+    state.daily_vault_reads[who] = (state.daily_vault_reads[who] || 0) + k.n;
+    const ips = [...k.ips].map((ip) => `${ip}${ipLabel(ip) ? ` (${ipLabel(ip)})` : ""}`).join(", ");
+    const list = fmtList([...k.secrets]);
+    if (who.startsWith("UNKNOWN:")) {
+      await page(`vault:unknown:${who}`, "🚨", "vault read by an UNKNOWN key", `A key that is not one of our named machine keys just read ${k.secrets.size} secret(s) from the vault.\nFrom: ${ips || "?"}\n${list}\nIf no new machine key was made today: delete unknown keys in the Supabase dashboard (neo-brain → API keys) NOW, then rotate the secrets listed.`, { level: "critical", cooldownH: 1 });
+    } else if (k.secrets.size > cfg.bulk_distinct) {
+      await page(`vault:bulk:${who}`, "🚨", `vault SWEEP by ${who}: ${k.secrets.size} secrets in one run`, `Key "${who}" read ${k.secrets.size} different secrets within ~10 minutes (normal is a handful). This is what a thief does.\nFrom: ${ips || "?"}\n${list}\nIf this is not you: delete the "${who}" key in the Supabase dashboard (neo-brain → API keys), then rotate.`, { level: "critical", cooldownH: 1 });
+    } else if (cfg.never_read.includes(who)) {
+      await page(`vault:never:${who}`, "🚨", `vault read by "${who}", which must never read it`, `Rule: internet-facing processes never read the vault (Rules.md #17). Key "${who}" read:\n${list}\nFrom: ${ips || "?"}`, { level: "critical", cooldownH: 3 });
+    } else if (who === "direct-sql") {
+      notes.push(`vault read via direct SQL (owner-level): ${[...k.secrets].slice(0, 4).join(", ")}`);
+    }
+    if (k.fresh.length && !who.startsWith("UNKNOWN:")) {
+      if (learning) notes.push(`vault learn: ${who} reads ${k.fresh.slice(0, 3).join(", ")}${k.fresh.length > 3 ? ` +${k.fresh.length - 3}` : ""}`);
+      else await page(`vault:new:${who}:${k.fresh.join(",").slice(0, 80)}`, "⚠️", `${who} read a secret it never read before`, `Key "${who}" read secret(s) it has not used before:\n${fmtList(k.fresh)}\nFrom: ${ips || "?"}\nNew deploy or new tool? ignore (it is learned now). Otherwise find what on that box asked for it.`, { cooldownH: 24 });
+    }
+  }
+  return { status: "ok", reads: rows.length, keys: Object.keys(byKey), learning };
+}
+
 // ── daily line + weekly routine ──────────────────────────────────────────────
 function dailyText(sent) {
   const hosts = Object.keys(state.acc).sort();
@@ -502,6 +549,8 @@ function dailyText(sent) {
   lines.push(`Tailnet: ${t.n ?? "?"} devices (${t.online ?? "?"} online)${t.sshNodes?.length ? ` · SSH-server on: ${t.sshNodes.join(",")}` : ""}${t.stale?.length ? ` · stale >14d: ${t.stale.length}` : ""}`);
   lines.push(`GitHub: ${state.last_github?.status || "?"}${state.last_github?.keys != null ? ` (${state.last_github.keys} keys, ${state.last_github.public} public repos)` : ""} · Hetzner: ${state.last_hetzner?.status || "?"}${state.last_hetzner?.servers != null ? ` (${state.last_hetzner.servers} servers)` : ""}`);
   const b = state.last_brain || {};
+  const vr = Object.entries(state.daily_vault_reads || {}).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${k} ${n}`);
+  lines.push(`Vault reads 24h: ${vr.length ? vr.join(" · ") : "none logged"}${state.last_vault?.learning ? " (learning week — new key/secret pairs noted, not paged)" : ""}`);
   lines.push(`neo-brain: auth users ${b.auth_users ?? "?"} · vault writes ${state.daily_vault_writes || 0} · unknown agents ${b.unknown_agents?.length || 0} · Siti line ${b.siti_line || "?"}`);
   lines.push(`Alerts sent 24h: ${state.daily_pages || 0}${state.selftest_ok ? " · selftest ✓" : ""} · SMS fallback ${meta.alerts?.sms_to ? "armed" : "OFF"} · twin watchdog ${b.watchdog || "?"}`);
   return lines.join("\n");
@@ -536,6 +585,7 @@ async function main() {
     state.last_github = await checkGithub();
     state.last_hetzner = await checkHetzner();
     state.last_brain = await checkBrain();
+    state.last_vault = await checkVaultReads();
   }
   const selftests = pages.filter((p) => p.dry).length;
   if (selftests) state.selftest_ok = new Date().toISOString();
@@ -547,7 +597,7 @@ async function main() {
     state.history.push({ day: MYT().slice(0, 10), logins: hosts.reduce((s, h) => s + Object.values(state.acc[h].logins).reduce((x, n) => x + n, 0), 0), unknown: hosts.reduce((s, h) => s + state.acc[h].unknown, 0), pages: state.daily_pages, changes: hosts.reduce((s, h) => s + state.acc[h].changes.length, 0) });
     state.history = state.history.slice(-14);
     if (DRY) console.log(text); else { const r = await sendWA(text); if (!r.ok) { await queueWA(text); await sendEmail("🛡️ NACA security line", text); } console.log(`[${ME}] daily line ${r.ok ? "sent" : "queued"}`); }
-    state.acc = {}; state.daily_pages = 0; state.daily_vault_writes = 0; state.selftest_ok = null; state.last_daily = new Date().toISOString();
+    state.acc = {}; state.daily_pages = 0; state.daily_vault_writes = 0; state.daily_vault_reads = {}; state.selftest_ok = null; state.last_daily = new Date().toISOString();
   }
   if (mode === "weekly") {
     const text = weeklyText(sent);
@@ -565,7 +615,7 @@ async function main() {
     const { error } = await brain.from("agent_registry").update({ meta: { ...meta, state } }).eq("agent_name", ME);
     if (error) console.error(`[${ME}] state save failed: ${error.message}`);
     const status = sent.silent.length || pages.some((p) => !p.dry && p.level === "critical") ? "degraded" : "ok";
-    await brain.from("agent_heartbeats").upsert({ agent_name: ME, status, reported_at: new Date().toISOString(), meta: { version: VERSION, mode, sentinels: sent, pages: pages.length, selftests, notes: notes.slice(0, 10), github: state.last_github?.status, hetzner: state.last_hetzner?.status, tailnet: state.last_tailnet?.n, siti_line: state.last_brain?.siti_line, last_daily: state.last_daily } }, { onConflict: "agent_name" });
+    await brain.from("agent_heartbeats").upsert({ agent_name: ME, status, reported_at: new Date().toISOString(), meta: { version: VERSION, mode, sentinels: sent, pages: pages.length, selftests, notes: notes.slice(0, 10), github: state.last_github?.status, hetzner: state.last_hetzner?.status, tailnet: state.last_tailnet?.n, siti_line: state.last_brain?.siti_line, vault: { status: state.last_vault?.status, reads: state.last_vault?.reads, learning: state.last_vault?.learning }, last_daily: state.last_daily } }, { onConflict: "agent_name" });
   }
   console.log(`[${new Date().toISOString()}] ${ME} ${mode}: sentinels ${sent.fresh}/${sent.total}${sent.silent.length ? ` silent=${sent.silent.join(",")}` : ""}${sent.pending?.length ? ` pending=${sent.pending.join(",")}` : ""} pages=${pages.length}${selftests ? ` (selftest ${selftests})` : ""} notes=${notes.length}${notes.length ? " → " + notes.slice(0, DRY ? 30 : 4).join(" | ") : ""}`);
 }
