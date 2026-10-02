@@ -1,0 +1,8 @@
+# runtime files the box keeps beside each tool — never committed
+.env
+.env.*
+state.json
+logs/
+node_modules/
+repo/
+*.bak*
