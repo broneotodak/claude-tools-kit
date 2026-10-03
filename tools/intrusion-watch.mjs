@@ -584,16 +584,21 @@ async function checkSpend() {
   const cfg = { daily_warn_usd: 5, daily_crit_usd: 20, ...(meta.spend || {}) };
   const key = await vault("anthropic", "admin_api_key");
   if (!key) return { status: "no admin key (vault anthropic/admin_api_key)" };
-  const start = new Date(NOW); start.setUTCHours(0, 0, 0, 0);
+  // The report is bucketed by UTC day and refuses a window that ends in the same bucket it starts in
+  // ("ending date must be after starting date" when starting_at = today 00:00Z and ending_at defaults to now),
+  // so ask for yesterday → tomorrow and read today's bucket out of it.
+  const today = new Date(NOW); today.setUTCHours(0, 0, 0, 0);
+  const start = new Date(today.getTime() - 864e5), end = new Date(today.getTime() + 864e5);
   try {
-    const r = await fetch(`https://api.anthropic.com/v1/organizations/cost_report?starting_at=${start.toISOString()}&bucket_width=1d`, { headers: { "x-api-key": key, "anthropic-version": "2023-06-01" }, signal: AbortSignal.timeout(15000) });
+    const r = await fetch(`https://api.anthropic.com/v1/organizations/cost_report?starting_at=${start.toISOString()}&ending_at=${end.toISOString()}&bucket_width=1d`, { headers: { "x-api-key": key, "anthropic-version": "2023-06-01" }, signal: AbortSignal.timeout(15000) });
     const j = await r.json();
-    if (!j.data) return { status: `cost_report ${r.status}` };
-    let usd = 0; for (const b of j.data) for (const x of b.results || []) usd += Number(x.amount || 0) / 100;
-    usd = +usd.toFixed(2);
+    if (!j.data) return { status: `cost_report ${r.status}: ${String(j?.error?.message || "").slice(0, 80)}` };
+    let usd = 0, yday = 0;
+    for (const b of j.data) { let sum = 0; for (const x of b.results || []) sum += Number(x.amount || 0) / 100; if (b.starting_at?.slice(0, 10) === today.toISOString().slice(0, 10)) usd += sum; else yday += sum; }
+    usd = +usd.toFixed(2); yday = +yday.toFixed(2);
     if (usd >= cfg.daily_crit_usd) await page("spend:daily-crit", "🚨", `Anthropic API spend today is $${usd}`, `Over the $${cfg.daily_crit_usd} critical line before the day is out (UTC day). On 23 Sep a day like this was a stolen key.\nCheck the Console usage page by key; archive any key you cannot explain; the wallet is the only brake until workspace caps are set.`, { level: "critical", cooldownH: 6 });
     else if (usd >= cfg.daily_warn_usd) await page("spend:daily-warn", "⚠️", `Anthropic API spend today is $${usd}`, `Over the $${cfg.daily_warn_usd} warning line (normal days are under $0.50). Check the Console usage page by key.`, { cooldownH: 12 });
-    return { status: "ok", today_usd: usd, warn: cfg.daily_warn_usd, crit: cfg.daily_crit_usd };
+    return { status: "ok", today_usd: usd, yesterday_usd: yday, warn: cfg.daily_warn_usd, crit: cfg.daily_crit_usd };
   } catch (e) { return { status: `cost_report failed: ${String(e.message || e).slice(0, 60)}` }; }
 }
 async function checkTokens() {
