@@ -49,7 +49,7 @@ const opt = (k, d = null) => (ARGS.includes(k) ? ARGS[ARGS.indexOf(k) + 1] : d);
 const DRY = flag("--dry-run");
 const ME = "intrusion-watch";
 const HOST_LABEL = "edgexpert";
-const VERSION = "intrusion-watch-v1.4"; // v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
+const VERSION = "intrusion-watch-v1.5"; // v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
 const NOW = Date.now();
 const MYT = (d = new Date()) => new Date(d).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour12: false });
 const ago = (iso) => (iso ? Math.round((NOW - new Date(iso).getTime()) / 60000) : Infinity);
@@ -533,6 +533,88 @@ async function checkVaultReads() {
   return { status: "ok", reads: rows.length, keys: Object.keys(byKey), learning };
 }
 
+// ── 8. lanes, spend, tokens (review 2026-10-03, items 1 + 2) ─────────────────
+// Config: registry meta.lanes = { window_h: 48, dev_fail_min: 2, task_fail_min: 3 },
+// meta.spend = { daily_warn_usd: 5, daily_crit_usd: 20 }, meta.tokens = { github: ["edge_cc_pat","readonly_pat"], expiry_warn_days: 14 }.
+// Why: the self-repair lane failed six nights (27 Sep–2 Oct) and nobody was paged — health checks asked "is the process alive",
+// not "did the lane succeed". The 23 Sep $285 day had no alarm faster than the next morning's money line.
+const short = (v, n = 90) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+function failReason(r) {
+  const res = r.result || {};
+  return short(res.output || res.error || res.stderr || res.stop_reason || (typeof res === "string" ? res : ""), 110) || "no reason recorded";
+}
+async function checkLanes() {
+  const cfg = { window_h: 48, dev_fail_min: 2, task_fail_min: 3, ...(meta.lanes || {}) };
+  const since = new Date(NOW - cfg.window_h * 3600e3).toISOString();
+  const { data: rows, error } = await brain.from("agent_commands").select("to_agent,command,status,payload,result,created_at").in("command", ["run_dev_task", "run_task"]).gte("created_at", since).limit(1000);
+  if (error) return { status: `agent_commands unavailable: ${error.message.slice(0, 60)}` };
+  const lanes = {};
+  for (const r of rows || []) {
+    const key = `${r.command}:${r.to_agent}`;
+    const l = (lanes[key] ||= { done: 0, failed: 0, other: 0, reasons: {} });
+    if (r.status === "done") l.done++;
+    else if (r.status === "failed") { l.failed++; const why = failReason(r); l.reasons[why] = (l.reasons[why] || 0) + 1; }
+    else l.other++;
+  }
+  const topReason = (l) => Object.entries(l.reasons).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+  const hint = (why) => /token|auth|401|credential|Username/i.test(why) ? "Looks like a dead credential: fix the token on that box (vault → file → restart), then re-run."
+    : /spend limit|rate.?limit|disabled/i.test(why) ? "Looks like a cap or an org setting: raise/clear it, or move the lane to its own key."
+    : "Open the job rows for that lane and read the last failure.";
+  for (const [key, l] of Object.entries(lanes)) {
+    const [command, agent] = key.split(":");
+    const isDev = command === "run_dev_task";
+    const min = isDev ? cfg.dev_fail_min : cfg.task_fail_min;
+    if (l.failed >= min && l.failed > l.done) {
+      const why = topReason(l);
+      await page(`lane:${command}:${agent}`, "⚠️", `${isDev ? "dev" : "hands"} lane on ${agent} is failing: ${l.failed} failed, ${l.done} done in ${cfg.window_h}h`,
+        `Most common reason: ${why}\n${hint(why)}`, { cooldownH: 12, host: agent.replace(/-cc$/, "") });
+    }
+  }
+  // Siti's self-repair filings specifically (night-shift → run_dev_task). Two consecutive failed nights = the repair lane is dead.
+  const ns = (rows || []).filter((r) => r.command === "run_dev_task" && r.payload?.source === "night-shift").sort((a, b) => a.created_at < b.created_at ? -1 : 1);
+  const lastTwo = ns.slice(-2);
+  if (lastTwo.length === 2 && lastTwo.every((r) => r.status === "failed")) {
+    const why = failReason(lastTwo[1]);
+    await page("lane:self-repair", "⚠️", "Siti's self-repair lane has failed two nights running", `The night shift filed fixes but both jobs failed.\nLast reason: ${why}\n${hint(why)}`, { cooldownH: 24 });
+  }
+  const summary = Object.fromEntries(Object.entries(lanes).map(([k, l]) => [k, `${l.done}/${l.done + l.failed + l.other}`]));
+  return { status: "ok", window_h: cfg.window_h, lanes: summary, self_repair_last: ns.slice(-1)[0]?.status || "none" };
+}
+async function checkSpend() {
+  const cfg = { daily_warn_usd: 5, daily_crit_usd: 20, ...(meta.spend || {}) };
+  const key = await vault("anthropic", "admin_api_key");
+  if (!key) return { status: "no admin key (vault anthropic/admin_api_key)" };
+  const start = new Date(NOW); start.setUTCHours(0, 0, 0, 0);
+  try {
+    const r = await fetch(`https://api.anthropic.com/v1/organizations/cost_report?starting_at=${start.toISOString()}&bucket_width=1d`, { headers: { "x-api-key": key, "anthropic-version": "2023-06-01" }, signal: AbortSignal.timeout(15000) });
+    const j = await r.json();
+    if (!j.data) return { status: `cost_report ${r.status}` };
+    let usd = 0; for (const b of j.data) for (const x of b.results || []) usd += Number(x.amount || 0) / 100;
+    usd = +usd.toFixed(2);
+    if (usd >= cfg.daily_crit_usd) await page("spend:daily-crit", "🚨", `Anthropic API spend today is $${usd}`, `Over the $${cfg.daily_crit_usd} critical line before the day is out (UTC day). On 23 Sep a day like this was a stolen key.\nCheck the Console usage page by key; archive any key you cannot explain; the wallet is the only brake until workspace caps are set.`, { level: "critical", cooldownH: 6 });
+    else if (usd >= cfg.daily_warn_usd) await page("spend:daily-warn", "⚠️", `Anthropic API spend today is $${usd}`, `Over the $${cfg.daily_warn_usd} warning line (normal days are under $0.50). Check the Console usage page by key.`, { cooldownH: 12 });
+    return { status: "ok", today_usd: usd, warn: cfg.daily_warn_usd, crit: cfg.daily_crit_usd };
+  } catch (e) { return { status: `cost_report failed: ${String(e.message || e).slice(0, 60)}` }; }
+}
+async function checkTokens() {
+  const cfg = { github: ["edge_cc_pat", "readonly_pat"], expiry_warn_days: 14, ...(meta.tokens || {}) };
+  const out = {};
+  for (const t of cfg.github) {
+    const tok = await vault("github", t);
+    if (!tok) { out[t] = "missing"; continue; }
+    try {
+      const r = await fetch("https://api.github.com/user", { headers: { Authorization: `Bearer ${tok}`, "User-Agent": "intrusion-watch" }, signal: AbortSignal.timeout(10000) });
+      const exp = r.headers.get("github-authentication-token-expiration");
+      if (r.status === 401) { out[t] = "DEAD"; await page(`token:github:${t}`, "🚨", `GitHub token ${t} is dead (401)`, "Every hand that clones or opens PRs with it is failing silently. Mint a replacement, vault it, install it on the box, restart the hand, prove a clone.", { level: "critical", cooldownH: 24 }); continue; }
+      if (r.status !== 200) { out[t] = `http ${r.status}`; continue; }
+      const days = exp ? Math.round((new Date(exp) - NOW) / 864e5) : null;
+      out[t] = days === null ? "ok (no expiry)" : `ok (${days}d left)`;
+      if (days !== null && days <= cfg.expiry_warn_days) await page(`token:github:${t}:expiry`, "⚠️", `GitHub token ${t} expires in ${days} day(s)`, "Mint the replacement now and install it on the box before it lapses.", { cooldownH: 48 });
+    } catch (e) { out[t] = `check failed: ${String(e.message || e).slice(0, 40)}`; }
+  }
+  return out;
+}
+
 // ── daily line + weekly routine ──────────────────────────────────────────────
 function dailyText(sent) {
   const hosts = Object.keys(state.acc).sort();
@@ -551,6 +633,9 @@ function dailyText(sent) {
   const b = state.last_brain || {};
   const vr = Object.entries(state.daily_vault_reads || {}).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${k} ${n}`);
   lines.push(`Vault reads 24h: ${vr.length ? vr.join(" · ") : "none logged"}${state.last_vault?.learning ? " (learning week — new key/secret pairs noted, not paged)" : ""}`);
+  const ln = state.last_lanes?.lanes || {};
+  lines.push(`Lanes ${state.last_lanes?.window_h || 48}h (done/total): ${Object.entries(ln).map(([k, v]) => `${k.replace("run_dev_task", "dev").replace("run_task", "hands")} ${v}`).join(" · ") || "no jobs"} · self-repair last: ${state.last_lanes?.self_repair_last || "?"}`);
+  lines.push(`API spend today: ${state.last_spend?.today_usd != null ? "$" + state.last_spend.today_usd : state.last_spend?.status || "?"} (warn $${state.last_spend?.warn ?? 5} · crit $${state.last_spend?.crit ?? 20}) · GitHub tokens: ${Object.entries(state.last_tokens || {}).map(([k, v]) => `${k} ${v}`).join(", ") || "?"}`);
   lines.push(`neo-brain: auth users ${b.auth_users ?? "?"} · vault writes ${state.daily_vault_writes || 0} · unknown agents ${b.unknown_agents?.length || 0} · Siti line ${b.siti_line || "?"}`);
   lines.push(`Alerts sent 24h: ${state.daily_pages || 0}${state.selftest_ok ? " · selftest ✓" : ""} · SMS fallback ${meta.alerts?.sms_to ? "armed" : "OFF"} · twin watchdog ${b.watchdog || "?"}`);
   return lines.join("\n");
@@ -586,6 +671,9 @@ async function main() {
     state.last_hetzner = await checkHetzner();
     state.last_brain = await checkBrain();
     state.last_vault = await checkVaultReads();
+    state.last_lanes = await checkLanes();
+    state.last_spend = await checkSpend();
+    state.last_tokens = await checkTokens();
   }
   const selftests = pages.filter((p) => p.dry).length;
   if (selftests) state.selftest_ok = new Date().toISOString();
@@ -615,7 +703,7 @@ async function main() {
     const { error } = await brain.from("agent_registry").update({ meta: { ...meta, state } }).eq("agent_name", ME);
     if (error) console.error(`[${ME}] state save failed: ${error.message}`);
     const status = sent.silent.length || pages.some((p) => !p.dry && p.level === "critical") ? "degraded" : "ok";
-    await brain.from("agent_heartbeats").upsert({ agent_name: ME, status, reported_at: new Date().toISOString(), meta: { version: VERSION, mode, sentinels: sent, pages: pages.length, selftests, notes: notes.slice(0, 10), github: state.last_github?.status, hetzner: state.last_hetzner?.status, tailnet: state.last_tailnet?.n, siti_line: state.last_brain?.siti_line, vault: { status: state.last_vault?.status, reads: state.last_vault?.reads, learning: state.last_vault?.learning }, last_daily: state.last_daily } }, { onConflict: "agent_name" });
+    await brain.from("agent_heartbeats").upsert({ agent_name: ME, status, reported_at: new Date().toISOString(), meta: { version: VERSION, mode, sentinels: sent, pages: pages.length, selftests, notes: notes.slice(0, 10), github: state.last_github?.status, hetzner: state.last_hetzner?.status, tailnet: state.last_tailnet?.n, siti_line: state.last_brain?.siti_line, vault: { status: state.last_vault?.status, reads: state.last_vault?.reads, learning: state.last_vault?.learning }, lanes: state.last_lanes, spend: state.last_spend, tokens: state.last_tokens, last_daily: state.last_daily } }, { onConflict: "agent_name" });
   }
   console.log(`[${new Date().toISOString()}] ${ME} ${mode}: sentinels ${sent.fresh}/${sent.total}${sent.silent.length ? ` silent=${sent.silent.join(",")}` : ""}${sent.pending?.length ? ` pending=${sent.pending.join(",")}` : ""} pages=${pages.length}${selftests ? ` (selftest ${selftests})` : ""} notes=${notes.length}${notes.length ? " → " + notes.slice(0, DRY ? 30 : 4).join(" | ") : ""}`);
 }
