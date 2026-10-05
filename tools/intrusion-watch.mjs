@@ -49,7 +49,7 @@ const opt = (k, d = null) => (ARGS.includes(k) ? ARGS[ARGS.indexOf(k) + 1] : d);
 const DRY = flag("--dry-run");
 const ME = "intrusion-watch";
 const HOST_LABEL = "edgexpert";
-const VERSION = "intrusion-watch-v1.5"; // v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
+const VERSION = "intrusion-watch-v1.6"; // v1.6: public-door probes (naca-mcp, webhook, cockpit, twin-api) · v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
 const NOW = Date.now();
 const MYT = (d = new Date()) => new Date(d).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour12: false });
 const ago = (iso) => (iso ? Math.round((NOW - new Date(iso).getTime()) / 60000) : Infinity);
@@ -640,6 +640,7 @@ function dailyText(sent) {
   lines.push(`Vault reads 24h: ${vr.length ? vr.join(" · ") : "none logged"}${state.last_vault?.learning ? " (learning week — new key/secret pairs noted, not paged)" : ""}`);
   const ln = state.last_lanes?.lanes || {};
   lines.push(`Lanes ${state.last_lanes?.window_h || 48}h (done/total): ${Object.entries(ln).map(([k, v]) => `${k.replace("run_dev_task", "dev").replace("run_task", "hands")} ${v}`).join(" · ") || "no jobs"} · self-repair last: ${state.last_lanes?.self_repair_last || "?"}`);
+  { const d = state.last_doors; lines.push(`Doors: ${d ? `${d.up}/${d.total} up` : "?"}${d?.down?.length ? ` · DOWN: ${d.down.map((k) => `${k} (${d.doors[k].replace("DOWN ", "")})`).join(", ")}` : ""}`); }
   lines.push(`API spend today: ${state.last_spend?.today_usd != null ? "$" + state.last_spend.today_usd : state.last_spend?.status || "?"} (warn $${state.last_spend?.warn ?? 5} · crit $${state.last_spend?.crit ?? 20}) · GitHub tokens: ${Object.entries(state.last_tokens || {}).map(([k, v]) => `${k} ${v}`).join(", ") || "?"}`);
   lines.push(`neo-brain: auth users ${b.auth_users ?? "?"} · vault writes ${state.daily_vault_writes || 0} · unknown agents ${b.unknown_agents?.length || 0} · Siti line ${b.siti_line || "?"}`);
   lines.push(`Alerts sent 24h: ${state.daily_pages || 0}${state.selftest_ok ? " · selftest ✓" : ""} · SMS fallback ${meta.alerts?.sms_to ? "armed" : "OFF"} · twin watchdog ${b.watchdog || "?"}`);
@@ -663,6 +664,55 @@ function weeklyText(sent) {
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
+// Public doors (5 Oct 2026). naca-mcp.neotodak.com and the GitHub webhook door died with Hermes on 25 Sep
+// and nobody noticed for 11 days: the back ends on EdgeXpert were fine, the front doors were gone. Probe
+// each door over the public internet every tick. "Up" = answers HTTPS with one of the expected statuses
+// (a 401 from a PIN gate or a 400 from the webhook's header check is the door working). Two failed ticks in
+// a row (≈20 min) page once per 12 h with what to check; recovery shows in the daily line. Override the list
+// with registry meta.doors = [{name,url,method?,ok?,fix?}] and thresholds with meta.doors_cfg.
+const DEFAULT_DOORS = [
+  { name: "naca-mcp (claude.ai Siti tools)", url: "https://naca-mcp.neotodak.com/.well-known/oauth-authorization-server", ok: [200], fix: "neo-twin Caddy → EdgeXpert :3906 (pm2 naca-mcp-bridge-http)" },
+  { name: "github webhook", url: "https://naca.neotodak.com/api/webhooks/github", method: "POST", ok: [400, 401], fix: "neo-twin Caddy → EdgeXpert :3100 (pm2 naca-backend); 13 repos deliver here, merges stop deploying while it is down" },
+  { name: "cockpit (cc.neotodak.com)", url: "https://cc.neotodak.com/baca/", ok: [200, 302, 401], fix: "neo-twin Caddy → EdgeXpert :3620 (pm2 cockpit-door)" },
+  { name: "twin-api", url: "https://twin-api.neotodak.com/", ok: [200, 404], fix: "pm2 twin-relay on neo-twin :3210 (user neotwin)" },
+];
+async function probeDoor(d) {
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), (d.timeout_s || 20) * 1000);
+  const t0 = Date.now();
+  try {
+    const r = await fetch(d.url, { method: d.method || "GET", signal: ctl.signal, redirect: "manual", headers: { "user-agent": `${ME}/door-probe`, "content-type": "application/json" }, body: d.method === "POST" ? "{}" : undefined });
+    return { up: (d.ok || [200]).includes(r.status), status: r.status, ms: Date.now() - t0 };
+  } catch (e) {
+    return { up: false, status: 0, ms: Date.now() - t0, err: String(e?.cause?.code || e?.name || e?.message || e).slice(0, 60) };
+  } finally { clearTimeout(timer); }
+}
+async function checkDoors() {
+  const doors = Array.isArray(meta.doors) && meta.doors.length ? meta.doors : DEFAULT_DOORS;
+  const cfg = { fail_ticks: 2, cooldown_h: 12, ...(meta.doors_cfg || {}) };
+  state.doors ||= {};
+  const out = {};
+  for (const d of doors) {
+    const r = await probeDoor(d);
+    const st = (state.doors[d.name] ||= { fails: 0, last_ok_at: null, last_status: null });
+    st.last_status = `${r.status || r.err || "?"} ${r.ms}ms`;
+    if (r.up) {
+      if (st.fails >= cfg.fail_ticks) st.recovered_at = new Date().toISOString();
+      st.fails = 0; st.last_ok_at = new Date().toISOString();
+    } else {
+      st.fails++;
+      if (st.fails >= cfg.fail_ticks) {
+        await page(`door:${d.name}`, "🚪", `public door DOWN: ${d.name}`,
+          `${d.url} has failed ${st.fails} checks in a row (last answer: ${st.last_status}).\n` +
+          `Last seen up: ${st.last_ok_at ? st.last_ok_at.slice(0, 16).replace("T", " ") + "Z" : "never since the judge started watching"}.\n` +
+          `What to check: ${d.fix || "the Caddy site on neo-twin and the back end on EdgeXpert"}. The 25 Sep lesson: a dead front door looks like silence, not an error.`,
+          { cooldownH: cfg.cooldown_h, host: "neo-twin" });
+      }
+    }
+    out[d.name] = r.up ? "up" : `DOWN (${st.last_status})`;
+  }
+  const down = Object.entries(out).filter(([, v]) => v !== "up").map(([k]) => k);
+  return { status: down.length ? `${down.length} down` : "ok", up: doors.length - down.length, total: doors.length, doors: out, down };
+}
 async function main() {
   const mode = flag("--daily") ? "daily" : flag("--weekly") ? "weekly" : "watch";
   await pullHosts();
@@ -679,6 +729,7 @@ async function main() {
     state.last_lanes = await checkLanes();
     state.last_spend = await checkSpend();
     state.last_tokens = await checkTokens();
+    state.last_doors = await checkDoors();
   }
   const selftests = pages.filter((p) => p.dry).length;
   if (selftests) state.selftest_ok = new Date().toISOString();
@@ -708,7 +759,7 @@ async function main() {
     const { error } = await brain.from("agent_registry").update({ meta: { ...meta, state } }).eq("agent_name", ME);
     if (error) console.error(`[${ME}] state save failed: ${error.message}`);
     const status = sent.silent.length || pages.some((p) => !p.dry && p.level === "critical") ? "degraded" : "ok";
-    await brain.from("agent_heartbeats").upsert({ agent_name: ME, status, reported_at: new Date().toISOString(), meta: { version: VERSION, mode, sentinels: sent, pages: pages.length, selftests, notes: notes.slice(0, 10), github: state.last_github?.status, hetzner: state.last_hetzner?.status, tailnet: state.last_tailnet?.n, siti_line: state.last_brain?.siti_line, vault: { status: state.last_vault?.status, reads: state.last_vault?.reads, learning: state.last_vault?.learning }, lanes: state.last_lanes, spend: state.last_spend, tokens: state.last_tokens, last_daily: state.last_daily } }, { onConflict: "agent_name" });
+    await brain.from("agent_heartbeats").upsert({ agent_name: ME, status, reported_at: new Date().toISOString(), meta: { version: VERSION, doors: state.last_doors?.status, doors_down: state.last_doors?.down, mode, sentinels: sent, pages: pages.length, selftests, notes: notes.slice(0, 10), github: state.last_github?.status, hetzner: state.last_hetzner?.status, tailnet: state.last_tailnet?.n, siti_line: state.last_brain?.siti_line, vault: { status: state.last_vault?.status, reads: state.last_vault?.reads, learning: state.last_vault?.learning }, lanes: state.last_lanes, spend: state.last_spend, tokens: state.last_tokens, last_daily: state.last_daily } }, { onConflict: "agent_name" });
   }
   console.log(`[${new Date().toISOString()}] ${ME} ${mode}: sentinels ${sent.fresh}/${sent.total}${sent.silent.length ? ` silent=${sent.silent.join(",")}` : ""}${sent.pending?.length ? ` pending=${sent.pending.join(",")}` : ""} pages=${pages.length}${selftests ? ` (selftest ${selftests})` : ""} notes=${notes.length}${notes.length ? " → " + notes.slice(0, DRY ? 30 : 4).join(" | ") : ""}`);
 }
