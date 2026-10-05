@@ -49,7 +49,7 @@ const opt = (k, d = null) => (ARGS.includes(k) ? ARGS[ARGS.indexOf(k) + 1] : d);
 const DRY = flag("--dry-run");
 const ME = "intrusion-watch";
 const HOST_LABEL = "edgexpert";
-const VERSION = "intrusion-watch-v1.6"; // v1.6: public-door probes (naca-mcp, webhook, cockpit, twin-api) · v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
+const VERSION = "intrusion-watch-v1.7"; // v1.7: OpenAI key expiry + tr-office PAT in token watch · v1.6: public-door probes (naca-mcp, webhook, cockpit, twin-api) · v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
 const NOW = Date.now();
 const MYT = (d = new Date()) => new Date(d).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour12: false });
 const ago = (iso) => (iso ? Math.round((NOW - new Date(iso).getTime()) / 60000) : Infinity);
@@ -602,7 +602,7 @@ async function checkSpend() {
   } catch (e) { return { status: `cost_report failed: ${String(e.message || e).slice(0, 60)}` }; }
 }
 async function checkTokens() {
-  const cfg = { github: ["edge_cc_pat", "readonly_pat"], expiry_warn_days: 14, ...(meta.tokens || {}) };
+  const cfg = { github: ["edge_cc_pat", "readonly_pat", "tr_office_cc_pat"], openai_admin: "admin_api_key_2026_10", expiry_warn_days: 14, ...(meta.tokens || {}) };
   const out = {};
   for (const t of cfg.github) {
     const tok = await vault("github", t);
@@ -617,6 +617,29 @@ async function checkTokens() {
       if (days !== null && days <= cfg.expiry_warn_days) await page(`token:github:${t}:expiry`, "⚠️", `GitHub token ${t} expires in ${days} day(s)`, "Mint the replacement now and install it on the box before it lapses.", { cooldownH: 48 });
     } catch (e) { out[t] = `check failed: ${String(e.message || e).slice(0, 40)}`; }
   }
+  // OpenAI API keys (5 Oct 2026): the fleet key was created with the Console's 1-day expiry default and
+  // would have died the afternoon after it was rolled out everywhere. Read every active project's keys
+  // through the Admin API and page while any one is inside the warning window or already dead.
+  const admin = cfg.openai_admin ? await vault("openai", cfg.openai_admin) : null;
+  if (!admin) { out["openai"] = `no admin key (vault openai/${cfg.openai_admin})`; return out; }
+  try {
+    const oh = { Authorization: `Bearer ${admin}` }, sig = AbortSignal.timeout(15000);
+    const projects = await (await fetch("https://api.openai.com/v1/organization/projects?limit=50", { headers: oh, signal: sig })).json();
+    for (const p of projects.data || []) {
+      if (p.status !== "active") continue;
+      const keys = await (await fetch(`https://api.openai.com/v1/organization/projects/${p.id}/api_keys?limit=100`, { headers: oh, signal: sig })).json();
+      for (const k of keys.data || []) {
+        const label = `openai:${k.name || k.id}`;
+        if (!k.expires_at) { out[label] = "ok (no expiry)"; continue; }
+        const days = Math.round((k.expires_at * 1000 - NOW) / 864e5);
+        out[label] = days < 0 ? "EXPIRED" : `ok (${days}d left)`;
+        if (days <= cfg.expiry_warn_days) await page(`token:openai:${k.id}:expiry`, days < 0 ? "🚨" : "⚠️",
+          `OpenAI key ${k.name || k.id} (project ${p.name}) ${days < 0 ? "has EXPIRED" : `expires in ${days} day(s)`}`,
+          "Everything on it stops: Astra writer, Studio, the crypto brief, ClaudeN. In the OpenAI Console open the key and set Expiration to Never (or mint a replacement with Never, vault-put it, and have CC roll it out). Rule: never create an OpenAI key with the default 1-day expiry.",
+          { cooldownH: 24 });
+      }
+    }
+  } catch (e) { out["openai"] = `check failed: ${String(e.message || e).slice(0, 40)}`; }
   return out;
 }
 
@@ -641,7 +664,7 @@ function dailyText(sent) {
   const ln = state.last_lanes?.lanes || {};
   lines.push(`Lanes ${state.last_lanes?.window_h || 48}h (done/total): ${Object.entries(ln).map(([k, v]) => `${k.replace("run_dev_task", "dev").replace("run_task", "hands")} ${v}`).join(" · ") || "no jobs"} · self-repair last: ${state.last_lanes?.self_repair_last || "?"}`);
   { const d = state.last_doors; lines.push(`Doors: ${d ? `${d.up}/${d.total} up` : "?"}${d?.down?.length ? ` · DOWN: ${d.down.map((k) => `${k} (${d.doors[k].replace("DOWN ", "")})`).join(", ")}` : ""}`); }
-  lines.push(`API spend today: ${state.last_spend?.today_usd != null ? "$" + state.last_spend.today_usd : state.last_spend?.status || "?"} (warn $${state.last_spend?.warn ?? 5} · crit $${state.last_spend?.crit ?? 20}) · GitHub tokens: ${Object.entries(state.last_tokens || {}).map(([k, v]) => `${k} ${v}`).join(", ") || "?"}`);
+  lines.push(`API spend today: ${state.last_spend?.today_usd != null ? "$" + state.last_spend.today_usd : state.last_spend?.status || "?"} (warn $${state.last_spend?.warn ?? 5} · crit $${state.last_spend?.crit ?? 20}) · GitHub tokens: ${Object.entries(state.last_tokens || {}).filter(([k]) => !k.startsWith("openai")).map(([k, v]) => `${k} ${v}`).join(", ") || "?"} · OpenAI keys: ${Object.entries(state.last_tokens || {}).filter(([k]) => k.startsWith("openai")).map(([k, v]) => `${k.replace(/^openai:?/, "") || "admin"} ${v}`).join(", ") || "?"}`);
   lines.push(`neo-brain: auth users ${b.auth_users ?? "?"} · vault writes ${state.daily_vault_writes || 0} · unknown agents ${b.unknown_agents?.length || 0} · Siti line ${b.siti_line || "?"}`);
   lines.push(`Alerts sent 24h: ${state.daily_pages || 0}${state.selftest_ok ? " · selftest ✓" : ""} · SMS fallback ${meta.alerts?.sms_to ? "armed" : "OFF"} · twin watchdog ${b.watchdog || "?"}`);
   return lines.join("\n");
