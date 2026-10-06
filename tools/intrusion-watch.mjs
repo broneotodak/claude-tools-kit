@@ -49,7 +49,7 @@ const opt = (k, d = null) => (ARGS.includes(k) ? ARGS[ARGS.indexOf(k) + 1] : d);
 const DRY = flag("--dry-run");
 const ME = "intrusion-watch";
 const HOST_LABEL = "edgexpert";
-const VERSION = "intrusion-watch-v1.8"; // v1.8: vault human_keys (Vault iPhone app: new-secret reads are notes, sweep pages at >10) · v1.7: OpenAI key expiry + tr-office PAT in token watch · v1.6: public-door probes (naca-mcp, webhook, cockpit, twin-api) · v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
+const VERSION = "intrusion-watch-v1.9"; // v1.9: allow.egress_procs — processes whose destinations vary by design (tor) note instead of page · v1.8: vault human_keys (Vault iPhone app: new-secret reads are notes, sweep pages at >10) · v1.7: OpenAI key expiry + tr-office PAT in token watch · v1.6: public-door probes (naca-mcp, webhook, cockpit, twin-api) · v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
 const NOW = Date.now();
 const MYT = (d = new Date()) => new Date(d).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour12: false });
 const ago = (iso) => (iso ? Math.round((NOW - new Date(iso).getTime()) / 60000) : Infinity);
@@ -98,6 +98,11 @@ const KNOWN_EGRESS_OWNERS = (allow.egress_owners && allow.egress_owners.length) 
   "FASTLY", "MICROSOFT", "APPLE-ENGINEERING", "GITHUB", "TWILIO", "HETZNER", "TAILSCALE", "ORACLE-BMC", "DIGITALOCEAN",
   "ELEVENLABS", "OPENAI", "AKAMAI-LINODE-AP",
 ];
+// Processes whose outbound destinations change by design (a Tor client builds a new circuit through new
+// relays every tick — 6 Oct 2026 paged Neo twice for tor on edge, installed on purpose 12 Sep for the @qwen lane).
+// Extend without code: registry meta.allow.egress_procs = ["tor", …]. The pair is still noted in the daily line.
+const EXPECTED_EGRESS_PROCS = (allow.egress_procs && allow.egress_procs.length) ? allow.egress_procs : ["tor"];
+const expectedProc = (line) => EXPECTED_EGRESS_PROCS.includes((line.split(" -> ")[0] || "").trim().toLowerCase());
 const knownOwner = (line) => { const o = (line.split(" -> ")[1] || "").toUpperCase(); return KNOWN_EGRESS_OWNERS.some((k) => o.startsWith(k.toUpperCase())); };
 const pages = [];         // alerts raised this run
 const notes = [];         // quiet findings for the daily line
@@ -344,6 +349,7 @@ async function checkSentinels() {
         // one page per NEW "process -> network owner" pair (24h cooldown per pair); a pair that stopped is only a note
         for (const line of d.added) {
           if (knownOwner(line)) { notes.push(`${host}: new outbound ${line} (known provider — not paged)`); continue; }
+          if (expectedProc(line)) { notes.push(`${host}: new outbound ${line} (${line.split(" -> ")[0].trim()} changes destinations by design — not paged)`); continue; }
           await page(`change:${name}:egress:${line}`, "⚠️", `new outbound destination on ${host}`, egressBody(line, m, host), { host, cooldownH: 24, dry: isTest });
         }
         if (d.removed.length) notes.push(`${host}: egress stopped → ${d.removed.slice(0, 3).join("; ")}`);
