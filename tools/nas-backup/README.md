@@ -58,3 +58,16 @@ tail -5 /volume1/docker/backups/neo-brain/nas-backup.log
 - CLAW split-brain guard: if CLAW is ever powered on again, DISABLE its
   `ai.openclaw.backup-sync` launchd job first (see the CLAW first-boot
   checklist memory in neo-brain).
+
+## Restore rehearsal + schema (6 Oct 2026)
+
+- `sh restore-rehearsal.sh <YYYY-MM-DD> [--keep]` on the NAS: loads one night's export into a throwaway
+  `pgvector/pgvector:pg17` container, checks every table's count against the manifest, runs a vector
+  query, writes `rehearsal-<date>.md` beside the backups, tears down. First run 6 Oct 2026: 58/58, 2 m 27 s.
+- Each backup folder also carries `schema.openapi.json` (column types + PKs from PostgREST) — what the
+  rehearsal rebuilds the tables from.
+- `node tools/nas-backup/schema-dump.mjs --out schema-full.sql --push nas-remote:/volume1/docker/backups/neo-brain`
+  on **neo-mbp** (the owner token lives only in its Keychain) writes the FULL public-schema DDL — tables
+  with defaults/constraints, FKs, indexes, functions (`get_credential`, `match_memories_hybrid_v2`, …),
+  triggers, RLS policies, grants — as `schema-full-latest.sql` + a dated copy on the NAS. Read-only.
+  Re-run after schema changes (the dump holds no secret values; checked before pushing).
