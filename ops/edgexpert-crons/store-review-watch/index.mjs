@@ -11,7 +11,7 @@ const CTK = "/home/neo/Projects/claude-tools-kit";
 for (const line of readFileSync(resolve(CTK, ".env"), "utf8").split("\n")) { const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/); if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^"(.*)"$/, "$1"); }
 const { NeoBrain } = await import(resolve(CTK, "packages/memory/src/index.js"));
 const nb = new NeoBrain({ agent: "store-review-watch" });
-const APP = { name: "police sentri : RUSH", id: "6812404214", version: "b6edffaa-fa17-4ceb-a547-d734d483e4de", submission: "54ac7b10-4785-4558-b7c1-73e63f637ddc", keyId: "TLWW549R3M", issuer: "6494819c-c63d-4082-a571-3a18bba77615" };
+const APP = { name: "police sentri : RUSH", id: "6812404214", version: "b6edffaa-fa17-4ceb-a547-d734d483e4de", submission: "54ac7b10-4785-4558-b7c1-73e63f637ddc", keyId: "4WGP8QU8F4", issuer: "6494819c-c63d-4082-a571-3a18bba77615" };
 const NEO = "60177519610";
 const stateFile = resolve(here, "state.json"); const logsDir = resolve(here, "logs"); mkdirSync(logsDir, { recursive: true });
 const log = (...a) => console.log(new Date().toISOString(), ...a);
