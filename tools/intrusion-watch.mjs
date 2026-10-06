@@ -49,7 +49,7 @@ const opt = (k, d = null) => (ARGS.includes(k) ? ARGS[ARGS.indexOf(k) + 1] : d);
 const DRY = flag("--dry-run");
 const ME = "intrusion-watch";
 const HOST_LABEL = "edgexpert";
-const VERSION = "intrusion-watch-v1.7"; // v1.7: OpenAI key expiry + tr-office PAT in token watch · v1.6: public-door probes (naca-mcp, webhook, cockpit, twin-api) · v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
+const VERSION = "intrusion-watch-v1.8"; // v1.8: vault human_keys (Vault iPhone app: new-secret reads are notes, sweep pages at >10) · v1.7: OpenAI key expiry + tr-office PAT in token watch · v1.6: public-door probes (naca-mcp, webhook, cockpit, twin-api) · v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
 const NOW = Date.now();
 const MYT = (d = new Date()) => new Date(d).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour12: false });
 const ago = (iso) => (iso ? Math.round((NOW - new Date(iso).getTime()) / 60000) : Infinity);
@@ -493,7 +493,9 @@ async function checkBrain() {
 // time AFTER the learning window pages once (warning). Unknown keys / bulk sweeps / a key that
 // must never read the vault page at once (critical).
 async function checkVaultReads() {
-  const cfg = { bulk_distinct: 25, never_read: ["netlify_v2", "legacy_service_role"], learn_days: 7, ...(meta.vault || {}) };
+  // human_keys: keys a person drives by hand (the Vault iPhone app). Each read already cost a Face ID prompt, so a new
+  // secret is a daily-line note, not a page; a sweep threshold far lower than a machine's still pages at once.
+  const cfg = { bulk_distinct: 25, never_read: ["netlify_v2", "legacy_service_role"], learn_days: 7, human_keys: ["vault_app_iphone"], human_bulk: 10, ...(meta.vault || {}) };
   state.vault_learn_until ||= new Date(NOW + cfg.learn_days * 86400e3).toISOString();
   const learning = NOW < new Date(state.vault_learn_until).getTime();
   const wm = state.vault_reads_watermark || 0;
@@ -518,7 +520,7 @@ async function checkVaultReads() {
     const list = fmtList([...k.secrets]);
     if (who.startsWith("UNKNOWN:")) {
       await page(`vault:unknown:${who}`, "🚨", "vault read by an UNKNOWN key", `A key that is not one of our named machine keys just read ${k.secrets.size} secret(s) from the vault.\nFrom: ${ips || "?"}\n${list}\nIf no new machine key was made today: delete unknown keys in the Supabase dashboard (neo-brain → API keys) NOW, then rotate the secrets listed.`, { level: "critical", cooldownH: 1 });
-    } else if (k.secrets.size > cfg.bulk_distinct) {
+    } else if (k.secrets.size > (cfg.human_keys.includes(who) ? cfg.human_bulk : cfg.bulk_distinct)) {
       await page(`vault:bulk:${who}`, "🚨", `vault SWEEP by ${who}: ${k.secrets.size} secrets in one run`, `Key "${who}" read ${k.secrets.size} different secrets within ~10 minutes (normal is a handful). This is what a thief does.\nFrom: ${ips || "?"}\n${list}\nIf this is not you: delete the "${who}" key in the Supabase dashboard (neo-brain → API keys), then rotate.`, { level: "critical", cooldownH: 1 });
     } else if (cfg.never_read.includes(who)) {
       await page(`vault:never:${who}`, "🚨", `vault read by "${who}", which must never read it`, `Rule: internet-facing processes never read the vault (Rules.md #17). Key "${who}" read:\n${list}\nFrom: ${ips || "?"}`, { level: "critical", cooldownH: 3 });
@@ -526,7 +528,8 @@ async function checkVaultReads() {
       notes.push(`vault read via direct SQL (owner-level): ${[...k.secrets].slice(0, 4).join(", ")}`);
     }
     if (k.fresh.length && !who.startsWith("UNKNOWN:")) {
-      if (learning) notes.push(`vault learn: ${who} reads ${k.fresh.slice(0, 3).join(", ")}${k.fresh.length > 3 ? ` +${k.fresh.length - 3}` : ""}`);
+      if (cfg.human_keys.includes(who)) notes.push(`vault by hand: ${who} opened ${k.fresh.slice(0, 3).join(", ")}${k.fresh.length > 3 ? ` +${k.fresh.length - 3}` : ""} from ${ips || "?"}`);
+      else if (learning) notes.push(`vault learn: ${who} reads ${k.fresh.slice(0, 3).join(", ")}${k.fresh.length > 3 ? ` +${k.fresh.length - 3}` : ""}`);
       else await page(`vault:new:${who}:${k.fresh.join(",").slice(0, 80)}`, "⚠️", `${who} read a secret it never read before`, `Key "${who}" read secret(s) it has not used before:\n${fmtList(k.fresh)}\nFrom: ${ips || "?"}\nNew deploy or new tool? ignore (it is learned now). Otherwise find what on that box asked for it.`, { cooldownH: 24 });
     }
   }
