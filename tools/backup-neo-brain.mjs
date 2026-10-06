@@ -204,6 +204,14 @@ const manifest = {
 
 if (LOCAL_DIR) {
   writeFileSync(`${LOCAL_DIR}/${DATE}/manifest.json`, JSON.stringify(manifest, null, 2));
+  // Schema alongside the data (6 Oct 2026, restore rehearsal): PostgREST's OpenAPI carries every
+  // column's exact type and the primary keys — enough to rebuild the tables with
+  // nas-backup/schema-from-openapi.mjs. Best-effort; a missing file falls back to the live fetch.
+  try {
+    const r = await fetch(`${URL}/rest/v1/`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, accept: "application/openapi+json" } });
+    if (r.ok) { const spec = await r.json(); if (LOCAL_DIR) writeFileSync(`${LOCAL_DIR}/${DATE}/schema.openapi.json`, JSON.stringify(spec.definitions || {})); }
+    else console.error(`[backup-neo-brain] schema.openapi.json skipped: openapi ${r.status}`);
+  } catch (e) { console.error(`[backup-neo-brain] schema.openapi.json skipped: ${e.message}`); }
 } else {
   const mSsh = spawn("ssh", [SSH_TARGET, `cat > '${REMOTE_DIR}/manifest.json'`], { stdio: ["pipe", "inherit", "inherit"] });
   mSsh.stdin.end(JSON.stringify(manifest, null, 2));
