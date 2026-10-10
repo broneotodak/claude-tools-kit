@@ -33,6 +33,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
+import { allTailscaleRelays, fetchRelayAddresses, relayShare } from "./tailscale-relays.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -105,6 +106,7 @@ const EXPECTED_EGRESS_PROCS = (allow.egress_procs && allow.egress_procs.length) 
 const expectedProc = (line) => EXPECTED_EGRESS_PROCS.includes((line.split(" -> ")[0] || "").trim().toLowerCase());
 const knownOwner = (line) => { const o = (line.split(" -> ")[1] || "").toUpperCase(); return KNOWN_EGRESS_OWNERS.some((k) => o.startsWith(k.toUpperCase())); };
 const pages = [];         // alerts raised this run
+let tsRelays = null;      // Tailscale relay addresses, fetched on first need
 const notes = [];         // quiet findings for the daily line
 const keyLabel = (fp) => allow.key_fps.find((k) => fp && fp.startsWith(k.fp))?.label;
 const ipLabel = (ip) => {
@@ -255,10 +257,13 @@ async function flushMaint(name, host, ts) {
   folded[host] = [];
 }
 /** Body for a new "process -> owner" egress pair, with the live addresses behind it when the sentinel sent them. */
-function egressBody(line, m, host) {
+function egressBody(line, m, host, relays) {
   const proc = line.split(" -> ")[0];
-  const ips = (m.outbound || []).filter((o) => (o.proc || "?") === proc).map((o) => `${o.ip} ×${o.n}`).slice(0, 5);
-  return `\`${line}\` — a program on ${host} is talking to a network it had not talked to before.${ips.length ? `\nnow: ${ips.join(", ")}` : ""}\nA new provider or a deploy? ignore. Otherwise on ${host}: \`sudo ss -tnp state established\` and find that process.`;
+  const rows = (m.outbound || []).filter((o) => (o.proc || "?") === proc);
+  const ips = rows.map((o) => `${o.ip} ×${o.n}`).slice(0, 5);
+  const sh = relays?.size ? relayShare(rows.map((o) => o.ip), relays) : null;
+  const tsLine = sh && sh.known > 0 ? `\n${sh.known} of ${sh.total} address(es) are Tailscale's own published servers — likely just the VPN reconnecting; the rest are unverified.` : "";
+  return `\`${line}\` — a program on ${host} is talking to a network it had not talked to before.${ips.length ? `\nnow: ${ips.join(", ")}` : ""}${tsLine}\nA new provider or a deploy? ignore. Otherwise on ${host}: \`sudo ss -tnp state established\` and find that process.`;
 }
 
 // ── 1. pull-mode hosts (boxes we do not put a brain key on) ─────────────────
@@ -349,8 +354,12 @@ async function checkSentinels() {
         // one page per NEW "process -> network owner" pair (24h cooldown per pair); a pair that stopped is only a note
         for (const line of d.added) {
           if (knownOwner(line)) { notes.push(`${host}: new outbound ${line} (known provider — not paged)`); continue; }
+          // Free answer before anyone pays for an investigation: Tailscale publishes its relay addresses.
+          // Every live address behind this pair must be on that list; one stranger still pages.
+          const liveIps = (m.outbound || []).filter((o) => (o.proc || "?") === line.split(" -> ")[0]).map((o) => o.ip);
+          if (liveIps.length) { tsRelays ||= await fetchRelayAddresses(); if (allTailscaleRelays(liveIps, tsRelays)) { notes.push(`${host}: new outbound ${line} (Tailscale relay addresses — not paged)`); continue; } }
           if (expectedProc(line)) { notes.push(`${host}: new outbound ${line} (${line.split(" -> ")[0].trim()} changes destinations by design — not paged)`); continue; }
-          await page(`change:${name}:egress:${line}`, "⚠️", `new outbound destination on ${host}`, egressBody(line, m, host), { host, cooldownH: 24, dry: isTest });
+          await page(`change:${name}:egress:${line}`, "⚠️", `new outbound destination on ${host}`, egressBody(line, m, host, tsRelays), { host, cooldownH: 24, dry: isTest });
         }
         if (d.removed.length) notes.push(`${host}: egress stopped → ${d.removed.slice(0, 3).join("; ")}`);
         continue;
