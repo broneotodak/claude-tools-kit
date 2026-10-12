@@ -4,8 +4,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  parseSnoozeKey, isSnoozable, matchesSnooze, pickSnooze, loadActiveSnoozes,
-  NEVER_SNOOZE_PREFIXES, NEVER_SNOOZE_EXACT, CRIT_CHANGE_SECTIONS,
+  parseSnoozeKey, isSnoozable, hostDownSnoozable, matchesSnooze, pickSnooze, loadActiveSnoozes,
+  NEVER_SNOOZE_PREFIXES, NEVER_SNOOZE_EXACT, CRIT_CHANGE_SECTIONS, SILENCE_PREFIXES,
 } from "./alert-snooze.mjs";
 
 const MON = "intrusion-watch";
@@ -107,6 +107,47 @@ test("V9 matchesSnooze is a pure function of (snoozeKey, subject): same answer r
   const realNow = Date.now; Date.now = () => 0;
   try { assert.deepEqual(cases.map(([k, s]) => matchesSnooze(k, s)), before); } finally { Date.now = realNow; }
   assert.deepEqual(before, [true, true, true, false]);
+});
+
+test("V10 host:<box> = 'down on purpose': mutes the silence family for that box even at critical — and nothing else", () => {
+  const h = "bandung-01";
+  // The real spelling: the judge calls page(`silent:${r.agent_name}`, …, { host: name.replace(/^sentinel-/, "") })
+  // and sentinel rows are named sentinel-<hostname> → key silent:sentinel-bandung-01, host bandung-01, level critical.
+  const silentCrit = subj("silent:sentinel-bandung-01", { level: "critical", host: h });
+  assert.equal(isSnoozable(silentCrit), false);                     // the plain rule still says no…
+  assert.equal(hostDownSnoozable(silentCrit), true);                 // …but a host note may
+  assert.ok(pickSnooze([note("host:bandung-01")], silentCrit, NOW));
+  assert.ok(pickSnooze([note("host:bandung-01")], subj("silent:forge-coach-agent", { host: h }), NOW));
+  assert.ok(pickSnooze([note("host:bandung-01")], subj("brain:agent:forge-coach-agent", { level: "critical", host: h }), NOW));
+  assert.ok(pickSnooze([note("host:bandung-01")], subj("pkg:sentinel-bandung-01", { host: h }), NOW)); // ordinary warning on that box: muted as before
+  assert.deepEqual(SILENCE_PREFIXES, ["silent:", "brain:agent:"]);
+  // another box's note, or a page that carries no host: no
+  assert.equal(pickSnooze([note("host:edge")], silentCrit, NOW), null);
+  assert.equal(pickSnooze([note("host:bandung-01")], subj("silent:sentinel-bandung-01", { level: "critical" }), NOW), null);
+  assert.equal(hostDownSnoozable({ key: "silent:x", level: "critical" }), false);
+  assert.equal(hostDownSnoozable({ key: "silent:x", host: "" }), false);
+  // security pages on the host-snoozed box still page, at either level
+  const security = ["sudo:bandung-01:x", "sudo:sentinel-bandung-01:neo->root", "login:1.2.3.4:abcdef12", "tsssh:sentinel-bandung-01",
+    "users:sentinel-bandung-01", "posture:sentinel-bandung-01:pw", "posture:sentinel-bandung-01:tsssh", "change:sentinel-bandung-01:sshd",
+    "change:sentinel-bandung-01:authkeys", "change:sentinel-bandung-01:sudoers", "vault:new:bandung-cc:x", "token:github:bandung_pat", "maint:sentinel-bandung-01:1"];
+  for (const key of security) for (const level of ["warning", "critical"]) {
+    const s = subj(key, { level, host: h });
+    assert.equal(hostDownSnoozable(s), false, `${key}@${level}`);
+    assert.equal(pickSnooze([note("host:bandung-01")], s, NOW), null, `must still page: ${key}@${level}`);
+  }
+  // an ops page that is NOT the silence family stays un-muteable at critical, even by the host note
+  for (const key of ["change:sentinel-bandung-01:ports", "pkg:sentinel-bandung-01", "door:x", "lane:run_task:bandung-cc"]) {
+    assert.equal(pickSnooze([note("host:bandung-01")], subj(key, { level: "critical", host: h }), NOW), null, `critical ${key}`);
+  }
+  // an agent: or check: note never reaches a critical page, even for the silence family on that box
+  assert.equal(pickSnooze([note("agent:sentinel-bandung-01")], silentCrit, NOW), null);
+  assert.equal(pickSnooze([note("check:intrusion-watch/silent:")], silentCrit, NOW), null);
+  assert.equal(pickSnooze([note("check:intrusion-watch/silent:sentinel-bandung-01")], silentCrit, NOW), null);
+  // a host note that is expired or cleared is no statement at all
+  assert.equal(pickSnooze([note("host:bandung-01", { until: PAST })], silentCrit, NOW), null);
+  assert.equal(pickSnooze([note("host:bandung-01", { status: "cleared" })], silentCrit, NOW), null);
+  // mixed list: the agent note is skipped, the host note is picked
+  assert.equal(pickSnooze([note("agent:sentinel-bandung-01"), note("host:bandung-01")], silentCrit, NOW)?.metadata.match, "host:bandung-01");
 });
 
 test("loadActiveSnoozes: builds the agreed PostgREST query with the brain headers", async () => {

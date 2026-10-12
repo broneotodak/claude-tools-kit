@@ -16,6 +16,12 @@
 // Never snoozable, whatever a note says: any page at level `critical`, and the security families below
 // (logins, sudo, Tailscale SSH, accounts, posture, keys on GitHub/Hetzner, vault, tokens, maintenance digests,
 // the watchdogs, Siti's own line, and config changes to the access/persistence surfaces).
+//
+// One deliberate exception — "this box is down on purpose": a `host:<box>` note is Neo's explicit statement about
+// that box, so it may ALSO mute the SILENCE family for that box (`silent:<name>` / `brain:agent:<name>` raised with
+// host === box) even when the monitor raises it at level critical (the judge pages a silent sentinel critical).
+// Nothing else widens: logins, sudo, Tailscale SSH, accounts, posture, crit config changes, keys, vault, tokens on
+// that box still page, and an `agent:` or `check:` note never reaches a critical page.
 
 /** Key prefixes that a snooze can never silence. */
 export const NEVER_SNOOZE_PREFIXES = [
@@ -27,6 +33,8 @@ export const NEVER_SNOOZE_PREFIXES = [
 export const NEVER_SNOOZE_EXACT = ["brain:auth-users", "spend:daily-crit"];
 /** change:<sentinel>:<section> — the access/persistence surfaces (mirrors CRIT_SECTIONS in intrusion-watch.mjs). */
 export const CRIT_CHANGE_SECTIONS = ["authkeys", "sudoers", "preload", "sshd", "suid", "admins", "users"];
+/** The silence family ("nothing heard from X"). A host:<box> note may mute these for that box even at critical. */
+export const SILENCE_PREFIXES = ["silent:", "brain:agent:"];
 
 /** parseSnoozeKey("agent:x") → {kind:"agent", name} | {kind:"host", host} | {kind:"check", monitor, id} | null */
 export function parseSnoozeKey(key) {
@@ -52,6 +60,16 @@ export function isSnoozable({ key, level } = {}) {
   return true;
 }
 
+/**
+ * May a host:<box> note mute this page even though it is critical? Only the silence family, and only when the
+ * page carries a host (the box the note must name — matchesSnooze checks host === box). `level` is deliberately
+ * not consulted: that is the whole point. Everything else keeps the isSnoozable rule.
+ */
+export function hostDownSnoozable({ key, host, level } = {}) { // eslint-disable-line no-unused-vars
+  if (typeof key !== "string" || !key || typeof host !== "string" || !host) return false;
+  return SILENCE_PREFIXES.some((p) => key.startsWith(p));
+}
+
 /** Pure: does this snooze key name this page? subject = { monitor, key, host }. No time, no I/O. */
 export function matchesSnooze(snoozeKey, { monitor, key, host } = {}) {
   const s = parseSnoozeKey(snoozeKey);
@@ -64,16 +82,20 @@ export function matchesSnooze(snoozeKey, { monitor, key, host } = {}) {
 
 /**
  * The first snooze row that is active, not yet expired at `now`, and names this page — or null.
- * Refuses by construction when the page itself is not snoozable (security family / critical).
+ * Refuses by construction when the page itself is not snoozable (security family / critical) — except that a
+ * host:<box> note may reach the silence family for its box at any level (hostDownSnoozable); no other note kind can.
  */
 export function pickSnooze(snoozes, subject, now = Date.now()) {
-  if (!isSnoozable(subject)) return null;
+  const plain = isSnoozable(subject);                        // any note kind may mute a non-security warning
+  const hostDown = !plain && hostDownSnoozable(subject);     // only a host:<box> note may mute the silence family at critical
+  if (!plain && !hostDown) return null;
   const t = now instanceof Date ? now.getTime() : Number(now);
   for (const s of snoozes || []) {
     const m = s?.metadata || {};
     if (m.status !== "active") continue;
     const until = new Date(m.until || 0).getTime();
     if (!(until > t)) continue;                     // expired, or no parseable date → not a live snooze
+    if (hostDown && parseSnoozeKey(m.match)?.kind !== "host") continue; // agent:/check: never reach a critical page
     if (matchesSnooze(m.match, subject)) return s;
   }
   return null;

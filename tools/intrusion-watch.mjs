@@ -18,7 +18,8 @@
 //                  announce planned work: that box's changes fold into ONE digest per report until the window ends
 //   intrusion-watch.mjs --maintenance-clear <host>
 //   (v2.0, 2026-10-12) reads Siti's alert_snooze notes each tick: "stand down on that ONE warning until <date>"
-//                  mutes a matching NON-security page (tools/alert-snooze.mjs); critical/security pages never snooze
+//                  mutes a matching NON-security page (tools/alert-snooze.mjs); critical/security pages never snooze —
+//                  except a host:<box> note ("this box is down on purpose"), which also mutes that box's silent sentinel
 //   15 9 * * 1    intrusion-watch.mjs --weekly    the security ROUTINE: posture + chores
 //   (v1.4, 2026-10-02) also judges the vault read log public.credential_reads
 //   --init --seed <json>                          create/refresh the registry rows + allow-list
@@ -36,7 +37,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { allTailscaleRelays, fetchRelayAddresses, relayShare } from "./tailscale-relays.mjs";
-import { isSnoozable, pickSnooze, loadActiveSnoozes } from "./alert-snooze.mjs";
+import { isSnoozable, hostDownSnoozable, pickSnooze, loadActiveSnoozes } from "./alert-snooze.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -218,15 +219,20 @@ const overflow = [];
 async function page(key, emoji, signal, body, { cooldownH = 6, level = "warning", channel = "wa", dry = false, host = null } = {}) {
   // Snooze (v2.0): an active alert_snooze note that names this page (agent:/host:/check:) mutes it until its date.
   // Checked BEFORE the cooldown so last_alerts stays untouched and the page fires the tick the snooze lapses.
-  // Never for critical pages or the security families (isSnoozable), never for selftest (dry) pages.
-  if (!dry && isSnoozable({ key, level })) {
-    const sn = pickSnooze(SNOOZES, { monitor: ME, key, host }, NOW);
+  // Never for the security families or critical pages (isSnoozable), never for selftest (dry) pages — with ONE
+  // exception: a host:<box> note is Neo's "this box is down on purpose", so it may also mute the silence family for
+  // that box (silent:sentinel-<box>, brain:agent:<name> raised with that host) even at critical (hostDownSnoozable).
+  // A silent sentinel always carries its box: derive it from the key if a call site ever passes no host.
+  const box = host || (key.startsWith("silent:sentinel-") ? key.slice("silent:sentinel-".length) : null);
+  if (!dry && (isSnoozable({ key, level }) || hostDownSnoozable({ key, host: box, level }))) {
+    const sn = pickSnooze(SNOOZES, { monitor: ME, key, host: box }, NOW);
     if (sn) {
-      const until = sn.metadata?.until, label = sn.metadata?.label || sn.metadata?.match;
+      const until = sn.metadata?.until, match = sn.metadata?.match || key, label = sn.metadata?.label || match;
       console.log(`[${ME}] (snoozed until ${until}) ${key}`);
       snoozed.push({ key, until, label });
-      const ds = (state.daily_snoozed ||= {});                  // for the 08:45 line: what was muted over the day
-      ds[key] = { until, label, n: (ds[key]?.n || 0) + 1 };
+      const ds = (state.daily_snoozed ||= {});                  // for the 08:45 line: which notes muted what over the day
+      const d = (ds[match] ||= { until, label, keys: [] });
+      d.until = until; if (d.keys.length < 10 && !d.keys.includes(key)) d.keys.push(key);
       // the security_alert row still exists (nothing is hidden from the record), flagged as snoozed
       if (!DRY) await logAlert(`${header(emoji, signal)}\n${body}`.trim().replace(/\n/g, " | "), level, key, { snoozed: true, snooze_id: sn.id, snooze_match: sn.metadata?.match, snooze_until: until });
       return false;
@@ -711,7 +717,7 @@ function dailyText(sent) {
   lines.push(`API spend today: ${state.last_spend?.today_usd != null ? "$" + state.last_spend.today_usd : state.last_spend?.status || "?"} (warn $${state.last_spend?.warn ?? 5} · crit $${state.last_spend?.crit ?? 20}) · GitHub tokens: ${Object.entries(state.last_tokens || {}).filter(([k]) => !k.startsWith("openai")).map(([k, v]) => `${k} ${v}`).join(", ") || "?"} · OpenAI keys: ${Object.entries(state.last_tokens || {}).filter(([k]) => k.startsWith("openai")).map(([k, v]) => `${k.replace(/^openai:?/, "") || "admin"} ${v}`).join(", ") || "?"}`);
   lines.push(`neo-brain: auth users ${b.auth_users ?? "?"} · vault writes ${state.daily_vault_writes || 0} · unknown agents ${b.unknown_agents?.length || 0} · Siti line ${b.siti_line || "?"}`);
   const sn = Object.entries(state.daily_snoozed || {});
-  lines.push(`Alerts sent 24h: ${state.daily_pages || 0}${state.selftest_ok ? " · selftest ✓" : ""} · SMS fallback ${meta.alerts?.sms_to ? "armed" : "OFF"} · twin watchdog ${b.watchdog || "?"}${sn.length ? ` · Snoozed: ${sn.length} (${sn.slice(0, 4).map(([k, v]) => `${k} until ${MYT(v.until).slice(0, 10)}`).join(", ")}${sn.length > 4 ? ", …" : ""})` : ""}`);
+  lines.push(`Alerts sent 24h: ${state.daily_pages || 0}${state.selftest_ok ? " · selftest ✓" : ""} · SMS fallback ${meta.alerts?.sms_to ? "armed" : "OFF"} · twin watchdog ${b.watchdog || "?"}${sn.length ? ` · Snoozed: ${sn.length} (${sn.slice(0, 4).map(([m, v]) => `${m} until ${MYT(v.until).slice(0, 10)}${(v.keys?.length || 0) > 1 ? ` ×${v.keys.length}` : ""}`).join(", ")}${sn.length > 4 ? ", …" : ""})` : ""}`);
   return lines.join("\n");
 }
 function weeklyText(sent) {
