@@ -17,6 +17,8 @@
 //   intrusion-watch.mjs --maintenance <host> --for 3h [--note "clean rebuild"] [--now]
 //                  announce planned work: that box's changes fold into ONE digest per report until the window ends
 //   intrusion-watch.mjs --maintenance-clear <host>
+//   (v2.1, 2026-10-13) snooze: an agent:<name> note naming exactly the silent sentinel mutes it like a host: note;
+//                  muted pages log one row per cooldown window and carry `box` (the box the page is about).
 //   (v2.0, 2026-10-12) reads Siti's alert_snooze notes each tick: "stand down on that ONE warning until <date>"
 //                  mutes a matching NON-security page (tools/alert-snooze.mjs); critical/security pages never snooze —
 //                  except a host:<box> note ("this box is down on purpose"), which also mutes that box's silent sentinel
@@ -54,7 +56,7 @@ const opt = (k, d = null) => (ARGS.includes(k) ? ARGS[ARGS.indexOf(k) + 1] : d);
 const DRY = flag("--dry-run");
 const ME = "intrusion-watch";
 const HOST_LABEL = "edgexpert";
-const VERSION = "intrusion-watch-v2.0"; // v2.0: alert_snooze notes (Siti: "stand down on X for 7 days") mute ONE non-security warning until its date; critical + login/sudo/key/posture pages never snooze · v1.9: allow.egress_procs — processes whose destinations vary by design (tor) note instead of page · v1.8: vault human_keys (Vault iPhone app: new-secret reads are notes, sweep pages at >10) · v1.7: OpenAI key expiry + tr-office PAT in token watch · v1.6: public-door probes (naca-mcp, webhook, cockpit, twin-api) · v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
+const VERSION = "intrusion-watch-v2.1"; // v2.1 (13 Oct 2026): snooze subject carries level (the critical guard was skipped); an agent: note naming exactly the silent sentinel mutes it like a host: note; a muted page logs ONE security_alert row per cooldown window (was one per 10-min run) and carries `box` = the box the page is about (`host` stays the judge's own box) · v2.0: alert_snooze notes (Siti: "stand down on X for 7 days") mute ONE non-security warning until its date; critical + login/sudo/key/posture pages never snooze · v1.9: allow.egress_procs — processes whose destinations vary by design (tor) note instead of page · v1.8: vault human_keys (Vault iPhone app: new-secret reads are notes, sweep pages at >10) · v1.7: OpenAI key expiry + tr-office PAT in token watch · v1.6: public-door probes (naca-mcp, webhook, cockpit, twin-api) · v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
 const NOW = Date.now();
 const MYT = (d = new Date()) => new Date(d).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour12: false });
 const ago = (iso) => (iso ? Math.round((NOW - new Date(iso).getTime()) / 60000) : Infinity);
@@ -223,9 +225,14 @@ async function page(key, emoji, signal, body, { cooldownH = 6, level = "warning"
   // exception: a host:<box> note is Neo's "this box is down on purpose", so it may also mute the silence family for
   // that box (silent:sentinel-<box>, brain:agent:<name> raised with that host) even at critical (hostDownSnoozable).
   // A silent sentinel always carries its box: derive it from the key if a call site ever passes no host.
+  // `box` is the box the page is ABOUT (bandung); `host` in the security_alert row stays the judge's own box.
+  // Siti's list_alerts reads `box` first, so "sentinel silent on bandung" proposes bandung, never edgexpert.
   const box = host || (key.startsWith("silent:sentinel-") ? key.slice("silent:sentinel-".length) : null);
+  const boxMeta = box ? { box } : {};
   if (!dry && (isSnoozable({ key, level }) || hostDownSnoozable({ key, host: box, level }))) {
-    const sn = pickSnooze(SNOOZES, { monitor: ME, key, host: box }, NOW);
+    // level MUST travel with the subject: pickSnooze re-checks the critical rule itself (v2.1 — without it an
+    // agent:/check: note reached a critical silence page through the plain branch).
+    const sn = pickSnooze(SNOOZES, { monitor: ME, key, host: box, level }, NOW);
     if (sn) {
       const until = sn.metadata?.until, match = sn.metadata?.match || key, label = sn.metadata?.label || match;
       console.log(`[${ME}] (snoozed until ${until}) ${key}`);
@@ -233,8 +240,13 @@ async function page(key, emoji, signal, body, { cooldownH = 6, level = "warning"
       const ds = (state.daily_snoozed ||= {});                  // for the 08:45 line: which notes muted what over the day
       const d = (ds[match] ||= { until, label, keys: [] });
       d.until = until; if (d.keys.length < 10 && !d.keys.includes(key)) d.keys.push(key);
-      // the security_alert row still exists (nothing is hidden from the record), flagged as snoozed
-      if (!DRY) await logAlert(`${header(emoji, signal)}\n${body}`.trim().replace(/\n/g, " | "), level, key, { snoozed: true, snooze_id: sn.id, snooze_match: sn.metadata?.match, snooze_until: until });
+      // the security_alert row still exists (nothing is hidden from the record), flagged as snoozed — ONE row per
+      // cooldown window, not one per 10-minute run (13 Oct 2026: 6 rows an hour for a box known to be off).
+      const ls = (state.last_snoozed ||= {});
+      if (!DRY && (!ls[key] || NOW - new Date(ls[key]).getTime() >= cooldownH * 3600e3)) {
+        await logAlert(`${header(emoji, signal)}\n${body}`.trim().replace(/\n/g, " | "), level, key, { snoozed: true, snooze_id: sn.id, snooze_match: sn.metadata?.match, snooze_until: until, ...boxMeta });
+        ls[key] = new Date(NOW).toISOString();
+      }
       return false;
     }
   }
@@ -272,7 +284,7 @@ async function page(key, emoji, signal, body, { cooldownH = 6, level = "warning"
     if (!e.ok) console.error(`[${ME}] e-mail failed (${e.why})`);
   }
   state.last_alerts[key] = new Date().toISOString();
-  await logAlert(text.replace(/\n/g, " | "), level, key);
+  await logAlert(text.replace(/\n/g, " | "), level, key, boxMeta);
   console.log(`[${ME}] PAGED ${key} (${delivered ? "delivered" : "queued"})`);
   return true;
 }
