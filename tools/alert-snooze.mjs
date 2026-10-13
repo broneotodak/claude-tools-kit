@@ -20,8 +20,11 @@
 // One deliberate exception — "this box is down on purpose": a `host:<box>` note is Neo's explicit statement about
 // that box, so it may ALSO mute the SILENCE family for that box (`silent:<name>` / `brain:agent:<name>` raised with
 // host === box) even when the monitor raises it at level critical (the judge pages a silent sentinel critical).
+// Naming the quiet watcher itself is just as explicit (v2.1, 13 Oct 2026 — Neo: "snooze the sentinel watch on
+// bandung" → Siti writes `agent:sentinel-bandung`, the same key the daily check-up uses for that finding), so an
+// `agent:<name>` note whose name is EXACTLY the silent one may mute that silence page at critical too.
 // Nothing else widens: logins, sudo, Tailscale SSH, accounts, posture, crit config changes, keys, vault, tokens on
-// that box still page, and an `agent:` or `check:` note never reaches a critical page.
+// that box still page, and a `check:` note (a prefix over many pages) never reaches a critical page.
 
 /** Key prefixes that a snooze can never silence. */
 export const NEVER_SNOOZE_PREFIXES = [
@@ -83,7 +86,9 @@ export function matchesSnooze(snoozeKey, { monitor, key, host } = {}) {
 /**
  * The first snooze row that is active, not yet expired at `now`, and names this page — or null.
  * Refuses by construction when the page itself is not snoozable (security family / critical) — except that a
- * host:<box> note may reach the silence family for its box at any level (hostDownSnoozable); no other note kind can.
+ * host:<box> note, or an agent:<name> note naming exactly the quiet watcher, may reach the silence family for its
+ * box at any level (hostDownSnoozable); a check: note never can. The subject MUST carry `level`: without it a
+ * critical page reads as plain and the exception is not applied — callers pass { monitor, key, host, level }.
  */
 export function pickSnooze(snoozes, subject, now = Date.now()) {
   const plain = isSnoozable(subject);                        // any note kind may mute a non-security warning
@@ -95,7 +100,7 @@ export function pickSnooze(snoozes, subject, now = Date.now()) {
     if (m.status !== "active") continue;
     const until = new Date(m.until || 0).getTime();
     if (!(until > t)) continue;                     // expired, or no parseable date → not a live snooze
-    if (hostDown && parseSnoozeKey(m.match)?.kind !== "host") continue; // agent:/check: never reach a critical page
+    if (hostDown) { const k = parseSnoozeKey(m.match)?.kind; if (k !== "host" && k !== "agent") continue; } // check: never reaches a critical page; agent: only by exact name (matchesSnooze)
     if (matchesSnooze(m.match, subject)) return s;
   }
   return null;

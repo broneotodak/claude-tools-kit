@@ -109,7 +109,7 @@ test("V9 matchesSnooze is a pure function of (snoozeKey, subject): same answer r
   assert.deepEqual(before, [true, true, true, false]);
 });
 
-test("V10 host:<box> = 'down on purpose': mutes the silence family for that box even at critical — and nothing else", () => {
+test("V10 host:<box> = 'down on purpose' (or agent:<exact sentinel>): mutes the silence family for that box even at critical — and nothing else", () => {
   const h = "bandung-01";
   // The real spelling: the judge calls page(`silent:${r.agent_name}`, …, { host: name.replace(/^sentinel-/, "") })
   // and sentinel rows are named sentinel-<hostname> → key silent:sentinel-bandung-01, host bandung-01, level critical.
@@ -139,15 +139,22 @@ test("V10 host:<box> = 'down on purpose': mutes the silence family for that box 
   for (const key of ["change:sentinel-bandung-01:ports", "pkg:sentinel-bandung-01", "door:x", "lane:run_task:bandung-cc"]) {
     assert.equal(pickSnooze([note("host:bandung-01")], subj(key, { level: "critical", host: h }), NOW), null, `critical ${key}`);
   }
-  // an agent: or check: note never reaches a critical page, even for the silence family on that box
-  assert.equal(pickSnooze([note("agent:sentinel-bandung-01")], silentCrit, NOW), null);
+  // v2.1: an agent: note naming EXACTLY the quiet watcher is as explicit as the host note (Neo: "snooze the
+  // sentinel watch on bandung" → Siti writes agent:sentinel-bandung, the daily check-up's key for the same finding)
+  assert.ok(pickSnooze([note("agent:sentinel-bandung-01")], silentCrit, NOW), "exact agent note quiets the critical silence page");
+  assert.equal(pickSnooze([note("agent:sentinel-bandung")], silentCrit, NOW), null, "not a prefix, not another box");
+  assert.equal(pickSnooze([note("agent:sentinel-bandung-01")], subj("silent:forge-coach-agent", { level: "critical", host: h }), NOW), null, "names one watcher, not the box");
+  // a check: note (a prefix over many pages) never reaches a critical page, even for the silence family on that box
   assert.equal(pickSnooze([note("check:intrusion-watch/silent:")], silentCrit, NOW), null);
   assert.equal(pickSnooze([note("check:intrusion-watch/silent:sentinel-bandung-01")], silentCrit, NOW), null);
+  // the subject MUST carry level — the judge's page() passes it (v2.1); a check: note still stays out at critical
+  assert.equal(pickSnooze([note("check:intrusion-watch/silent:")], subj("silent:sentinel-bandung-01", { host: h }), NOW)?.metadata.match, "check:intrusion-watch/silent:", "no level = plain warning (caller contract)");
   // a host note that is expired or cleared is no statement at all
   assert.equal(pickSnooze([note("host:bandung-01", { until: PAST })], silentCrit, NOW), null);
   assert.equal(pickSnooze([note("host:bandung-01", { status: "cleared" })], silentCrit, NOW), null);
-  // mixed list: the agent note is skipped, the host note is picked
-  assert.equal(pickSnooze([note("agent:sentinel-bandung-01"), note("host:bandung-01")], silentCrit, NOW)?.metadata.match, "host:bandung-01");
+  // mixed list: a check: note is skipped, the host note is picked; the exact agent note counts like the host note
+  assert.equal(pickSnooze([note("check:intrusion-watch/silent:"), note("host:bandung-01")], silentCrit, NOW)?.metadata.match, "host:bandung-01");
+  assert.equal(pickSnooze([note("agent:sentinel-bandung-01"), note("host:bandung-01")], silentCrit, NOW)?.metadata.match, "agent:sentinel-bandung-01");
 });
 
 test("loadActiveSnoozes: builds the agreed PostgREST query with the brain headers", async () => {
