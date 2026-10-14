@@ -42,7 +42,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 
-VERSION = "sentinel-v1.4"  # v1.2 egress fingerprint · v1.3 7-day window · v1.4 outbound only (inbound peers of sshd/web/etc. excluded)
+VERSION = "sentinel-v1.5"  # v1.2 egress fingerprint · v1.3 7-day window · v1.4 outbound only (inbound peers of sshd/web/etc. excluded) · v1.5 resources block (load/RAM/disk/temps; NOT fingerprinted)
 # Same PATH under cron, launchd and an SSH shell — otherwise `sshd -T` / `ss` /
 # `tailscale` resolve differently per launcher and every run diffs the baseline.
 os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin:" + os.environ.get("PATH", "")
@@ -627,6 +627,167 @@ def uptime_s():
         return 0
 
 
+
+# ── resources (v1.5, 14 Oct 2026) ─────────────────────────────────────────────
+# Load, memory, swap, disk, temperatures, top memory users, and the sandbox egress
+# drop counter. This is VOLATILE data: it goes in meta["resources"] only and is
+# never part of `sections` / the fingerprint, so it can never flip a box to
+# `degraded`. Every reader is defensive — a missing tool or sensor yields None,
+# never an exception. Process names only (comm), never command lines.
+def parse_meminfo(text):
+    """/proc/meminfo text -> kB ints for MemTotal, MemAvailable, SwapTotal, SwapFree."""
+    out = {}
+    for line in (text or "").splitlines():
+        m = re.match(r"^(MemTotal|MemAvailable|SwapTotal|SwapFree):\s+(\d+)\s+kB", line)
+        if m:
+            out[m.group(1)] = int(m.group(2))
+    return out
+
+
+def parse_nvidia_smi(text):
+    """`nvidia-smi --query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits`
+    -> [{name, temp_c, util_pct, mem_used_mb, mem_total_mb}]; '[N/A]' / '[Not Supported]' become None (GB10 has no VRAM split)."""
+    def num(v):
+        v = (v or "").strip()
+        try:
+            return float(v)
+        except ValueError:
+            return None
+    gpus = []
+    for line in (text or "").splitlines():
+        parts = [x.strip() for x in line.split(",")]
+        if len(parts) < 5 or not parts[0]:
+            continue
+        gpus.append({"name": parts[0][:24], "temp_c": num(parts[1]), "util_pct": num(parts[2]),
+                     "mem_used_mb": num(parts[3]), "mem_total_mb": num(parts[4])})
+    return gpus
+
+
+def parse_rocm_temps(text):
+    """`rocm-smi --showtemp` text -> {sensor: celsius}, e.g. {'edge': 30.0, 'junction': 37.0, 'memory': 44.0}."""
+    out = {}
+    for m in re.finditer(r"Temperature \(Sensor (\w+)\) \(C\):\s*([0-9.]+)", text or ""):
+        out[m.group(1)] = float(m.group(2))
+    return out
+
+
+def parse_rocm_use(text):
+    """`rocm-smi --showuse` text -> GPU busy percent (first GPU) or None."""
+    m = re.search(r"GPU use \(%\):\s*([0-9.]+)", text or "")
+    return float(m.group(1)) if m else None
+
+
+def top_rss(ps_text, n=3):
+    """`ps -Ao pid=,rss=,comm=` text -> top-n [{pid, rss_mb, comm}] by resident memory (comm only, no args)."""
+    rows = []
+    for line in (ps_text or "").splitlines():
+        m = re.match(r"^\s*(\d+)\s+(\d+)\s+(.+?)\s*$", line)
+        if m:
+            rows.append((int(m.group(2)), int(m.group(1)), os.path.basename(m.group(3))[:28]))
+    rows.sort(reverse=True)
+    return [{"pid": pid, "rss_mb": round(rss / 1024), "comm": comm} for rss, pid, comm in rows[:n]]
+
+
+def parse_nft_drops(text):
+    """`nft list table inet studio_lab` text -> total packets that hit a `drop` counter, or None if there is no such table."""
+    if not text or "studio_lab" not in text:
+        return None
+    return sum(int(m.group(1)) for m in re.finditer(r"counter packets (\d+) bytes \d+ drop", text))
+
+
+def read_temps_linux():
+    """CPU / board / NVMe temperatures from sysfs: [{name, c}] sorted hottest first (max 6)."""
+    temps = []
+    try:
+        for d in sorted(os.listdir("/sys/class/hwmon")):
+            base = os.path.join("/sys/class/hwmon", d)
+            try:
+                name = open(os.path.join(base, "name")).read().strip()
+            except Exception:
+                name = d
+            for f in sorted(os.listdir(base)):
+                if f.startswith("temp") and f.endswith("_input"):
+                    try:
+                        c = int(open(os.path.join(base, f)).read().strip()) / 1000.0
+                    except Exception:
+                        continue
+                    if 0 < c < 130:
+                        label = ""
+                        try:
+                            label = open(os.path.join(base, f.replace("_input", "_label"))).read().strip()
+                        except Exception:
+                            pass
+                        temps.append({"name": (name + ("/" + label if label else ""))[:28], "c": round(c, 1)})
+    except Exception:
+        pass
+    if not temps:  # boards without hwmon (the GB10) expose thermal zones instead
+        try:
+            for d in sorted(os.listdir("/sys/class/thermal")):
+                if d.startswith("thermal_zone"):
+                    try:
+                        c = int(open(f"/sys/class/thermal/{d}/temp").read().strip()) / 1000.0
+                        t = open(f"/sys/class/thermal/{d}/type").read().strip()
+                    except Exception:
+                        continue
+                    if 0 < c < 130:
+                        temps.append({"name": t[:28], "c": round(c, 1)})
+        except Exception:
+            pass
+    temps.sort(key=lambda x: -x["c"])
+    return temps[:6]
+
+
+def resources():
+    """One small dict of live load numbers. See the block comment above."""
+    import shutil
+    r = {"v": 1}
+    try:
+        l1, l5, l15 = os.getloadavg()
+        r["load"] = [round(l1, 2), round(l5, 2), round(l15, 2)]
+        r["ncpu"] = os.cpu_count() or 0
+    except Exception:
+        pass
+    try:
+        if IS_MAC:
+            total = int(sh("sysctl -n hw.memsize").strip() or 0) // 1024
+            pages = {k: int(v) for k, v in re.findall(r"Pages (free|inactive|speculative):\s+(\d+)", sh("vm_stat"))}
+            avail = sum(pages.values()) * 16384 // 1024 if pages else 0   # Apple silicon page size
+            r["mem"] = {"total_mb": total // 1024, "avail_mb": avail // 1024, "swap_total_mb": 0, "swap_free_mb": 0}
+        else:
+            mi = parse_meminfo(open("/proc/meminfo").read())
+            r["mem"] = {"total_mb": mi.get("MemTotal", 0) // 1024, "avail_mb": mi.get("MemAvailable", 0) // 1024,
+                        "swap_total_mb": mi.get("SwapTotal", 0) // 1024, "swap_free_mb": mi.get("SwapFree", 0) // 1024}
+    except Exception:
+        pass
+    disks = {}
+    for mp in ("/", "/home", "/volume1", "/var/lib"):
+        try:
+            if mp != "/" and os.path.ismount(mp) is False:
+                continue
+            u = shutil.disk_usage(mp)
+            key = f"{u.total}:{u.used}"
+            if key in {v["_k"] for v in disks.values()}:
+                continue
+            disks[mp] = {"total_gb": round(u.total / 1e9), "free_gb": round(u.free / 1e9), "used_pct": round(100.0 * u.used / u.total, 1), "_k": key}
+        except Exception:
+            continue
+    r["disk"] = {k: {kk: vv for kk, vv in v.items() if kk != "_k"} for k, v in disks.items()}
+    if not IS_MAC:
+        r["temps"] = read_temps_linux()
+        gpus = parse_nvidia_smi(sh("nvidia-smi --query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits", timeout=8))
+        if gpus:
+            r["gpu"] = gpus[:2]
+        else:
+            rt = parse_rocm_temps(sh("rocm-smi --showtemp", timeout=8))
+            if rt:
+                r["gpu"] = [{"name": "amd", "temp_c": rt.get("junction") or max(rt.values()), "util_pct": parse_rocm_use(sh("rocm-smi --showuse", timeout=8))}]
+    r["top"] = top_rss(sh("ps -Ao pid=,rss=,comm=", timeout=8), 3)
+    drops = parse_nft_drops(sh("nft list table inet studio_lab", timeout=6, sudo=True)) if not IS_MAC else None
+    if drops is not None:
+        r["lab_drops"] = drops
+    return r
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 def main():
     os.makedirs(DIR, exist_ok=True)
@@ -685,11 +846,13 @@ def main():
         "baseline": reset, "fp": {k: sha(v) for k, v in sections.items()}, "counts": {k: len(v) for k, v in sections.items()},
         "changed": changed, "diff": diff, "events": ev, "sessions": sessions(), "outbound": outbound(), "errors": errors[:5],
         "facts": facts(sections), "selftest": FLAG("--selftest"),
+        "resources": resources(),
     }
     body = json.dumps(meta)
     if len(body) > 14000:  # keep the row small: drop diff detail first, then outbound
         meta["diff"] = {k: {"added": v["added"][:5], "removed": v["removed"][:5]} for k, v in diff.items()}
         meta["outbound"] = meta["outbound"][:3]
+        meta["resources"]["top"] = meta["resources"].get("top", [])[:1]
         body = json.dumps(meta)
     status = "degraded" if degraded else "ok"
 
