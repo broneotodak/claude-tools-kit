@@ -25,6 +25,7 @@
 //   15 9 * * 1    intrusion-watch.mjs --weekly    the security ROUTINE: posture + chores
 //   (v1.4, 2026-10-02) also judges the vault read log public.credential_reads
 //   --init --seed <json>                          create/refresh the registry rows + allow-list
+//   (v2.2, 14 Oct 2026) also judges box resources: load, RAM, swap, disk, temperatures, GPU, sandbox egress drops (resource-judge.mjs)
 //   --dry-run                                     print alerts, send nothing
 //
 // State + allow-list live in agent_registry row `intrusion-watch` (meta.allow,
@@ -40,6 +41,7 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { allTailscaleRelays, fetchRelayAddresses, relayShare } from "./tailscale-relays.mjs";
 import { isSnoozable, hostDownSnoozable, pickSnooze, loadActiveSnoozes } from "./alert-snooze.mjs";
+import { evaluateResources, resourceLine } from "./resource-judge.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -56,7 +58,7 @@ const opt = (k, d = null) => (ARGS.includes(k) ? ARGS[ARGS.indexOf(k) + 1] : d);
 const DRY = flag("--dry-run");
 const ME = "intrusion-watch";
 const HOST_LABEL = "edgexpert";
-const VERSION = "intrusion-watch-v2.1"; // v2.1 (13 Oct 2026): snooze subject carries level (the critical guard was skipped); an agent: note naming exactly the silent sentinel mutes it like a host: note; a muted page logs ONE security_alert row per cooldown window (was one per 10-min run) and carries `box` = the box the page is about (`host` stays the judge's own box) · v2.0: alert_snooze notes (Siti: "stand down on X for 7 days") mute ONE non-security warning until its date; critical + login/sudo/key/posture pages never snooze · v1.9: allow.egress_procs — processes whose destinations vary by design (tor) note instead of page · v1.8: vault human_keys (Vault iPhone app: new-secret reads are notes, sweep pages at >10) · v1.7: OpenAI key expiry + tr-office PAT in token watch · v1.6: public-door probes (naca-mcp, webhook, cockpit, twin-api) · v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
+const VERSION = "intrusion-watch-v2.2"; // v2.2 (14 Oct 2026): resource watch — sentinel v1.5 `resources` (load/RAM/swap/disk/temps/GPU, sandbox egress drops) judged by resource-judge.mjs; one 📈 page per signal per day, skipped during maintenance; lab-egress is critical // v2.1 v2.1 (13 Oct 2026): snooze subject carries level (the critical guard was skipped); an agent: note naming exactly the silent sentinel mutes it like a host: note; a muted page logs ONE security_alert row per cooldown window (was one per 10-min run) and carries `box` = the box the page is about (`host` stays the judge's own box) · v2.0: alert_snooze notes (Siti: "stand down on X for 7 days") mute ONE non-security warning until its date; critical + login/sudo/key/posture pages never snooze · v1.9: allow.egress_procs — processes whose destinations vary by design (tor) note instead of page · v1.8: vault human_keys (Vault iPhone app: new-secret reads are notes, sweep pages at >10) · v1.7: OpenAI key expiry + tr-office PAT in token watch · v1.6: public-door probes (naca-mcp, webhook, cockpit, twin-api) · v1.5: lane outcomes + API spend + token health (review week 1) · v1.4: vault read log (credential_reads) judged · v1.3: burst cap — max 3 warning pages per run, rest folded into one // v1.1 maintenance windows + egress pages · v1.2 known-provider owners are notes, not pages
 const NOW = Date.now();
 const MYT = (d = new Date()) => new Date(d).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour12: false });
 const ago = (iso) => (iso ? Math.round((NOW - new Date(iso).getTime()) / 60000) : Infinity);
@@ -350,6 +352,16 @@ async function checkSentinels() {
     const m = hb.meta || {};
     if (state.seen[name] === m.ts) continue; // already judged this report
     state.seen[name] = m.ts;
+    // resource watch (v2.2): evaluate EVERY fresh report so streaks and the egress-drop baseline keep moving even during
+    // a maintenance window; the pages themselves are dispatched below, after the maintenance guard.
+    // Belt and braces (14 Oct review #1): this loop judges EVERY box — nothing a box reports may crash it.
+    const rs = ((state.res ||= {})[host] ||= { streaks: {} });
+    let rev = { signals: [], drops: undefined };
+    try {
+      rev = evaluateResources(m.resources, { host, cfg: r.meta?.resources_cfg || {}, streaks: rs.streaks, prevDrops: rs.drops });
+      rs.drops = rev.drops;           // unconditional: a report with no reading clears the baseline (review #4)
+      if (m.resources) (state.last_resources ||= {})[host] = { line: resourceLine(host, m.resources), ts: m.ts };
+    } catch (e) { console.log(`[${ME}] resource check failed for ${host}: ${e.message}`); }
     const a = acc(host), ev = m.events || {};
     const isTest = !!m.selftest;
     // logins
@@ -415,15 +427,22 @@ async function checkSentinels() {
     // posture regressions (facts)
     const f = m.facts || {};
     if (inMaint(host)) {
+      for (const sg of rev.signals.filter((x) => x.level === "critical")) (folded[host] ||= []).push(`${sg.emoji} ${sg.signal}`);
       const bad = [f.password_auth === "yes" && "🚨 password SSH ON", String(f.ts_run_ssh).toLowerCase() === "true" && "🚨 Tailscale SSH server ON", /https?:\/\//.test(f.ts_funnel || "") && "🚨 Tailscale Funnel exposed", f.preload && "🚨 ld.so.preload present"].filter(Boolean);
       if (bad.length) (folded[host] ||= []).push(...bad);
       await flushMaint(name, host, m.ts);
       continue;
     }
+    for (const sg of rev.signals) await page(sg.key, sg.emoji, sg.signal, sg.body, { host, level: sg.level, cooldownH: sg.cooldownH, dry: isTest });
     if (f.password_auth === "yes") await page(`posture:${name}:pw`, "🚨", `password SSH turned ON on ${host}`, "PasswordAuthentication yes — keys-only is the rule since 25 Sep.", { host, level: "critical", cooldownH: 12, dry: isTest });
     if (String(f.ts_run_ssh).toLowerCase() === "true" && !allow.ts_ssh_ok?.includes(host)) await page(`posture:${name}:tsssh`, "🚨", `Tailscale SSH server ON on ${host}`, "RunSSH=true — turn it off: `sudo tailscale set --ssh=false`.", { host, level: "critical", cooldownH: 12, dry: isTest });
     if (/https?:\/\//.test(f.ts_funnel || "")) await page(`posture:${name}:funnel`, "🚨", `Tailscale Funnel exposed on ${host}`, `${f.ts_funnel}\nThe intruder published tr-home to the internet this way. \`tailscale funnel reset\`.`, { host, level: "critical", cooldownH: 12, dry: isTest });
     if (f.preload) await page(`posture:${name}:preload`, "🚨", `ld.so.preload present on ${host}`, "A preload library is the classic rootkit hook.", { host, level: "critical", cooldownH: 12, dry: isTest });
+  }
+  { // forget resource state of boxes that left the registry (a renamed/retired box must not keep a stale baseline)
+    const live = new Set(names.map((n) => n.replace(/^sentinel-/, "")));
+    for (const k of Object.keys(state.res || {})) if (!live.has(k)) delete state.res[k];
+    for (const k of Object.keys(state.last_resources || {})) if (!live.has(k)) delete state.last_resources[k];
   }
   return summary;
 }
@@ -726,6 +745,7 @@ function dailyText(sent) {
   const ln = state.last_lanes?.lanes || {};
   lines.push(`Lanes ${state.last_lanes?.window_h || 48}h (done/total): ${Object.entries(ln).map(([k, v]) => `${k.replace("run_dev_task", "dev").replace("run_task", "hands")} ${v}`).join(" · ") || "no jobs"} · self-repair last: ${state.last_lanes?.self_repair_last || "?"}`);
   { const d = state.last_doors; lines.push(`Doors: ${d ? `${d.up}/${d.total} up` : "?"}${d?.down?.length ? ` · DOWN: ${d.down.map((k) => `${k} (${d.doors[k].replace("DOWN ", "")})`).join(", ")}` : ""}`); }
+  { const rl = Object.values(state.last_resources || {}).filter((x) => x.ts && NOW - new Date(x.ts).getTime() < 3 * 3600e3).map((x) => x.line); lines.push(`Resources: ${rl.length ? rl.join(" · ") : "no readings yet (sentinels < v1.5)"}`); }
   lines.push(`API spend today: ${state.last_spend?.today_usd != null ? "$" + state.last_spend.today_usd : state.last_spend?.status || "?"} (warn $${state.last_spend?.warn ?? 5} · crit $${state.last_spend?.crit ?? 20}) · GitHub tokens: ${Object.entries(state.last_tokens || {}).filter(([k]) => !k.startsWith("openai")).map(([k, v]) => `${k} ${v}`).join(", ") || "?"} · OpenAI keys: ${Object.entries(state.last_tokens || {}).filter(([k]) => k.startsWith("openai")).map(([k, v]) => `${k.replace(/^openai:?/, "") || "admin"} ${v}`).join(", ") || "?"}`);
   lines.push(`neo-brain: auth users ${b.auth_users ?? "?"} · vault writes ${state.daily_vault_writes || 0} · unknown agents ${b.unknown_agents?.length || 0} · Siti line ${b.siti_line || "?"}`);
   const sn = Object.entries(state.daily_snoozed || {});
