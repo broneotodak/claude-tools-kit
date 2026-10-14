@@ -737,6 +737,25 @@ def read_temps_linux():
     return temps[:6]
 
 
+LAB_DROPS_FILE = "/run/studio-lab/drops.txt"   # written every minute by a root timer on boxes whose sentinel is not root
+
+
+def lab_drops(path=LAB_DROPS_FILE, max_age_s=300, now=None):
+    """Packets dropped by the sandbox egress wall. Reads the nft counter directly (root, or `sudo -n`); if that is not
+    possible (tr-office: the sentinel runs as a normal user) falls back to the root-written copy at LAB_DROPS_FILE,
+    ignoring it when older than max_age_s so a dead timer shows up as 'no reading', never as a stale number."""
+    d = parse_nft_drops(sh("nft list table inet studio_lab", timeout=6, sudo=True))
+    if d is not None:
+        return d
+    try:
+        age = (now if now is not None else time.time()) - os.stat(path).st_mtime
+        if age > max_age_s:
+            return None
+        return parse_nft_drops(open(path).read())
+    except Exception:
+        return None
+
+
 def resources():
     """One small dict of live load numbers. See the block comment above."""
     import shutil
@@ -782,7 +801,7 @@ def resources():
             if rt:
                 r["gpu"] = [{"name": "amd", "temp_c": rt.get("junction") or max(rt.values()), "util_pct": parse_rocm_use(sh("rocm-smi --showuse", timeout=8))}]
     r["top"] = top_rss(sh("ps -Ao pid=,rss=,comm=", timeout=8), 3)
-    drops = parse_nft_drops(sh("nft list table inet studio_lab", timeout=6, sudo=True)) if not IS_MAC else None
+    drops = lab_drops() if not IS_MAC else None
     if drops is not None:
         r["lab_drops"] = drops
     return r

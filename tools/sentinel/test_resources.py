@@ -107,5 +107,19 @@ class Collector(unittest.TestCase):
         self.assertEqual(d["meta"]["changed"], [])
 
 
+class LabDropsFallback(unittest.TestCase):
+    def test_reads_root_written_file_and_ignores_stale_or_missing(self):
+        import time
+        d = tempfile.mkdtemp(prefix="labdrops-")
+        f = os.path.join(d, "drops.txt")
+        # no nft table reachable in the test sandbox → the file is the only source
+        self.assertIsNone(S.lab_drops(path=f))                      # missing file
+        open(f, "w").write(NFT)
+        self.assertEqual(S.lab_drops(path=f), 15)                   # fresh file
+        self.assertIsNone(S.lab_drops(path=f, now=time.time() + 600))  # older than 5 min → no reading, not a stale number
+        open(f, "w").write("garbage")
+        self.assertIsNone(S.lab_drops(path=f))                      # unparseable
+
+
 if __name__ == "__main__":
     unittest.main()
