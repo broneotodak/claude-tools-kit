@@ -740,7 +740,7 @@ def read_temps_linux():
 LAB_DROPS_FILE = "/run/studio-lab/drops.txt"   # written every minute by a root timer on boxes whose sentinel is not root
 
 
-def lab_drops(path=LAB_DROPS_FILE, max_age_s=300, now=None):
+def lab_drops(path=LAB_DROPS_FILE, max_age_s=300, now=None, require_root=True):
     """Packets dropped by the sandbox egress wall. Reads the nft counter directly (root, or `sudo -n`); if that is not
     possible (tr-office: the sentinel runs as a normal user) falls back to the root-written copy at LAB_DROPS_FILE,
     ignoring it when older than max_age_s so a dead timer shows up as 'no reading', never as a stale number."""
@@ -748,12 +748,43 @@ def lab_drops(path=LAB_DROPS_FILE, max_age_s=300, now=None):
     if d is not None:
         return d
     try:
-        age = (now if now is not None else time.time()) - os.stat(path).st_mtime
-        if age > max_age_s:
+        st = os.stat(path)
+        age = (now if now is not None else time.time()) - st.st_mtime
+        if age > max_age_s or age < -60:          # stale, or a clock-skewed / forged future mtime
             return None
-        return parse_nft_drops(open(path).read())
+        if require_root and st.st_uid != 0:       # only a root-written file counts (the sandbox user must not be able to forge it)
+            return None
+        with open(path) as fh:
+            return parse_nft_drops(fh.read(65536))   # a counter dump is < 2 kB; never slurp more
     except Exception:
         return None
+
+
+def mac_avail_kb(total_kb, memory_pressure_text, vm_stat_text):
+    """Available memory on macOS in kB. Prefer Apple's own `System-wide memory free percentage` (counts compressed and
+    cached memory correctly); fall back to vm_stat free+inactive+speculative+purgeable using the page size from its
+    header (4096 on Intel, 16384 on Apple silicon — never assume)."""
+    m = re.search(r"free percentage:\s*(\d+)%", memory_pressure_text or "")
+    if m and total_kb:
+        return total_kb * int(m.group(1)) // 100
+    ps = re.search(r"page size of (\d+) bytes", vm_stat_text or "")
+    page = int(ps.group(1)) if ps else 4096
+    pages = {k: int(v) for k, v in re.findall(r"Pages (free|inactive|speculative|purgeable):\s+(\d+)", vm_stat_text or "")}
+    return sum(pages.values()) * page // 1024
+
+
+def local_mounts():
+    """Mount points on LOCAL filesystems only (a hung NFS/CIFS/fuse mount must never block the cron run)."""
+    ok = {"ext4", "ext3", "xfs", "btrfs", "zfs", "f2fs", "apfs", "overlay"}
+    out = ["/"]
+    try:
+        for line in open("/proc/mounts").read().splitlines():
+            parts = line.split()
+            if len(parts) >= 3 and parts[2] in ok and parts[1] in ("/home", "/volume1", "/var/lib", "/data", "/srv") and parts[1] not in out:
+                out.append(parts[1])
+    except Exception:
+        pass
+    return out
 
 
 def resources():
@@ -768,9 +799,8 @@ def resources():
         pass
     try:
         if IS_MAC:
-            total = int(sh("sysctl -n hw.memsize").strip() or 0) // 1024
-            pages = {k: int(v) for k, v in re.findall(r"Pages (free|inactive|speculative):\s+(\d+)", sh("vm_stat"))}
-            avail = sum(pages.values()) * 16384 // 1024 if pages else 0   # Apple silicon page size
+            total = int(sh("sysctl -n hw.memsize").strip() or 0) // 1024          # kB
+            avail = mac_avail_kb(total, sh("memory_pressure", timeout=8), sh("vm_stat", timeout=8))
             r["mem"] = {"total_mb": total // 1024, "avail_mb": avail // 1024, "swap_total_mb": 0, "swap_free_mb": 0}
         else:
             mi = parse_meminfo(open("/proc/meminfo").read())
@@ -779,15 +809,15 @@ def resources():
     except Exception:
         pass
     disks = {}
-    for mp in ("/", "/home", "/volume1", "/var/lib"):
+    for mp in (["/"] if IS_MAC else local_mounts()):
         try:
-            if mp != "/" and os.path.ismount(mp) is False:
-                continue
             u = shutil.disk_usage(mp)
             key = f"{u.total}:{u.used}"
             if key in {v["_k"] for v in disks.values()}:
                 continue
-            disks[mp] = {"total_gb": round(u.total / 1e9), "free_gb": round(u.free / 1e9), "used_pct": round(100.0 * u.used / u.total, 1), "_k": key}
+            avail_ish = u.used + u.free                      # df's definition: reserved blocks count as used
+            disks[mp] = {"total_gb": round(u.total / 1e9), "free_gb": round(u.free / 1e9),
+                         "used_pct": round(100.0 * u.used / avail_ish, 1) if avail_ish else 0.0, "_k": key}
         except Exception:
             continue
     r["disk"] = {k: {kk: vv for kk, vv in v.items() if kk != "_k"} for k, v in disks.items()}
@@ -871,7 +901,7 @@ def main():
     if len(body) > 14000:  # keep the row small: drop diff detail first, then outbound
         meta["diff"] = {k: {"added": v["added"][:5], "removed": v["removed"][:5]} for k, v in diff.items()}
         meta["outbound"] = meta["outbound"][:3]
-        meta["resources"]["top"] = meta["resources"].get("top", [])[:1]
+        meta["resources"] = {k: v for k, v in meta["resources"].items() if k in ("v", "load", "ncpu", "mem", "lab_drops")}
         body = json.dumps(meta)
     status = "degraded" if degraded else "ok"
 

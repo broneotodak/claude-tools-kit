@@ -354,10 +354,14 @@ async function checkSentinels() {
     state.seen[name] = m.ts;
     // resource watch (v2.2): evaluate EVERY fresh report so streaks and the egress-drop baseline keep moving even during
     // a maintenance window; the pages themselves are dispatched below, after the maintenance guard.
+    // Belt and braces (14 Oct review #1): this loop judges EVERY box — nothing a box reports may crash it.
     const rs = ((state.res ||= {})[host] ||= { streaks: {} });
-    const rev = evaluateResources(m.resources, { host, cfg: r.meta?.resources_cfg || {}, streaks: rs.streaks, prevDrops: rs.drops });
-    if (rev.drops !== undefined) rs.drops = rev.drops;
-    if (m.resources) (state.last_resources ||= {})[host] = { line: resourceLine(host, m.resources), ts: m.ts };
+    let rev = { signals: [], drops: undefined };
+    try {
+      rev = evaluateResources(m.resources, { host, cfg: r.meta?.resources_cfg || {}, streaks: rs.streaks, prevDrops: rs.drops });
+      rs.drops = rev.drops;           // unconditional: a report with no reading clears the baseline (review #4)
+      if (m.resources) (state.last_resources ||= {})[host] = { line: resourceLine(host, m.resources), ts: m.ts };
+    } catch (e) { console.log(`[${ME}] resource check failed for ${host}: ${e.message}`); }
     const a = acc(host), ev = m.events || {};
     const isTest = !!m.selftest;
     // logins
@@ -423,6 +427,7 @@ async function checkSentinels() {
     // posture regressions (facts)
     const f = m.facts || {};
     if (inMaint(host)) {
+      for (const sg of rev.signals.filter((x) => x.level === "critical")) (folded[host] ||= []).push(`${sg.emoji} ${sg.signal}`);
       const bad = [f.password_auth === "yes" && "🚨 password SSH ON", String(f.ts_run_ssh).toLowerCase() === "true" && "🚨 Tailscale SSH server ON", /https?:\/\//.test(f.ts_funnel || "") && "🚨 Tailscale Funnel exposed", f.preload && "🚨 ld.so.preload present"].filter(Boolean);
       if (bad.length) (folded[host] ||= []).push(...bad);
       await flushMaint(name, host, m.ts);
@@ -433,6 +438,11 @@ async function checkSentinels() {
     if (String(f.ts_run_ssh).toLowerCase() === "true" && !allow.ts_ssh_ok?.includes(host)) await page(`posture:${name}:tsssh`, "🚨", `Tailscale SSH server ON on ${host}`, "RunSSH=true — turn it off: `sudo tailscale set --ssh=false`.", { host, level: "critical", cooldownH: 12, dry: isTest });
     if (/https?:\/\//.test(f.ts_funnel || "")) await page(`posture:${name}:funnel`, "🚨", `Tailscale Funnel exposed on ${host}`, `${f.ts_funnel}\nThe intruder published tr-home to the internet this way. \`tailscale funnel reset\`.`, { host, level: "critical", cooldownH: 12, dry: isTest });
     if (f.preload) await page(`posture:${name}:preload`, "🚨", `ld.so.preload present on ${host}`, "A preload library is the classic rootkit hook.", { host, level: "critical", cooldownH: 12, dry: isTest });
+  }
+  { // forget resource state of boxes that left the registry (a renamed/retired box must not keep a stale baseline)
+    const live = new Set(names.map((n) => n.replace(/^sentinel-/, "")));
+    for (const k of Object.keys(state.res || {})) if (!live.has(k)) delete state.res[k];
+    for (const k of Object.keys(state.last_resources || {})) if (!live.has(k)) delete state.last_resources[k];
   }
   return summary;
 }

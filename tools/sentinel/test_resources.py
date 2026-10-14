@@ -108,17 +108,51 @@ class Collector(unittest.TestCase):
 
 
 class LabDropsFallback(unittest.TestCase):
-    def test_reads_root_written_file_and_ignores_stale_or_missing(self):
+    def test_reads_root_written_file_and_ignores_stale_missing_or_garbage(self):
         import time
         d = tempfile.mkdtemp(prefix="labdrops-")
         f = os.path.join(d, "drops.txt")
-        # no nft table reachable in the test sandbox → the file is the only source
-        self.assertIsNone(S.lab_drops(path=f))                      # missing file
+        self.assertIsNone(S.lab_drops(path=f, require_root=False))                       # missing file
         open(f, "w").write(NFT)
-        self.assertEqual(S.lab_drops(path=f), 15)                   # fresh file
-        self.assertIsNone(S.lab_drops(path=f, now=time.time() + 600))  # older than 5 min → no reading, not a stale number
+        self.assertEqual(S.lab_drops(path=f, require_root=False), 15)                    # fresh file
+        self.assertIsNone(S.lab_drops(path=f, require_root=False, now=time.time() + 600))  # older than 5 min
+        self.assertIsNone(S.lab_drops(path=f, require_root=False, now=time.time() - 3600))  # mtime in the future (clock skew / forged)
         open(f, "w").write("garbage")
-        self.assertIsNone(S.lab_drops(path=f))                      # unparseable
+        self.assertIsNone(S.lab_drops(path=f, require_root=False))                       # unparseable
+
+    def test_file_not_owned_by_root_is_rejected_by_default(self):
+        d = tempfile.mkdtemp(prefix="labdrops-")
+        f = os.path.join(d, "drops.txt")
+        open(f, "w").write(NFT)                                                          # owned by the test user, not root
+        if os.geteuid() != 0:
+            self.assertIsNone(S.lab_drops(path=f))                                       # the sandbox user must not be able to forge the counter
+
+    def test_read_is_capped(self):
+        d = tempfile.mkdtemp(prefix="labdrops-")
+        f = os.path.join(d, "drops.txt")
+        open(f, "w").write(NFT + ("x" * 200000))
+        self.assertEqual(S.lab_drops(path=f, require_root=False), 15)                    # still parses; did not slurp 200 kB
+
+
+class MacMemory(unittest.TestCase):
+    VM = "Mach Virtual Memory Statistics: (page size of 4096 bytes)\nPages free:      1000.\nPages inactive:  2000.\nPages speculative: 500.\nPages purgeable: 100.\n"
+    VM_ARM = VM.replace("4096", "16384")
+
+    def test_prefers_apples_free_percentage(self):
+        mp = "The system has 25769803776 (6291456 pages with a page size of 4096).\nSystem-wide memory free percentage: 41%\n"
+        self.assertEqual(S.mac_avail_kb(24 * 1024 * 1024, mp, self.VM), 24 * 1024 * 1024 * 41 // 100)
+
+    def test_vm_stat_fallback_uses_the_page_size_from_the_header(self):
+        self.assertEqual(S.mac_avail_kb(0, "", self.VM), (1000 + 2000 + 500 + 100) * 4096 // 1024)
+        self.assertEqual(S.mac_avail_kb(0, "", self.VM_ARM), (1000 + 2000 + 500 + 100) * 16384 // 1024)
+        self.assertEqual(S.mac_avail_kb(0, "", ""), 0)
+
+
+class Disks(unittest.TestCase):
+    def test_local_mounts_always_has_root_and_never_raises(self):
+        m = S.local_mounts()
+        self.assertEqual(m[0], "/")
+        self.assertEqual(len(m), len(set(m)))
 
 
 if __name__ == "__main__":
