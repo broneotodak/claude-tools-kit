@@ -14,9 +14,11 @@
 //   RAM   /proc/meminfo  (MemTotal / MemAvailable)
 //
 // ALERT POLICY (one rule, deliberately simple — anti-flap):
-//   * healthy (OK)     → silent, except a single "back to normal" line when a WARN/CRIT clears
-//   * WARN / CRIT      → page once for that state; re-page after PAGE_COOLDOWN_H if still bad
-//   * never page twice for the same state inside the cooldown
+//   * healthy (OK)     → silent; a "back to normal" line only after a CRIT clears (never after a WARN)
+//   * WARN             → at most one page per PAGE_COOLDOWN_H, however often it flips
+//   * CRIT             → page on arrival, then re-page per PAGE_COOLDOWN_H
+//   * status steps down only after RECOVER_RUNS better readings in a row (hysteresis)
+//   (15 Oct 2026: CPU hovering 88-94 °C vs a 90 °C limit paged Neo 26x in a day — hence the above)
 //
 // LANE: POST 127.0.0.1:3501/send (SEND_API_TOKEN from /home/neo/naca/siti/.env) — the same
 // single WhatsApp route hub-watch uses. Never touches wacli's session.db (a second login
@@ -29,7 +31,7 @@
 //
 // ENV (thresholds, all overridable for synthetic tests):
 //   GPU_TEMP_WARN=85  GPU_TEMP_CRIT=95        (°C)
-//   CPU_TEMP_WARN=90  CPU_TEMP_CRIT=100       (°C, hottest thermal zone)
+//   CPU_TEMP_WARN=96  CPU_TEMP_CRIT=100       (°C, hottest thermal zone)
 //   RAM_AVAIL_WARN_PCT=20  RAM_AVAIL_CRIT_PCT=10   (% free before it's warn/crit)
 //   LOAD_WARN_X=1.5   LOAD_CRIT_X=3.0         (× core count, on load1)
 //   PAGE_COOLDOWN_H=6                          (re-page interval per state)
@@ -51,13 +53,14 @@ const num = (v, d) => { const x = Number(v); return Number.isFinite(x) ? x : d; 
 const TH = {
   gpuTempWarn: num(process.env.GPU_TEMP_WARN, 85),
   gpuTempCrit: num(process.env.GPU_TEMP_CRIT, 95),
-  cpuTempWarn: num(process.env.CPU_TEMP_WARN, 90),
+  cpuTempWarn: num(process.env.CPU_TEMP_WARN, 96),
   cpuTempCrit: num(process.env.CPU_TEMP_CRIT, 100),
   ramAvailWarn: num(process.env.RAM_AVAIL_WARN_PCT, 20),
   ramAvailCrit: num(process.env.RAM_AVAIL_CRIT_PCT, 10),
   loadWarnX: num(process.env.LOAD_WARN_X, 1.5),
   loadCritX: num(process.env.LOAD_CRIT_X, 3.0),
   cooldownH: num(process.env.PAGE_COOLDOWN_H, 6),
+  recoverRuns: num(process.env.RECOVER_RUNS, 3),   // consecutive better readings before status steps down
 };
 const JID = process.env.HUB_WATCH_JID || '60177519610@s.whatsapp.net';
 const SEND_URL = (process.env.SEND_API_URL || 'http://127.0.0.1:3501').replace(/\/$/, '') + '/send';
@@ -141,6 +144,16 @@ const loadState = () => { try { return JSON.parse(readFileSync(STATE, 'utf8')); 
 const saveState = st => { try { writeFileSync(STATE, JSON.stringify(st, null, 2)); } catch (e) { console.error('state write failed:', e.message); } };
 const isoMinusH = (nowIso, h) => new Date(new Date(nowIso).getTime() - h * 3_600_000).toISOString();
 
+const RANK = { ok: 0, warn: 1, crit: 2 };
+// Sticky status: a raw reading only steps DOWN after RECOVER_RUNS better readings in a row, so a
+// value hovering on a limit (CPU 89<->91 °C under GPU load) can't flip the state every run.
+function settle(state, raw) {
+  const prev = state.last_status || null;
+  if (!prev || RANK[raw] >= RANK[prev]) return { status: raw, streak: 0 };
+  const streak = (state.better_streak || 0) + 1;
+  return streak >= TH.recoverRuns ? { status: raw, streak: 0 } : { status: prev, streak };
+}
+
 function decide(state, status, nowIso) {
   const prev = state.last_status || null;
   const changed = prev !== status;
@@ -148,8 +161,9 @@ function decide(state, status, nowIso) {
   const lastSentFor = (state.alert_keys && state.alert_keys[status]) || null;
   const withinCooldown = !!lastSentFor && lastSentFor >= isoMinusH(nowIso, TH.cooldownH);
   let alert = false;
-  if (bad) alert = changed || !withinCooldown;         // newly crossed a limit, or still bad past cooldown
-  else if (changed && prev) alert = true;              // recovered from a WARN/CRIT → one "back to normal"
+  // warn: at most one page per cooldown no matter how it flips; crit: page on arrival, then per cooldown
+  if (bad) alert = status === 'crit' ? (changed || !withinCooldown) : !withinCooldown;
+  else if (changed && prev === 'crit') alert = true;   // "back to normal" only after a critical, never after a warn
   const keys = Object.assign({}, state.alert_keys || {});
   if (alert) keys[status] = nowIso;
   const cutoff = isoMinusH(nowIso, TH.cooldownH * 3);  // prune so meta can't grow unbounded
@@ -189,14 +203,17 @@ async function main() {
   const c = cores();
   const [g, mem, cpuTempC, load] = [gpu(), memInfo(), cpuTemp(), load1()];
   const cpu = await cpuBusy();
-  const { status, lines } = assess(g, mem, cpuTempC, load, c);
+  const assessed = assess(g, mem, cpuTempC, load, c);
+  const lines = assessed.lines;
+  const state = loadState();
+  const settled = settle(state, assessed.status);
+  const status = settled.status;
   const snap = { g, mem, cpu, cpuTempC, load, cores: c, status, lines };
   const text = snapshotText(snap);
   const logLine = `${nowIso} status=${status} gpu=${g ? `${g.util}%/${g.temp}C` : 'na'} cpu=${cpu != null ? cpu + '%' : 'na'} cputemp=${cpuTempC != null ? cpuTempC + 'C' : 'na'} load=${load != null ? load : 'na'} ram_avail=${mem ? mem.availPct + '%' : 'na'}`;
 
   if (STATUS) { console.log(text); return; }
 
-  const state = loadState();
   const d = decide(state, status, nowIso);
   const verdict = d.alert ? (DRY ? 'would-page' : 'PAGE') : 'silent';
   console.log(logLine + ` · ${verdict}${d.from && d.alert ? ` (from ${d.from})` : ''}`);
@@ -208,6 +225,7 @@ async function main() {
   }
   saveState({
     last_status: status,
+    better_streak: settled.streak,
     alert_keys: d.keys,
     last_run: nowIso,
     last_alert: d.alert ? nowIso : (state.last_alert || null),
