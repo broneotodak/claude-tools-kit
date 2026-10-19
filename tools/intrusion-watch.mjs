@@ -752,21 +752,51 @@ function dailyText(sent) {
   lines.push(`Alerts sent 24h: ${state.daily_pages || 0}${state.selftest_ok ? " · selftest ✓" : ""} · SMS fallback ${meta.alerts?.sms_to ? "armed" : "OFF"} · twin watchdog ${b.watchdog || "?"}${sn.length ? ` · Snoozed: ${sn.length} (${sn.slice(0, 4).map(([m, v]) => `${m} until ${MYT(v.until).slice(0, 10)}${(v.keys?.length || 0) > 1 ? ` ×${v.keys.length}` : ""}`).join(", ")}${sn.length > 4 ? ", …" : ""})` : ""}`);
   return lines.join("\n");
 }
-function weeklyText(sent) {
-  const lines = [header("🧭", `weekly security routine · ${MYT().slice(0, 10)}`)];
+// The weekly routine used to send every open item in full (~7,000 characters). Now: the numbers, the posture in one line,
+// and the top items as one short line each. The full text is saved to memory (category owner_report_full) every week.
+function weeklyBase(sent) {
+  const lines = [];
   const hist = state.history.slice(-7);
   const totLogins = hist.reduce((s, d) => s + (d.logins || 0), 0), unk = hist.reduce((s, d) => s + (d.unknown || 0), 0), pg = hist.reduce((s, d) => s + (d.pages || 0), 0);
   lines.push(`Week: ${totLogins} logins · ${unk} unknown · ${pg} alerts · sentinels ${sent.fresh}/${sent.total}`);
   const post = state.posture || {};
   const bad = Object.entries(post).filter(([, f]) => f.password_auth === "yes" || String(f.ts_run_ssh) === "true" || f.preload).map(([h]) => h);
-  lines.push(`Posture: ${bad.length ? `⚠️ ${bad.join(", ")} need fixing` : "keys-only SSH + Tailscale-SSH off + no preload on every reporting box ✓"}`);
-  const pub = Object.entries(post).map(([h, f]) => `${h}:${(f.public_listen || []).length}`).join(" ");
-  lines.push(`Public-bind ports per box: ${pub || "?"} (VPS boxes should be 22/80/443 only)`);
+  const pub = Object.entries(post).map(([h, f]) => [h, (f.public_listen || []).length]);
   const t = state.last_tailnet || {};
+  return { lines, bad, pub, t };
+}
+function weeklyFullText(sent) {
+  const { lines, bad, pub, t } = weeklyBase(sent);
+  lines.unshift(header("🧭", `weekly security routine · ${MYT().slice(0, 10)}`));
+  lines.push(`Posture: ${bad.length ? `⚠️ ${bad.join(", ")} need fixing` : "keys-only SSH + Tailscale-SSH off + no preload on every reporting box ✓"}`);
+  lines.push(`Public-bind ports per box: ${pub.map(([h, n]) => `${h}:${n}`).join(" ") || "?"} (VPS boxes should be 22/80/443 only)`);
   lines.push(`Tailnet chores: ${t.stale?.length ? `remove or re-check stale nodes → ${t.stale.join(", ")}` : "no stale nodes"}`);
   for (const item of meta.open_items || []) lines.push(`☐ ${item}`);
   lines.push("Reply *done <item>* and I'll tick it; *allow <ip|key>* to allow-list.");
   return lines.join("\n");
+}
+// One short line per open item: meta.open_items_short = [{ match: "<start of the item text>", short: "…", who: "Lan" }], else the first words.
+function shortItem(item, table = []) {
+  const hit = (table || []).find((x) => x?.match && String(item).startsWith(x.match));
+  if (hit?.short) return hit.who ? `${hit.short} (${hit.who})` : hit.short;
+  const first = String(item).replace(/^(TOP PRIORITY|IDEA)[^:]*:\s*/i, "").split(/[:.—]/)[0].trim();
+  return first.length > 70 ? `${first.slice(0, 67)}…` : first;
+}
+function weeklyShortText(sent, { top = 5 } = {}) {
+  const { lines, bad, pub, t } = weeklyBase(sent);
+  const out = [header("🧭", `weekly security · ${MYT().slice(0, 10)}`), ...lines];
+  out.push(bad.length ? `⚠️ Fix: ${bad.join(", ")} (password login / Tailscale-SSH / preload)` : "✅ Posture OK: keys-only SSH, Tailscale-SSH off, no preload");
+  const wide = pub.filter(([h, n]) => n > 8).map(([h, n]) => `${h} ${n}`);
+  if (wide.length) out.push(`⚠️ Many open ports: ${wide.join(", ")}`);
+  if (t.stale?.length) out.push(`⚠️ Stale tailnet nodes: ${t.stale.join(", ")}`);
+  const items = meta.open_items || [];
+  if (items.length) {
+    out.push("", `Open items: ${items.length}. First ${Math.min(top, items.length)}:`);
+    items.slice(0, top).forEach((it, i) => out.push(`${i + 1}. ${shortItem(it, meta.open_items_short)}`));
+    if (items.length > top) out.push(`+${items.length - top} more. Full list is saved; ask Siti for "the full weekly security list".`);
+  }
+  out.push("", "Reply *done <item>* to tick one, *allow <ip|key>* to allow-list.");
+  return out.join("\n");
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
@@ -850,7 +880,8 @@ async function main() {
     state.acc = {}; state.daily_pages = 0; state.daily_vault_writes = 0; state.daily_vault_reads = {}; state.daily_snoozed = {}; state.selftest_ok = null; state.last_daily = new Date().toISOString();
   }
   if (mode === "weekly") {
-    const text = weeklyText(sent);
+    const text = weeklyShortText(sent);
+    if (!DRY) { try { await nb.save(`[${ME}] ${weeklyFullText(sent)}`, { category: "owner_report_full", type: "report", importance: 5, visibility: "internal", source: ME, metadata: { kind: "weekly_security_full", day: MYT().slice(0, 10) } }); } catch { /* best effort: the short text still goes */ } }
     if (DRY) console.log(text); else { const r = await sendWA(text); if (!r.ok) { await queueWA(text); await sendEmail("🧭 NACA weekly security routine", text); } console.log(`[${ME}] weekly routine ${r.ok ? "sent" : "queued"}`); }
     state.last_weekly = new Date().toISOString();
   }
