@@ -3,6 +3,8 @@
 # Run on the Mac (owner SQL via ~/bin/neo-brain-sql.mjs); writes straight to edge as anchors-clean.jsonl.new. Then: mv it to anchors-clean.jsonl and
 # `sudo systemctl restart neo-twin-server` (the gateway reads the pool only at startup). Prints counts only; never prints or stores message text on the Mac.
 # Built 17 Nov 2026 (Neo: "do the pool swap").
+# FIXED 21 Nov 2026: the brain's old-ingest rows (Apr-Sep 2026, ~86,000 'Neo' replies) all carry a [dm] tag, start with a capital and run ~110 chars: they are NOT Neo's typing (the 17 Nov pool was 67% those).
+# Only Nio-era rows (1 Nov 2026 on, recorded by whatsmeow: no tag, median ~24 chars) are used now. Re-run whenever never-keep changes.
 import json, subprocess, re, random, sys
 BASE = """
 with ex0 as (select split_part(chat_jid,'@',1) u from nio_excluded_chats),
@@ -19,6 +21,7 @@ cand as (
   from wa_messages m
   where m.source = 'wa-primary' and m.is_from_self and not m.is_group
     and m.chat_jid not like '%@g.us' and m.chat_jid not like '%@broadcast' and m.chat_jid not like '%@newsletter'
+    and m.created_at >= '2026-11-01' and m.content !~* '^\\s*\\[dm\\]'
     and length(m.content) between 8 and 140
     and m.content !~* '(\\d{7,}|@|https?://|www\\.)' and m.content not like '%REDACTED%'
     and split_part(m.chat_jid,'@',1) not in (select u from bad)
