@@ -36,6 +36,7 @@
 // second line `[~ intrusion-watch on edgexpert]`. Cooldown per signal key.
 import { execFileSync, spawnSync } from "node:child_process";
 import { funnelExposed } from "./funnel-exposed.mjs";
+import { tierFor, wireLabel } from "./iw-tier.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -179,12 +180,13 @@ if (!regRow) { console.error(`[${ME}] no registry row — run --init --seed <fil
 
 // ── alerting ─────────────────────────────────────────────────────────────────
 function header(emoji, signal) { return `${emoji} NACA · ${signal}\n[~ ${ME} on ${HOST_LABEL}]`; }
-async function sendWA(text, toJid = NEO_JID) {
+// `label` (P1-04) = { key, level, box, tier } → priority/source/key/box on the wire so the hub inbox can sort it; IW_TIERING=off drops it.
+async function sendWA(text, toJid = NEO_JID, label = null) {
   const env = existsSync(SITI_ENV) ? readFileSync(SITI_ENV, "utf-8") : "";
   const token = env.match(/^SEND_API_TOKEN=(.+)$/m)?.[1]?.trim();
   if (!token) return { ok: false, why: "no SEND_API_TOKEN" };
   try {
-    const r = await fetch(SITI_URL, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ type: "send", toJid, text }), signal: AbortSignal.timeout(8000) });
+    const r = await fetch(SITI_URL, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ type: "send", toJid, text, ...(label ? wireLabel({ source: ME, ...label }) : {}) }), signal: AbortSignal.timeout(8000) });
     return { ok: r.status === 200, why: `http ${r.status}` };
   } catch (e) { return { ok: false, why: e.message }; }
 }
@@ -266,7 +268,7 @@ async function page(key, emoji, signal, body, { cooldownH = 6, level = "warning"
   if (DRY || dry) { console.log(`[${ME}] ${dry ? "SELFTEST" : "DRY-RUN"} alert →\n${text}\n`); if (!dry) return true; state.last_alerts[key] = new Date().toISOString(); return true; }
   let delivered = false;
   if (channel !== "email") {
-    const r = await sendWA(text);
+    const r = await sendWA(text, NEO_JID, { key, level, box });
     delivered = r.ok;
     if (!r.ok) { console.error(`[${ME}] WA send failed (${r.why}) — queuing + SMS + e-mail`); await queueWA(text); }
     // Per-host copies: registry meta.alerts.per_host = { "<host>": ["<phone>@s.whatsapp.net", ...] } (the box owner, e.g. Kai for academy).
@@ -877,18 +879,18 @@ async function main() {
     const hosts = Object.keys(state.acc);
     state.history.push({ day: MYT().slice(0, 10), logins: hosts.reduce((s, h) => s + Object.values(state.acc[h].logins).reduce((x, n) => x + n, 0), 0), unknown: hosts.reduce((s, h) => s + state.acc[h].unknown, 0), pages: state.daily_pages, changes: hosts.reduce((s, h) => s + state.acc[h].changes.length, 0) });
     state.history = state.history.slice(-14);
-    if (DRY) console.log(text); else { const r = await sendWA(text); if (!r.ok) { await queueWA(text); await sendEmail("🛡️ NACA security line", text); } console.log(`[${ME}] daily line ${r.ok ? "sent" : "queued"}`); }
+    if (DRY) console.log(text); else { const r = await sendWA(text, NEO_JID, { key: "daily", tier: "p1" }); if (!r.ok) { await queueWA(text); await sendEmail("🛡️ NACA security line", text); } console.log(`[${ME}] daily line ${r.ok ? "sent" : "queued"}`); }
     state.acc = {}; state.daily_pages = 0; state.daily_vault_writes = 0; state.daily_vault_reads = {}; state.daily_snoozed = {}; state.selftest_ok = null; state.last_daily = new Date().toISOString();
   }
   if (mode === "weekly") {
     const text = weeklyShortText(sent);
     if (!DRY) { try { await nb.save(`[${ME}] ${weeklyFullText(sent)}`, { category: "owner_report_full", type: "report", importance: 5, visibility: "internal", source: ME, metadata: { kind: "weekly_security_full", day: MYT().slice(0, 10) } }); } catch { /* best effort: the short text still goes */ } }
-    if (DRY) console.log(text); else { const r = await sendWA(text); if (!r.ok) { await queueWA(text); await sendEmail("🧭 NACA weekly security routine", text); } console.log(`[${ME}] weekly routine ${r.ok ? "sent" : "queued"}`); }
+    if (DRY) console.log(text); else { const r = await sendWA(text, NEO_JID, { key: "weekly", tier: "p1" }); if (!r.ok) { await queueWA(text); await sendEmail("🧭 NACA weekly security routine", text); } console.log(`[${ME}] weekly routine ${r.ok ? "sent" : "queued"}`); }
     state.last_weekly = new Date().toISOString();
   }
   if (overflow.length) {
     const text = `${header("📦", `${overflow.length} more alert(s) this cycle, folded`)}\n${fmtList(overflow, 15)}\n(burst cap ${PAGE_CAP}/run keeps Siti's number under WhatsApp's spam radar; ask me for details)`;
-    const r = await sendWA(text); if (!r.ok) await queueWA(text);
+    const r = await sendWA(text, NEO_JID, { key: "fold", tier: "p1" }); if (!r.ok) await queueWA(text);
     console.log(`[${ME}] folded ${overflow.length} warning page(s) into one`);
   }
   state.last_run = new Date().toISOString();
