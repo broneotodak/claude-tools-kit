@@ -35,6 +35,7 @@
 // Alert format (Monitoring.md rule): first line `<emoji> NACA · <signal>`,
 // second line `[~ intrusion-watch on edgexpert]`. Cooldown per signal key.
 import { execFileSync, spawnSync } from "node:child_process";
+import { funnelExposed } from "./funnel-exposed.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -428,7 +429,7 @@ async function checkSentinels() {
     const f = m.facts || {};
     if (inMaint(host)) {
       for (const sg of rev.signals.filter((x) => x.level === "critical")) (folded[host] ||= []).push(`${sg.emoji} ${sg.signal}`);
-      const bad = [f.password_auth === "yes" && "🚨 password SSH ON", String(f.ts_run_ssh).toLowerCase() === "true" && "🚨 Tailscale SSH server ON", /https?:\/\//.test(f.ts_funnel || "") && "🚨 Tailscale Funnel exposed", f.preload && "🚨 ld.so.preload present"].filter(Boolean);
+      const bad = [f.password_auth === "yes" && "🚨 password SSH ON", String(f.ts_run_ssh).toLowerCase() === "true" && "🚨 Tailscale SSH server ON", funnelExposed(f.ts_funnel) && "🚨 Tailscale Funnel exposed", f.preload && "🚨 ld.so.preload present"].filter(Boolean);
       if (bad.length) (folded[host] ||= []).push(...bad);
       await flushMaint(name, host, m.ts);
       continue;
@@ -436,7 +437,7 @@ async function checkSentinels() {
     for (const sg of rev.signals) await page(sg.key, sg.emoji, sg.signal, sg.body, { host, level: sg.level, cooldownH: sg.cooldownH, dry: isTest });
     if (f.password_auth === "yes") await page(`posture:${name}:pw`, "🚨", `password SSH turned ON on ${host}`, "PasswordAuthentication yes — keys-only is the rule since 25 Sep.", { host, level: "critical", cooldownH: 12, dry: isTest });
     if (String(f.ts_run_ssh).toLowerCase() === "true" && !allow.ts_ssh_ok?.includes(host)) await page(`posture:${name}:tsssh`, "🚨", `Tailscale SSH server ON on ${host}`, "RunSSH=true — turn it off: `sudo tailscale set --ssh=false`.", { host, level: "critical", cooldownH: 12, dry: isTest });
-    if (/https?:\/\//.test(f.ts_funnel || "")) await page(`posture:${name}:funnel`, "🚨", `Tailscale Funnel exposed on ${host}`, `${f.ts_funnel}\nThe intruder published tr-home to the internet this way. \`tailscale funnel reset\`.`, { host, level: "critical", cooldownH: 12, dry: isTest });
+    if (funnelExposed(f.ts_funnel)) await page(`posture:${name}:funnel`, "🚨", `Tailscale Funnel exposed on ${host}`, `${f.ts_funnel}\nThe intruder published tr-home to the internet this way. \`tailscale funnel reset\`.`, { host, level: "critical", cooldownH: 12, dry: isTest });
     if (f.preload) await page(`posture:${name}:preload`, "🚨", `ld.so.preload present on ${host}`, "A preload library is the classic rootkit hook.", { host, level: "critical", cooldownH: 12, dry: isTest });
   }
   { // forget resource state of boxes that left the registry (a renamed/retired box must not keep a stale baseline)
